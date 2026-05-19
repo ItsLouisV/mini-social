@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/extensions/date_extension.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../domain/message_model.dart';
 import '../../providers/chat_provider.dart';
@@ -69,6 +68,70 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  String _formatMessageGroupTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final sixDaysAgo = today.subtract(const Duration(days: 6));
+
+    final dateToCompare = DateTime(dateTime.year, dateTime.month, dateTime.day);
+    final h = dateTime.hour.toString().padLeft(2, '0');
+    final m = dateTime.minute.toString().padLeft(2, '0');
+    final timeStr = '$h:$m';
+
+    if (dateToCompare == today) {
+      return timeStr;
+    } else if (dateToCompare == yesterday) {
+      return 'Hôm qua, $timeStr';
+    } else if (dateToCompare.isAfter(sixDaysAgo)) {
+      const days = [
+        'Chủ Nhật',
+        'Thứ Hai',
+        'Thứ Ba',
+        'Thứ Tư',
+        'Thứ Năm',
+        'Thứ Sáu',
+        'Thứ Bảy'
+      ];
+      final index = dateTime.weekday == 7 ? 0 : dateTime.weekday;
+      return '${days[index]}, $timeStr';
+    } else {
+      final day = dateTime.day.toString().padLeft(2, '0');
+      final month = dateTime.month.toString().padLeft(2, '0');
+      final year = dateTime.year.toString();
+      return '$day/$month/$year, $timeStr';
+    }
+  }
+
+  Widget _buildTimeDivider(DateTime dateTime) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final formattedStr = _formatMessageGroupTime(dateTime);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: isDark
+                ? const Color(0xFF2C2C2E)
+                : const Color(0xFFE5E5EA),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            formattedStr,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -166,20 +229,35 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
+    final listItems = <Widget>[];
+    DateTime? lastShowedTime;
+
+    for (int i = 0; i < messages.length; i++) {
+      final message = messages[i];
+      final isMine = message.senderId == currentUserId;
+      final isLast = i == messages.length - 1;
+
+      // Nhóm tin nhắn theo khoảng thời gian 10 phút
+      if (lastShowedTime == null ||
+          message.createdAt.difference(lastShowedTime).inMinutes.abs() >= 10) {
+        listItems.add(_buildTimeDivider(message.createdAt));
+        lastShowedTime = message.createdAt;
+      }
+
+      listItems.add(_MessageBubble(
+        key: ValueKey(message.id),
+        message: message,
+        isMine: isMine,
+        showSeen: isMine && isLast && message.isSeen,
+      ));
+    }
+
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      itemCount: messages.length,
+      itemCount: listItems.length,
       itemBuilder: (context, index) {
-        final message = messages[index];
-        final isMine = message.senderId == currentUserId;
-        final isLast = index == messages.length - 1;
-
-        return _MessageBubble(
-          message: message,
-          isMine: isMine,
-          showSeen: isMine && isLast && message.isSeen,
-        );
+        return listItems[index];
       },
     );
   }
@@ -255,76 +333,114 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 }
 
-class _MessageBubble extends StatelessWidget {
+class _MessageBubble extends StatefulWidget {
   final MessageModel message;
   final bool isMine;
   final bool showSeen;
 
   const _MessageBubble({
+    super.key,
     required this.message,
     required this.isMine,
     this.showSeen = false,
   });
 
   @override
+  State<_MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<_MessageBubble> {
+  bool _showTime = false;
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isMine = widget.isMine;
+    final showSeen = widget.showSeen;
+    final message = widget.message;
+
+    final shouldShowTime = _showTime || showSeen;
+    final bubbleTimeStr =
+        '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}';
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Column(
         crossAxisAlignment:
             isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment:
-                isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
-            children: [
-              Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.7,
-                ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isMine
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(18).copyWith(
-                    bottomRight: isMine ? const Radius.circular(4) : null,
-                    bottomLeft: !isMine ? const Radius.circular(4) : null,
-                  ),
-                ),
-                child: Text(
-                  message.content ?? '',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: isMine ? Colors.white : null,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: EdgeInsets.only(
-              top: 4,
-              left: isMine ? 0 : 8,
-              right: isMine ? 8 : 0,
-            ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _showTime = !_showTime;
+              });
+            },
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment:
                   isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: [
-                Text(
-                  message.createdAt.chatTimestamp,
-                  style: AppTextStyles.caption,
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.75,
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isMine
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(18).copyWith(
+                      bottomRight: isMine ? const Radius.circular(4) : null,
+                      bottomLeft: !isMine ? const Radius.circular(4) : null,
+                    ),
+                  ),
+                  child: Text(
+                    message.content ?? '',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: isMine ? Colors.white : null,
+                    ),
+                  ),
                 ),
-                if (showSeen) ...[
-                  const SizedBox(width: 4),
-                  Text('✓✓ Đã xem',
-                      style: AppTextStyles.caption.copyWith(
-                          color: Theme.of(context).colorScheme.primary)),
-                ],
               ],
             ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeInOut,
+            child: shouldShowTime
+                ? Padding(
+                    padding: EdgeInsets.only(
+                      top: 4,
+                      left: isMine ? 0 : 8,
+                      right: isMine ? 8 : 0,
+                      bottom: 2,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment:
+                          isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                      children: [
+                        Text(
+                          bubbleTimeStr,
+                          style: AppTextStyles.caption.copyWith(
+                            fontSize: 10,
+                            color: theme.hintColor,
+                          ),
+                        ),
+                        if (showSeen) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '• Đã xem',
+                            style: AppTextStyles.caption.copyWith(
+                              fontSize: 10,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity, height: 0),
           ),
         ],
       ),
