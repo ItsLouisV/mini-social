@@ -2,8 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-
-
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
@@ -24,35 +22,52 @@ class NotificationScreen extends ConsumerWidget {
       });
     });
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Thông báo')),
-      body: notificationsAsync.when(
-        data: (notifications) {
-          if (notifications.isEmpty) {
-            return const EmptyStateWidget(
-              icon: CupertinoIcons.bell,
-              title: 'Không có thông báo',
-              subtitle: 'Các hoạt động của bạn sẽ hiển thị ở đây',
-            );
-          }
+    final theme = Theme.of(context);
 
-          return RefreshIndicator(
-            onRefresh: () async =>
-                ref.invalidate(notificationsProvider),
-            child: ListView.separated(
+    return CupertinoPageScaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      navigationBar: CupertinoNavigationBar(
+        transitionBetweenRoutes: false,
+        backgroundColor: theme.scaffoldBackgroundColor.withValues(alpha: 0.92),
+        border: Border(
+          bottom: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.3),
+            width: 0.5,
+          ),
+        ),
+        middle: Text(
+          'Thông báo',
+          style: TextStyle(
+            color: theme.textTheme.titleMedium?.color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: notificationsAsync.when(
+          data: (notifications) {
+            if (notifications.isEmpty) {
+              return const EmptyStateWidget(
+                icon: CupertinoIcons.bell,
+                title: 'Không có thông báo',
+                subtitle: 'Các hoạt động của bạn sẽ hiển thị ở đây',
+              );
+            }
+
+            return ListView.separated(
               itemCount: notifications.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final n = notifications[index];
                 return _NotificationTile(notification: n);
               },
-            ),
-          );
-        },
-        loading: () => const Center(child: CupertinoActivityIndicator()),
-        error: (e, _) => AppErrorWidget(
-          message: e.toString(),
-          onRetry: () => ref.invalidate(notificationsProvider),
+            );
+          },
+          loading: () => const Center(child: CupertinoActivityIndicator()),
+          error: (e, _) => AppErrorWidget(
+            message: e.toString(),
+            onRetry: () => ref.invalidate(notificationsProvider),
+          ),
         ),
       ),
     );

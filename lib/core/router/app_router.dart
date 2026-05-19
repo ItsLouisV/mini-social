@@ -23,8 +23,11 @@ import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/social/presentation/screens/notification_screen.dart';
 import '../../features/social/providers/follow_provider.dart';
 
-
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final _feedTabKey = GlobalKey<NavigatorState>(debugLabel: 'feedTab');
+final _chatTabKey = GlobalKey<NavigatorState>(debugLabel: 'chatTab');
+final _notifTabKey = GlobalKey<NavigatorState>(debugLabel: 'notifTab');
+final _settingsTabKey = GlobalKey<NavigatorState>(debugLabel: 'settingsTab');
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -39,7 +42,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         error: (_, __) => false,
       );
 
-      if (isLoggedIn == null) return null; // still loading
+      if (isLoggedIn == null) return null;
 
       final isAuthRoute = state.matchedLocation.startsWith('/login') ||
           state.matchedLocation.startsWith('/register') ||
@@ -50,112 +53,142 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // Auth routes
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      // ── Auth routes ──────────────────────────────────────────────────
       GoRoute(
-          path: '/forgot-password',
-          builder: (_, __) => const ForgotPasswordScreen()),
+        path: '/login',
+        pageBuilder: (_, __) => const CupertinoPage(child: LoginScreen()),
+      ),
+      GoRoute(
+        path: '/register',
+        pageBuilder: (_, __) => const CupertinoPage(child: RegisterScreen()),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: ForgotPasswordScreen()),
+      ),
 
-      // Search (push, no bottom nav)
+      // ── Global routes (pushed over everything) ───────────────────────
       GoRoute(
         path: '/search',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (_, __) => const SearchScreen(),
+        pageBuilder: (_, __) => const CupertinoPage(child: SearchScreen()),
       ),
-
-      // Edit profile
       GoRoute(
         path: '/profile/edit',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (_, __) => const EditProfileScreen(),
+        pageBuilder: (_, __) => const CupertinoPage(
+          fullscreenDialog: true,
+          child: EditProfileScreen(),
+        ),
       ),
-
-      // Account Settings
       GoRoute(
         path: '/settings/account',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (_, __) => const AccountSettingsScreen(),
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: AccountSettingsScreen()),
       ),
-
-      // Create Post (Fullscreen modal)
       GoRoute(
-          path: '/create',
-          parentNavigatorKey: _rootNavigatorKey,
-          pageBuilder: (context, state) => const CupertinoPage(
-                fullscreenDialog: true,
-                child: CreatePostScreen(),
-              )),
-
+        path: '/create',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) => const CupertinoPage(
+          fullscreenDialog: true,
+          child: CreatePostScreen(),
+        ),
+      ),
       GoRoute(
         path: '/chat/:conversationId',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (_, state) =>
-            ChatScreen(conversationId: state.pathParameters['conversationId']!),
+        pageBuilder: (_, state) => CupertinoPage(
+          child: ChatScreen(
+            conversationId: state.pathParameters['conversationId']!,
+          ),
+        ),
       ),
-
-      // Post detail (outside shell)
       GoRoute(
         path: '/feed/post/:id',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (_, state) =>
-            PostDetailScreen(postId: state.pathParameters['id']!),
+        pageBuilder: (_, state) => CupertinoPage(
+          child: PostDetailScreen(postId: state.pathParameters['id']!),
+        ),
       ),
-
-
-      // Main shell (bottom nav)
-      ShellRoute(
-        builder: (context, state, child) =>
-            MainShell(location: state.matchedLocation, child: child),
-        routes: [
-          GoRoute(path: '/feed', builder: (_, __) => const FeedScreen()),
-          
-          GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
-
-          GoRoute(
-              path: '/chat',
-              builder: (_, __) => const ConversationsScreen()),
-
-          GoRoute(
-              path: '/notifications',
-              builder: (_, __) => const NotificationScreen()),
-        ],
-      ),
-
-      // Profile (me - outside shell)
       GoRoute(
         path: '/profile/me',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (_, __) {
-          return Consumer(
+        pageBuilder: (_, __) => CupertinoPage(
+          child: Consumer(
             builder: (context, ref, _) {
               final userId = ref.watch(currentUserIdProvider) ?? '';
               return ProfileScreen(userId: userId, isMe: true);
             },
-          );
-        },
+          ),
+        ),
       ),
-
-      // Profile (outside shell — other users)
       GoRoute(
         path: '/profile/:userId',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (_, state) =>
-            ProfileScreen(userId: state.pathParameters['userId']!),
+        pageBuilder: (_, state) => CupertinoPage(
+          child: ProfileScreen(userId: state.pathParameters['userId']!),
+        ),
+      ),
+
+      // ── StatefulShellRoute — each tab keeps its own navigator stack ──
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            MainShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            navigatorKey: _feedTabKey,
+            routes: [
+              GoRoute(
+                path: '/feed',
+                pageBuilder: (_, __) =>
+                    const CupertinoPage(child: FeedScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _chatTabKey,
+            routes: [
+              GoRoute(
+                path: '/chat',
+                pageBuilder: (_, __) =>
+                    const CupertinoPage(child: ConversationsScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _notifTabKey,
+            routes: [
+              GoRoute(
+                path: '/notifications',
+                pageBuilder: (_, __) =>
+                    const CupertinoPage(child: NotificationScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _settingsTabKey,
+            routes: [
+              GoRoute(
+                path: '/settings',
+                pageBuilder: (_, __) =>
+                    const CupertinoPage(child: SettingsScreen()),
+              ),
+            ],
+          ),
+        ],
       ),
     ],
   );
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MainShell
+// ─────────────────────────────────────────────────────────────────────────────
 class MainShell extends ConsumerStatefulWidget {
-  final Widget child;
-  final String location;
-
-  const MainShell({
-    super.key,
-    required this.child,
-    required this.location,
-  });
+  final StatefulNavigationShell navigationShell;
+  const MainShell({super.key, required this.navigationShell});
 
   @override
   ConsumerState<MainShell> createState() => _MainShellState();
@@ -164,19 +197,30 @@ class MainShell extends ConsumerStatefulWidget {
 class _MainShellState extends ConsumerState<MainShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  int _selectedIndex(String location) {
-    if (location.startsWith('/feed')) return 0;
-    if (location.startsWith('/chat')) return 1;
-    if (location.startsWith('/create')) return 2;
-    if (location.startsWith('/notifications')) return 3;
-    if (location.startsWith('/settings') || location.startsWith('/profile/me')) return 4;
-    return 0;
+  void _onTap(int index) {
+    if (index == 2) {
+      context.push('/create');
+      return;
+    }
+    // Map visual index → branch index (skip the "+" slot)
+    final branchIndex = index > 2 ? index - 1 : index;
+    if (branchIndex == widget.navigationShell.currentIndex) {
+      widget.navigationShell.goBranch(branchIndex, initialLocation: true);
+    } else {
+      widget.navigationShell.goBranch(branchIndex);
+    }
+  }
+
+  // Convert branch index → visual tab index
+  int get _visualIndex {
+    final branch = widget.navigationShell.currentIndex;
+    return branch >= 2 ? branch + 1 : branch;
   }
 
   @override
   Widget build(BuildContext context) {
     final unreadCount = ref.watch(unreadNotificationsCountProvider);
-    final selectedIndex = _selectedIndex(widget.location);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return NotificationListener<OpenDrawerNotification>(
       onNotification: (_) {
@@ -186,74 +230,225 @@ class _MainShellState extends ConsumerState<MainShell> {
       child: Scaffold(
         key: _scaffoldKey,
         drawer: const FeedDrawer(),
-        body: widget.child,
-        bottomNavigationBar: CupertinoTabBar(
-        currentIndex: selectedIndex,
-        activeColor: AppColors.primary,
-        inactiveColor: AppColors.textHint,
-        backgroundColor: Theme.of(context).cardColor.withValues(alpha: 0.9),
+        body: widget.navigationShell,
+        bottomNavigationBar: _IosTabBar(
+          visualIndex: _visualIndex,
+          unreadCount: unreadCount,
+          isDark: isDark,
+          onTap: _onTap,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// iOS-style frosted-glass tab bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _IosTabBar extends StatelessWidget {
+  final int visualIndex;
+  final int unreadCount;
+  final bool isDark;
+  final void Function(int) onTap;
+
+  const _IosTabBar({
+    required this.visualIndex,
+    required this.unreadCount,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final barBg = isDark
+        ? const Color(0xFF1C1C1E).withValues(alpha: 0.92)
+        : Colors.white.withValues(alpha: 0.92);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: barBg,
         border: Border(
           top: BorderSide(
-            color: Theme.of(context).dividerColor,
-            width: 0.4,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.10)
+                : Colors.black.withValues(alpha: 0.14),
+            width: 0.5,
           ),
         ),
-        onTap: (index) {
-          switch (index) {
-            case 0:
-              context.go('/feed');
-              break;
-            case 1:
-              context.go('/chat');
-              break;
-            case 2:
-              context.push('/create');
-              break;
-            case 3:
-              context.go('/notifications');
-              break;
-            case 4:
-              context.go('/settings');
-              break;
-          }
-        },
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.house),
-            activeIcon: Icon(CupertinoIcons.house_fill),
-            label: 'Trang chủ',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.chat_bubble_2),
-            activeIcon: Icon(CupertinoIcons.chat_bubble_2_fill),
-            label: 'Tin nhắn',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.plus_circle),
-            activeIcon: Icon(CupertinoIcons.plus_circle_fill),
-            label: 'Đăng bài',
-          ),
-          BottomNavigationBarItem(
-            icon: Badge(
-              isLabelVisible: unreadCount > 0,
-              label: Text('$unreadCount'),
-              child: const Icon(CupertinoIcons.bell),
-            ),
-            activeIcon: Badge(
-              isLabelVisible: unreadCount > 0,
-              label: Text('$unreadCount'),
-              child: const Icon(CupertinoIcons.bell_fill),
-            ),
-            label: 'Thông báo',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.settings),
-            activeIcon: Icon(CupertinoIcons.settings_solid),
-            label: 'Cài đặt',
-          ),
-        ],
       ),
-    ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 50,
+          child: Row(
+            children: [
+              _TabItem(
+                visualIdx: 0,
+                currentVisualIdx: visualIndex,
+                icon: CupertinoIcons.house,
+                activeIcon: CupertinoIcons.house_fill,
+                label: 'Trang chủ',
+                onTap: onTap,
+              ),
+              _TabItem(
+                visualIdx: 1,
+                currentVisualIdx: visualIndex,
+                icon: CupertinoIcons.chat_bubble_2,
+                activeIcon: CupertinoIcons.chat_bubble_2_fill,
+                label: 'Tin nhắn',
+                onTap: onTap,
+              ),
+              // ── Centre create button ──
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(2),
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            theme.colorScheme.primary,
+                            theme.colorScheme.secondary,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.colorScheme.primary
+                                .withValues(alpha: 0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.plus,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              _TabItem(
+                visualIdx: 3,
+                currentVisualIdx: visualIndex,
+                icon: CupertinoIcons.bell,
+                activeIcon: CupertinoIcons.bell_fill,
+                label: 'Thông báo',
+                badge: unreadCount > 0 ? '$unreadCount' : null,
+                onTap: onTap,
+              ),
+              _TabItem(
+                visualIdx: 4,
+                currentVisualIdx: visualIndex,
+                icon: CupertinoIcons.person_circle,
+                activeIcon: CupertinoIcons.person_circle_fill,
+                label: 'Cài đặt',
+                onTap: onTap,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TabItem extends StatelessWidget {
+  final int visualIdx;
+  final int currentVisualIdx;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final String? badge;
+  final void Function(int) onTap;
+
+  const _TabItem({
+    required this.visualIdx,
+    required this.currentVisualIdx,
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.onTap,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = visualIdx == currentVisualIdx;
+    final color = isActive ? AppColors.primary : AppColors.textHint;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onTap(visualIdx),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  transitionBuilder: (child, anim) => ScaleTransition(
+                    scale: anim,
+                    child: FadeTransition(opacity: anim, child: child),
+                  ),
+                  child: Icon(
+                    isActive ? activeIcon : icon,
+                    key: ValueKey(isActive),
+                    color: color,
+                    size: 25,
+                  ),
+                ),
+                if (badge != null)
+                  Positioned(
+                    right: -9,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Text(
+                        badge!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              ),
+              child: Text(label),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

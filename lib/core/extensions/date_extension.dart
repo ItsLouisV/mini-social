@@ -25,16 +25,22 @@ extension DateTimeExtension on DateTime {
 
   String get chatTimestamp {
     final now = DateTime.now();
-    final diff = now.difference(this);
-    if (diff.inDays == 0) {
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final sixDaysAgo = today.subtract(const Duration(days: 6));
+
+    final dateToCompare = DateTime(year, month, day);
+
+    if (dateToCompare == today) {
       final h = hour.toString().padLeft(2, '0');
       final m = minute.toString().padLeft(2, '0');
       return '$h:$m';
-    } else if (diff.inDays == 1) {
+    } else if (dateToCompare == yesterday) {
       return 'Hôm qua';
-    } else if (diff.inDays < 7) {
+    } else if (dateToCompare.isAfter(sixDaysAgo)) {
       const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-      return days[weekday % 7];
+      final index = weekday == 7 ? 0 : weekday;
+      return days[index];
     } else {
       return formattedDate;
     }

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
@@ -18,95 +17,91 @@ class SettingsScreen extends ConsumerWidget {
     final profileAsync = ref.watch(profileProvider(currentUserId ?? ''));
     final themeMode = ref.watch(themeModeProvider);
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // iOS grouped background màu
+    final groupedBg =
+        isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7);
+    final cardBg = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final labelColor =
+        isDark ? const Color(0xFF8E8E93) : const Color(0xFF6C6C70);
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor, // Using standard background
+      backgroundColor: groupedBg,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar.large(
-            title: const Text('Cài đặt', style: TextStyle(fontWeight: FontWeight.bold)),
-            elevation: 0,
-            backgroundColor: theme.scaffoldBackgroundColor,
+          // ── Large-title iOS nav bar ──────────────────────────────────
+          CupertinoSliverNavigationBar(
+            transitionBetweenRoutes: false,
+            largeTitle: const Text(
+              'Cài đặt',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: groupedBg.withValues(alpha: 0.92),
+            border: Border(
+              bottom: BorderSide(
+                color: theme.dividerColor.withValues(alpha: 0.0),
+                width: 0,
+              ),
+            ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 40),
-              child: Column(
-                children: [
-                  // Profile Banner (Apple ID style)
-                  profileAsync.when(
-                    data: (profile) => _buildSection(
-                      context,
-                      null,
-                      [
-                        InkWell(
-                          onTap: () => context.push('/settings/account'),
-                          borderRadius: BorderRadius.circular(10),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: Row(
-                              children: [
-                                AppAvatar(
-                                  imageUrl: profile.avatarUrl,
-                                  name: profile.displayName,
-                                  radius: 30,
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(profile.displayName,
-                                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      Text('Tài khoản, Bảo mật & Dữ liệu',
-                                          style: TextStyle(
-                                              fontSize: 13, color: theme.hintColor)),
-                                    ],
-                                  ),
-                                ),
-                                Icon(CupertinoIcons.chevron_forward,
-                                    size: 18, color: theme.hintColor),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    loading: () => const Center(child: CupertinoActivityIndicator()),
-                    error: (_, __) => const SizedBox(),
-                  ),
 
-                  _buildSection(
-                    context,
-                    'Truy cập',
-                    [
-                      _buildSettingsItem(
-                        context,
+          SliverSafeArea(
+            top: false,
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                // ── Apple-ID style profile banner ───────────────────────
+                profileAsync.when(
+                  data: (profile) => _ProfileBanner(
+                    profile: profile,
+                    cardBg: cardBg,
+                    labelColor: labelColor,
+                    onTap: () => context.push('/settings/account'),
+                  ),
+                  loading: () => _SectionCard(
+                    bg: cardBg,
+                    child: const SizedBox(
+                      height: 80,
+                      child: Center(child: CupertinoActivityIndicator()),
+                    ),
+                  ),
+                  error: (_, __) => const SizedBox(),
+                ),
+
+                // ── TRUY CẬP ────────────────────────────────────────────
+                _SectionLabel(label: 'TRUY CẬP', color: labelColor),
+                _SectionCard(
+                  bg: cardBg,
+                  child: Column(
+                    children: [
+                      _IosRow(
+                        iconBg: Colors.blue,
                         icon: CupertinoIcons.person_crop_rectangle_fill,
-                        iconColor: Colors.blue,
                         title: 'Trang cá nhân',
                         onTap: () => context.push('/profile/me'),
                       ),
-                      _buildSettingsItem(
-                        context,
+                      _Divider(color: theme.dividerColor),
+                      _IosRow(
+                        iconBg: Colors.green,
                         icon: CupertinoIcons.shield_lefthalf_fill,
-                        iconColor: Colors.green,
                         title: 'Quyền riêng tư',
                         onTap: () {},
                       ),
                     ],
                   ),
+                ),
 
-                  _buildSection(
-                    context,
-                    'Tùy chỉnh',
-                    [
-                      _buildSettingsItem(
-                        context,
+                // ── TÙY CHỈNH ───────────────────────────────────────────
+                _SectionLabel(label: 'TÙY CHỈNH', color: labelColor),
+                _SectionCard(
+                  bg: cardBg,
+                  child: Column(
+                    children: [
+                      _IosRow(
+                        iconBg: Colors.indigo,
                         icon: CupertinoIcons.moon_fill,
-                        iconColor: Colors.indigo,
                         title: 'Chế độ tối',
+                        showChevron: false,
                         trailing: CupertinoSwitch(
                           activeTrackColor: theme.colorScheme.primary,
                           value: themeMode == ThemeMode.dark,
@@ -116,165 +111,97 @@ class SettingsScreen extends ConsumerWidget {
                           },
                         ),
                       ),
-                      _buildSettingsItem(
-                        context,
+                      _Divider(color: theme.dividerColor),
+                      _IosRow(
+                        iconBg: Colors.redAccent,
                         icon: CupertinoIcons.bell_fill,
-                        iconColor: Colors.redAccent,
                         title: 'Thông báo',
                         onTap: () {},
                       ),
-                      _buildSettingsItem(
-                        context,
+                      _Divider(color: theme.dividerColor),
+                      _IosRow(
+                        iconBg: Colors.purple,
                         icon: CupertinoIcons.globe,
-                        iconColor: Colors.purple,
                         title: 'Ngôn ngữ',
+                        showChevron: false,
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('Tiếng Việt', style: TextStyle(color: theme.hintColor)),
-                            const SizedBox(width: 8),
-                            Icon(CupertinoIcons.chevron_forward, size: 18, color: theme.hintColor),
+                            Text(
+                              'Tiếng Việt',
+                              style: TextStyle(color: labelColor, fontSize: 15),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(CupertinoIcons.chevron_forward,
+                                size: 16, color: labelColor),
                           ],
                         ),
-                        showChevron: false,
                         onTap: () {},
                       ),
                     ],
                   ),
+                ),
 
-                  _buildSection(
-                    context,
-                    'Hỗ trợ',
-                    [
-                      _buildSettingsItem(
-                        context,
+                // ── HỖ TRỢ ──────────────────────────────────────────────
+                _SectionLabel(label: 'HỖ TRỢ', color: labelColor),
+                _SectionCard(
+                  bg: cardBg,
+                  child: Column(
+                    children: [
+                      _IosRow(
+                        iconBg: Colors.lightBlue,
                         icon: CupertinoIcons.question_circle_fill,
-                        iconColor: Colors.lightBlue,
                         title: 'Trợ giúp & Hỗ trợ',
                         onTap: () {},
                       ),
-                      _buildSettingsItem(
-                        context,
+                      _Divider(color: theme.dividerColor),
+                      _IosRow(
+                        iconBg: Colors.teal,
                         icon: CupertinoIcons.info_circle_fill,
-                        iconColor: Colors.teal,
                         title: 'Về MiniSocial',
                         onTap: () {},
                       ),
                     ],
                   ),
+                ),
 
-                  _buildSection(
-                    context,
-                    null,
-                    [
-                      _buildSettingsItem(
-                        context,
-                        icon: CupertinoIcons.square_arrow_right_fill,
-                        iconColor: theme.colorScheme.error,
-                        title: 'Đăng xuất',
-                        titleColor: theme.colorScheme.error,
-                        showChevron: false,
-                        onTap: () => _showLogoutDialog(context, ref),
+                // ── ĐĂNG XUẤT ───────────────────────────────────────────
+                const SizedBox(height: 32),
+                _SectionCard(
+                  bg: cardBg,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    onPressed: () => _showLogoutDialog(context, ref),
+                    child: Center(
+                      child: Text(
+                        'Đăng xuất',
+                        style: TextStyle(
+                          color: theme.colorScheme.error,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w400,
+                        ),
                       ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 40),
-                  Center(
-                    child: Text(
-                      'Phiên bản 1.0.0\nMiniSocial',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: theme.hintColor, fontSize: 13),
                     ),
                   ),
-                ],
-              ),
+                ),
+
+                // ── Version footer ───────────────────────────────────────
+                const SizedBox(height: 32),
+                Center(
+                  child: Text(
+                    'MiniSocial • Phiên bản 1.0.0',
+                    style: TextStyle(
+                      color: labelColor,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+              ]),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSection(BuildContext context, String? title, List<Widget> children) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (title != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 32, bottom: 6, top: 24),
-            child: Text(
-              title.toUpperCase(),
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.hintColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          )
-        else
-          const SizedBox(height: 16),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            children: [
-              for (int i = 0; i < children.length; i++) ...[
-                children[i],
-                if (i < children.length - 1)
-                  Divider(
-                    height: 1,
-                    thickness: 0.5,
-                    indent: 52,
-                    endIndent: 0,
-                    color: theme.dividerColor.withValues(alpha: 0.5),
-                  ),
-              ]
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSettingsItem(
-    BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    Color? titleColor,
-    Widget? trailing,
-    bool showChevron = true,
-    VoidCallback? onTap,
-  }) {
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      leading: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: iconColor,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, color: Colors.white, size: 20),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontSize: 16,
-          color: titleColor,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      trailing: trailing ??
-          (showChevron
-              ? Icon(CupertinoIcons.chevron_forward,
-                  size: 18, color: Theme.of(context).hintColor)
-              : null),
     );
   }
 
@@ -287,7 +214,7 @@ class SettingsScreen extends ConsumerWidget {
         actions: [
           CupertinoDialogAction(
             onPressed: () => ctx.pop(),
-            child: const Text('Hủy'),
+            child: const Text('Huỷ'),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
@@ -298,6 +225,204 @@ class SettingsScreen extends ConsumerWidget {
             child: const Text('Đăng xuất'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Apple-ID Style Profile Banner
+// ─────────────────────────────────────────────────────────────────────────────
+class _ProfileBanner extends StatelessWidget {
+  final dynamic profile;
+  final Color cardBg;
+  final Color labelColor;
+  final VoidCallback onTap;
+
+  const _ProfileBanner({
+    required this.profile,
+    required this.cardBg,
+    required this.labelColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Material(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                AppAvatar(
+                  imageUrl: profile.avatarUrl,
+                  name: profile.displayName,
+                  radius: 32,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        profile.displayName,
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Tài khoản, Bảo mật & Dữ liệu',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: labelColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  CupertinoIcons.chevron_forward,
+                  size: 16,
+                  color: labelColor,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared Widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _SectionLabel({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 22, 16, 6),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final Color bg;
+  final Widget child;
+  const _SectionCard({required this.bg, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  final Color color;
+  const _Divider({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 0.5,
+      thickness: 0.5,
+      indent: 54,
+      endIndent: 0,
+      color: color.withValues(alpha: 0.4),
+    );
+  }
+}
+
+class _IosRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final String title;
+  final Widget? trailing;
+  final bool showChevron;
+  final VoidCallback? onTap;
+
+  const _IosRow({
+    required this.icon,
+    required this.iconBg,
+    required this.title,
+    this.trailing,
+    this.showChevron = true,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hintColor = Theme.of(context).hintColor;
+
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onTap,
+      child: Container(
+        color: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        child: Row(
+          children: [
+            // Icon badge
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Icon(icon, color: Colors.white, size: 17),
+            ),
+            const SizedBox(width: 14),
+
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+
+            // Trailing / chevron
+            trailing ??
+                (showChevron
+                    ? Icon(CupertinoIcons.chevron_forward,
+                        size: 16, color: hintColor)
+                    : const SizedBox.shrink()),
+          ],
+        ),
       ),
     );
   }

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../auth/providers/auth_provider.dart';
@@ -27,7 +26,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    // Mark as seen when opened
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(chatRepositoryProvider).markAsSeen(widget.conversationId);
     });
@@ -78,8 +76,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final messagesAsync =
         ref.watch(realtimeMessagesProvider(widget.conversationId));
     final currentUserId = ref.watch(currentUserIdProvider) ?? '';
+    final theme = Theme.of(context);
 
-    // Auto scroll when new messages arrive
     ref.listen(realtimeMessagesProvider(widget.conversationId), (_, next) {
       next.whenData((_) {
         WidgetsBinding.instance
@@ -87,26 +85,74 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       });
     });
 
+    // Lấy tên người dùng từ provider nếu có, fallback về 'Chat'
+    final convAsync = ref.watch(conversationsProvider);
+    final otherUserName = convAsync.whenData((convs) {
+      try {
+        final conv = convs.firstWhere((c) => c.id == widget.conversationId);
+        return conv.otherUser?.displayName ?? 'Chat';
+      } catch (_) {
+        return 'Chat';
+      }
+    }).valueOrNull ?? 'Chat';
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chat'),
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.chevron_back),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      resizeToAvoidBottomInset: true,
+      appBar: CupertinoNavigationBar(
+        transitionBetweenRoutes: false,
+        backgroundColor: theme.scaffoldBackgroundColor.withValues(alpha: 0.92),
+        border: Border(
+          bottom: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.3),
+            width: 0.5,
+          ),
+        ),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                CupertinoIcons.chevron_back,
+                color: theme.colorScheme.primary,
+                size: 18,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Quay lại',
+                style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+        middle: Text(
+          otherUserName,
+          style: TextStyle(
+            color: theme.textTheme.titleMedium?.color,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: messagesAsync.when(
-              data: (messages) => _buildMessageList(messages, currentUserId),
-              loading: () =>
-                  const Center(child: CupertinoActivityIndicator()),
-              error: (e, _) => Center(child: Text(e.toString())),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: messagesAsync.when(
+                data: (messages) =>
+                    _buildMessageList(messages, currentUserId),
+                loading: () =>
+                    const Center(child: CupertinoActivityIndicator()),
+                error: (e, _) => Center(child: Text(e.toString())),
+              ),
             ),
-          ),
-          _buildInput(),
-        ],
+            _buildInput(theme),
+          ],
+        ),
       ),
     );
   }
@@ -138,18 +184,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Widget _buildInput() {
+  Widget _buildInput(ThemeData theme) {
     return Container(
       padding: EdgeInsets.only(
         left: 12,
         right: 8,
         top: 8,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 8,
+        bottom: MediaQuery.of(context).padding.bottom + 8,
       ),
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        border:
-            Border(top: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
+        color: theme.scaffoldBackgroundColor,
+        border: Border(
+          top: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.4),
+            width: 0.5,
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -159,13 +209,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               decoration: InputDecoration(
                 hintText: 'Nhắn tin...',
                 hintStyle: AppTextStyles.bodyMedium
-                    .copyWith(color: Theme.of(context).hintColor),
+                    .copyWith(color: theme.hintColor),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                fillColor: theme.colorScheme.surfaceContainerHighest,
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 10),
                 isDense: true,
@@ -183,7 +233,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
+                color: theme.colorScheme.primary,
                 shape: BoxShape.circle,
               ),
               child: _sending
@@ -232,8 +282,8 @@ class _MessageBubble extends StatelessWidget {
                 constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.7,
                 ),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: isMine
                       ? Theme.of(context).colorScheme.primary

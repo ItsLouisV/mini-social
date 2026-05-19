@@ -41,119 +41,128 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final resultsAsync = ref.watch(searchResultsProvider(_query));
 
     return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _controller,
-          autofocus: true,
-          onChanged: _onChanged,
-          decoration: InputDecoration(
-            hintText: 'Tìm kiếm người dùng...',
-            hintStyle:
-                AppTextStyles.bodyMedium.copyWith(color: Theme.of(context).hintColor),
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            filled: false,
-          ),
-          style: AppTextStyles.bodyLarge,
-        ),
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.chevron_back),
-          onPressed: () => context.pop(),
-        ),
-        actions: [
-          if (_controller.text.isNotEmpty)
-            IconButton(
-              icon: const Icon(CupertinoIcons.xmark_circle_fill),
-              onPressed: () {
-                _controller.clear();
-                setState(() => _query = '');
-              },
+      body: Column(
+        children: [
+          CupertinoNavigationBar(
+            transitionBetweenRoutes: false,
+            backgroundColor:
+                Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.92),
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+                width: 0.5,
+              ),
             ),
+            leading: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => context.pop(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.chevron_back,
+                      color: Theme.of(context).colorScheme.primary, size: 18),
+                  const SizedBox(width: 2),
+                  Text('Huỷ',
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontSize: 16)),
+                ],
+              ),
+            ),
+            middle: CupertinoSearchTextField(
+              controller: _controller,
+              autofocus: true,
+              onChanged: _onChanged,
+              placeholder: 'Tìm kiếm người dùng...',
+              style: AppTextStyles.bodyMedium,
+            ),
+          ),
+          Expanded(
+            child: _query.isEmpty
+                ? _buildEmpty()
+                : resultsAsync.when(
+                    data: (users) {
+                      if (users.isEmpty) {
+                        return Center(
+                          child: Text(
+                            'Không tìm thấy "$_query"',
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(color: Theme.of(context).hintColor),
+                          ),
+                        );
+                      }
+                      return ListView.separated(
+                        itemCount: users.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final user = users[index];
+                          final isFollowingAsync =
+                              ref.watch(isFollowingProvider(user.id));
+
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 4),
+                            leading: AppAvatar(
+                              imageUrl: user.avatarUrl,
+                              name: user.displayName,
+                              radius: 22,
+                            ),
+                            title: Text(user.displayName,
+                                style: AppTextStyles.titleSmall),
+                            subtitle: Text('@${user.username}',
+                                style: AppTextStyles.caption),
+                            trailing: isFollowingAsync.when(
+                              data: (isFollowing) => OutlinedButton(
+                                onPressed: () {
+                                  if (isFollowing) {
+                                    ref
+                                        .read(followActionsProvider.notifier)
+                                        .unfollow(user.id);
+                                  } else {
+                                    ref
+                                        .read(followActionsProvider.notifier)
+                                        .follow(user.id);
+                                  }
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  side: BorderSide(
+                                    color: isFollowing
+                                        ? Theme.of(context).dividerColor
+                                        : Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                                child: Text(
+                                  isFollowing ? 'Đang theo dõi' : 'Theo dõi',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isFollowing
+                                        ? Theme.of(context).hintColor
+                                        : Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                              loading: () => const SizedBox(
+                                width: 80,
+                                child: LinearProgressIndicator(),
+                              ),
+                              error: (_, __) => const SizedBox(),
+                            ),
+                            onTap: () => context.push('/profile/${user.id}'),
+                          );
+                        },
+                      );
+                    },
+                    loading: () =>
+                        const Center(child: CupertinoActivityIndicator()),
+                    error: (e, _) =>
+                        Center(child: Text(e.toString())),
+                  ),
+          ),
         ],
       ),
-      body: _query.isEmpty
-          ? _buildEmpty()
-          : resultsAsync.when(
-              data: (users) {
-                if (users.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'Không tìm thấy "$_query"',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: Theme.of(context).hintColor),
-                    ),
-                  );
-                }
-                return ListView.separated(
-                  itemCount: users.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final user = users[index];
-                    final isFollowingAsync =
-                        ref.watch(isFollowingProvider(user.id));
-
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
-                      leading: AppAvatar(
-                        imageUrl: user.avatarUrl,
-                        name: user.displayName,
-                        radius: 22,
-                      ),
-                      title: Text(user.displayName,
-                          style: AppTextStyles.titleSmall),
-                      subtitle: Text('@${user.username}',
-                          style: AppTextStyles.caption),
-                      trailing: isFollowingAsync.when(
-                        data: (isFollowing) => OutlinedButton(
-                          onPressed: () {
-                            if (isFollowing) {
-                              ref
-                                  .read(followActionsProvider.notifier)
-                                  .unfollow(user.id);
-                            } else {
-                              ref
-                                  .read(followActionsProvider.notifier)
-                                  .follow(user.id);
-                            }
-                          },
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 6),
-                            minimumSize: Size.zero,
-                            side: BorderSide(
-                              color: isFollowing
-                                  ? Theme.of(context).dividerColor
-                                  : Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                          child: Text(
-                            isFollowing ? 'Đang theo dõi' : 'Theo dõi',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isFollowing
-                                  ? Theme.of(context).hintColor
-                                  : Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                        loading: () => const SizedBox(
-                          width: 80,
-                          child: LinearProgressIndicator(),
-                        ),
-                        error: (_, __) => const SizedBox(),
-                      ),
-                      onTap: () => context.push('/profile/${user.id}'),
-                    );
-                  },
-                );
-              },
-              loading: () =>
-                  const Center(child: CupertinoActivityIndicator()),
-              error: (e, _) =>
-                  Center(child: Text(e.toString())),
-            ),
     );
   }
 
