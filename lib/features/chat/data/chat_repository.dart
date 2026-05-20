@@ -1,4 +1,6 @@
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../domain/conversation_model.dart';
 import '../domain/message_model.dart';
 import '../../profile/domain/profile_model.dart';
@@ -8,6 +10,7 @@ import '../../../core/services/supabase_service.dart';
 
 class ChatRepository {
   final SupabaseService _service;
+  final _uuid = const Uuid();
 
   ChatRepository(this._service);
 
@@ -114,7 +117,44 @@ class ChatRepository {
         .from(SupabaseConstants.conversationsTable)
         .update({
           'last_message': content,
-          'last_message_at': DateTime.now().toIso8601String(),
+          'last_message_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', conversationId);
+
+    return MessageModel.fromJson(data);
+  }
+
+  Future<MessageModel> sendImageMessage(
+      String conversationId, XFile imageFile) async {
+    final userId = currentUserId!;
+    final imageId = _uuid.v4();
+    final ext = imageFile.name.split('.').last.toLowerCase();
+    final path = '$userId/$conversationId/$imageId.$ext';
+
+    final url = await _service.uploadFile(
+      bucket: 'chat-images',
+      path: path,
+      file: imageFile,
+    );
+
+    final data = await _client
+        .from(SupabaseConstants.messagesTable)
+        .insert({
+          'conversation_id': conversationId,
+          'sender_id': userId,
+          'content': null,
+          'media_url': url,
+          'message_type': 'image',
+        })
+        .select()
+        .single();
+
+    await _client
+        .from(SupabaseConstants.conversationsTable)
+        .update({
+          'last_message': '📷 Hình ảnh',
+          'last_message_at': DateTime.now().toUtc().toIso8601String(),
+          'last_message_sender_id': userId,
         })
         .eq('id', conversationId);
 

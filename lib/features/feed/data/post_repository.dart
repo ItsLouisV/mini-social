@@ -41,7 +41,7 @@ class PostRepository {
   // ── Create Post ──
   Future<PostModel> createPost({
     required String caption,
-    required List<XFile> images,
+    required List<XFile> media,
   }) async {
     final userId = currentUserId!;
     final postId = _uuid.v4();
@@ -53,23 +53,28 @@ class PostRepository {
       'caption': caption,
     });
 
-    // 2. Upload images and insert media records
-    for (int i = 0; i < images.length; i++) {
-      final image = images[i];
+    // 2. Upload media and insert media records
+    for (int i = 0; i < media.length; i++) {
+      final item = media[i];
       final mediaId = _uuid.v4();
-      final path = '$userId/$postId/$i.jpg';
+      
+      final extension = item.name.split('.').last.toLowerCase();
+      final isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp'].contains(extension);
+      final fileExtension = isVideo ? extension : 'jpg';
+      final path = '$userId/$postId/$i.$fileExtension';
+      final mediaType = isVideo ? 'video' : 'image';
       
       final url = await _service.uploadFile(
         bucket: SupabaseConstants.postsBucket,
         path: path,
-        file: image,
+        file: item,
       );
 
       await _client.from(SupabaseConstants.postMediaTable).insert({
         'id': mediaId,
         'post_id': postId,
         'url': url,
-        'type': 'image',
+        'type': mediaType,
         'order_index': i,
       });
     }

@@ -107,12 +107,12 @@ class PostCard extends ConsumerWidget {
                   const SizedBox(height: 10),
                 ],
 
-                // Images
+                // Media (images & videos)
                 if (post.media.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: ImageCarousel(
-                      imageUrls: post.media.map((m) => m.url).toList(),
+                      media: post.media,
                     ),
                   ),
 

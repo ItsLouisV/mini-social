@@ -28,7 +28,7 @@ class MessageModel {
       mediaUrl: json['media_url'] as String?,
       messageType: json['message_type'] as String? ?? 'text',
       isSeen: json['is_seen'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
     );
   }
 

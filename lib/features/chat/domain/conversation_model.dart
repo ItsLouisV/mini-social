@@ -29,9 +29,9 @@ class ConversationModel {
       participant2: json['participant_2'] as String,
       lastMessage: json['last_message'] as String?,
       lastMessageAt: json['last_message_at'] != null
-          ? DateTime.parse(json['last_message_at'] as String)
+          ? DateTime.parse(json['last_message_at'] as String).toLocal()
           : null,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
       lastMessageSenderId: json['last_message_sender'] != null
           ? (json['last_message_sender'] is Map ? json['last_message_sender']['sender_id'] as String? : null)
           : null,

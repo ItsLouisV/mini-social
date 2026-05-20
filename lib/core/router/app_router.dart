@@ -29,13 +29,24 @@ final _chatTabKey = GlobalKey<NavigatorState>(debugLabel: 'chatTab');
 final _notifTabKey = GlobalKey<NavigatorState>(debugLabel: 'notifTab');
 final _settingsTabKey = GlobalKey<NavigatorState>(debugLabel: 'settingsTab');
 
+class RouterRefreshListenable extends ChangeNotifier {
+  RouterRefreshListenable(Ref ref) {
+    ref.listen(authStateProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final refreshListenable = RouterRefreshListenable(ref);
+  ref.onDispose(() => refreshListenable.dispose());
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/feed',
+    refreshListenable: refreshListenable,
     redirect: (context, state) {
+      final authState = ref.read(authStateProvider);
       final isLoggedIn = authState.when(
         data: (s) => s.session != null,
         loading: () => null,

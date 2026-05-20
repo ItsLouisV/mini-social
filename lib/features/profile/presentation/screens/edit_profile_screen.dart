@@ -1,10 +1,12 @@
 import 'dart:io' as io;
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 
 import '../../../../core/utils/image_utils.dart';
@@ -56,9 +58,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Chỉnh sửa hồ sơ'),
+            title: const Text(
+              'Chỉnh sửa hồ sơ',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+            centerTitle: true,
             leading: IconButton(
-              icon: const Icon(CupertinoIcons.xmark),
+              icon: const Icon(CupertinoIcons.xmark, size: 20),
               onPressed: () => context.pop(),
             ),
             actions: [
@@ -70,91 +79,273 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CupertinoActivityIndicator())
-                    : const Text('Lưu',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                        child: CupertinoActivityIndicator(),
+                      )
+                    : const Text(
+                        'Lưu',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
               ),
             ],
           ),
           body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Avatar picker
-                  Center(
-                    child: Stack(
-                      children: [
-                        _newAvatar != null
-                            ? CircleAvatar(
-                                radius: 50,
-                                backgroundImage: kIsWeb
-                                    ? NetworkImage(_newAvatar!.path)
-                                    : FileImage(io.File(_newAvatar!.path)) as ImageProvider,
-                              )
-                            : AppAvatar(
-                                imageUrl: profile.avatarUrl,
-                                name: profile.displayName,
-                                radius: 50,
-                              ),
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Stack for Cover and Avatar Picker
+                SizedBox(
+                  height: 220,
+                  child: Stack(
+                    children: [
+                      // Cover Banner
+                      GestureDetector(
+                        onTap: _pickCover,
+                        child: Container(
+                          height: 160,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                            image: _newCover != null
+                                ? DecorationImage(
+                                    image: kIsWeb
+                                        ? NetworkImage(_newCover!.path)
+                                        : FileImage(io.File(_newCover!.path)) as ImageProvider,
+                                    fit: BoxFit.cover,
+                                  )
+                                : (profile.coverUrl != null
+                                    ? DecorationImage(
+                                        image: CachedNetworkImageProvider(profile.coverUrl!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null),
+                          ),
+                          child: _newCover == null && profile.coverUrl == null
+                              ? Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                                        Theme.of(context).colorScheme.secondary.withValues(alpha: 0.7),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          CupertinoIcons.photo,
+                                          color: Colors.white70,
+                                          size: 32,
+                                        ),
+                                        SizedBox(height: 6),
+                                        Text(
+                                          'Thay đổi ảnh bìa',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ),
+                      
+                      // Glassmorphic Edit Cover Pill Button
+                      if (_newCover != null || profile.coverUrl != null)
                         Positioned(
-                          right: 0,
-                          bottom: 0,
+                          bottom: 72,
+                          right: 16,
                           child: GestureDetector(
-                            onTap: _pickAvatar,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                    color: Colors.white, width: 2),
+                            onTap: _pickCover,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  color: Colors.black.withValues(alpha: 0.35),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(CupertinoIcons.camera_fill, size: 14, color: Colors.white),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Thay đổi ảnh bìa',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                              child: const Icon(CupertinoIcons.camera_fill,
-                                  size: 16, color: Colors.white),
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: TextButton(
-                      onPressed: _pickCover,
-                      child: Text(_newCover != null
-                          ? '✓ Ảnh bìa đã chọn'
-                          : 'Thay đổi ảnh bìa'),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
 
-                  AppTextField(
-                    label: 'Họ và tên',
-                    controller: _nameController,
-                    validator: Validators.fullName,
-                    prefixIcon: CupertinoIcons.person,
+                      // Avatar overlapping
+                      Positioned(
+                        top: 100,
+                        left: 20,
+                        child: Stack(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Theme.of(context).scaffoldBackgroundColor,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: _newAvatar != null
+                                  ? CircleAvatar(
+                                      radius: 50,
+                                      backgroundImage: kIsWeb
+                                          ? NetworkImage(_newAvatar!.path)
+                                          : FileImage(io.File(_newAvatar!.path)) as ImageProvider,
+                                    )
+                                  : AppAvatar(
+                                      imageUrl: profile.avatarUrl,
+                                      name: profile.displayName,
+                                      radius: 50,
+                                    ),
+                            ),
+                            Positioned(
+                              right: 2,
+                              bottom: 2,
+                              child: GestureDetector(
+                                onTap: _pickAvatar,
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Theme.of(context).scaffoldBackgroundColor,
+                                      width: 2.5,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.15),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    CupertinoIcons.camera_fill,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Username',
-                    controller: _usernameController,
-                    validator: Validators.username,
-                    prefixIcon: CupertinoIcons.at,
+                ),
+                
+                // Form Fields
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Section Title
+                      Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.square_list_fill,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'THÔNG TIN CÁ NHÂN',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      
+                      // Card Box for Form
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor.withValues(alpha: 0.08),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.all(16),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AppTextField(
+                                label: 'Họ và tên',
+                                controller: _nameController,
+                                validator: Validators.fullName,
+                                prefixIcon: CupertinoIcons.person,
+                              ),
+                              const SizedBox(height: 18),
+                              AppTextField(
+                                label: 'Username',
+                                controller: _usernameController,
+                                validator: Validators.username,
+                                prefixIcon: CupertinoIcons.at,
+                              ),
+                              const SizedBox(height: 18),
+                              AppTextField(
+                                label: 'Bio',
+                                hint: 'Giới thiệu về bản thân...',
+                                controller: _bioController,
+                                maxLines: 4,
+                                maxLength: 150,
+                                prefixIcon: CupertinoIcons.info,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Bio',
-                    hint: 'Giới thiệu về bản thân...',
-                    controller: _bioController,
-                    maxLines: 4,
-                    maxLength: 150,
-                    prefixIcon: CupertinoIcons.info,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         );
@@ -224,6 +415,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
+        debugPrint('Edit profile error: $e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

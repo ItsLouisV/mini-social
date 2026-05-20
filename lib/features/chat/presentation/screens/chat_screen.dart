@@ -1,9 +1,14 @@
+import 'dart:io' as io;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
-import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/extensions/date_extension.dart';
+import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../domain/message_model.dart';
 import '../../providers/chat_provider.dart';
@@ -20,6 +25,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  final _focusNode = FocusNode();
   bool _sending = false;
 
   @override
@@ -34,16 +40,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
+  void _scrollToBottom({bool animated = true}) {
+    if (!_scrollController.hasClients) return;
+    if (animated) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
       );
+    } else {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     }
   }
 
@@ -58,7 +68,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       await ref
           .read(chatRepositoryProvider)
           .sendMessage(widget.conversationId, text);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -70,68 +81,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  String _formatMessageGroupTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final sixDaysAgo = today.subtract(const Duration(days: 6));
+  Future<void> _pickAndSendImage() async {
+    final picker = ImagePicker();
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery);
+    if (picked == null || !mounted) return;
 
-    final dateToCompare = DateTime(dateTime.year, dateTime.month, dateTime.day);
-    final h = dateTime.hour.toString().padLeft(2, '0');
-    final m = dateTime.minute.toString().padLeft(2, '0');
-    final timeStr = '$h:$m';
-
-    if (dateToCompare == today) {
-      return timeStr;
-    } else if (dateToCompare == yesterday) {
-      return 'Hôm qua, $timeStr';
-    } else if (dateToCompare.isAfter(sixDaysAgo)) {
-      const days = [
-        'Chủ Nhật',
-        'Thứ Hai',
-        'Thứ Ba',
-        'Thứ Tư',
-        'Thứ Năm',
-        'Thứ Sáu',
-        'Thứ Bảy'
-      ];
-      final index = dateTime.weekday == 7 ? 0 : dateTime.weekday;
-      return '${days[index]}, $timeStr';
-    } else {
-      final day = dateTime.day.toString().padLeft(2, '0');
-      final month = dateTime.month.toString().padLeft(2, '0');
-      final year = dateTime.year.toString();
-      return '$day/$month/$year, $timeStr';
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(chatRepositoryProvider)
+          .sendImageMessage(widget.conversationId, picked);
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _scrollToBottom());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gửi ảnh thất bại: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
-  }
-
-  Widget _buildTimeDivider(DateTime dateTime) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final formattedStr = _formatMessageGroupTime(dateTime);
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: isDark
-                ? const Color(0xFF2C2C2E)
-                : const Color(0xFFE5E5EA),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            formattedStr,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   @override
@@ -141,63 +115,121 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final currentUserId = ref.watch(currentUserIdProvider) ?? '';
     final theme = Theme.of(context);
 
-    ref.listen(realtimeMessagesProvider(widget.conversationId), (_, next) {
+    ref.listen(realtimeMessagesProvider(widget.conversationId),
+        (_, next) {
       next.whenData((_) {
         WidgetsBinding.instance
             .addPostFrameCallback((_) => _scrollToBottom());
       });
     });
 
-    // Lấy tên người dùng từ provider nếu có, fallback về 'Chat'
+    // Lấy info người kia từ conversations provider
     final convAsync = ref.watch(conversationsProvider);
-    final otherUserName = convAsync.whenData((convs) {
+    final otherUser = convAsync.whenData((convs) {
       try {
-        final conv = convs.firstWhere((c) => c.id == widget.conversationId);
-        return conv.otherUser?.displayName ?? 'Chat';
+        return convs
+            .firstWhere((c) => c.id == widget.conversationId)
+            .otherUser;
       } catch (_) {
-        return 'Chat';
+        return null;
       }
-    }).valueOrNull ?? 'Chat';
+    }).valueOrNull;
+
+    final otherUserName = otherUser?.displayName ?? 'Chat';
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       resizeToAvoidBottomInset: true,
-      appBar: CupertinoNavigationBar(
-        transitionBetweenRoutes: false,
-        backgroundColor: theme.scaffoldBackgroundColor.withValues(alpha: 0.92),
-        border: Border(
-          bottom: BorderSide(
-            color: theme.dividerColor.withValues(alpha: 0.3),
-            width: 0.5,
+      appBar: AppBar(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leadingWidth: 36,
+        leading: IconButton(
+          icon: Icon(
+            CupertinoIcons.chevron_back,
+            color: theme.colorScheme.primary,
+            size: 22,
           ),
-        ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+        ),
+        title: GestureDetector(
+          onTap: () {
+            if (otherUser != null) {
+              context.push('/profile/${otherUser.id}');
+            }
+          },
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                CupertinoIcons.chevron_back,
-                color: theme.colorScheme.primary,
-                size: 18,
+              AppAvatar(
+                imageUrl: otherUser?.avatarUrl,
+                name: otherUser?.displayName,
+                radius: 18,
               ),
-              const SizedBox(width: 4),
-              Text(
-                'Quay lại',
-                style: TextStyle(
-                  color: theme.colorScheme.primary,
-                  fontSize: 16,
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      otherUserName,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        letterSpacing: -0.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
-        middle: Text(
-          otherUserName,
-          style: TextStyle(
-            color: theme.textTheme.titleMedium?.color,
-            fontWeight: FontWeight.w600,
+        titleSpacing: 4,
+        actions: [
+          // Video call
+          IconButton(
+            icon: Icon(
+              CupertinoIcons.videocam,
+              color: theme.colorScheme.primary,
+              size: 24,
+            ),
+            onPressed: () {},
+            tooltip: 'Gọi video',
+          ),
+          // Voice call
+          IconButton(
+            icon: Icon(
+              CupertinoIcons.phone,
+              color: theme.colorScheme.primary,
+              size: 20,
+            ),
+            onPressed: () {},
+            tooltip: 'Gọi thoại',
+          ),
+          // More options
+          IconButton(
+            icon: Icon(
+              CupertinoIcons.ellipsis,
+              color: theme.colorScheme.primary,
+              size: 20,
+            ),
+            onPressed: () {},
+            tooltip: 'Thêm',
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(0.5),
+          child: Divider(
+            height: 0.5,
+            thickness: 0.5,
+            color: theme.dividerColor.withValues(alpha: 0.3),
           ),
         ),
       ),
@@ -223,49 +255,74 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget _buildMessageList(
       List<MessageModel> messages, String currentUserId) {
     if (messages.isEmpty) {
-      return const Center(
-        child: Text('Hãy gửi tin nhắn đầu tiên!',
-            style: AppTextStyles.bodySmall),
+      return Center(
+        child: Text(
+          'Hãy gửi tin nhắn đầu tiên!',
+          style: TextStyle(color: Theme.of(context).hintColor),
+        ),
       );
     }
 
-    final listItems = <Widget>[];
-    DateTime? lastShowedTime;
+    // Build message items with grouping logic
+    final items = <_MessageListItem>[];
 
     for (int i = 0; i < messages.length; i++) {
-      final message = messages[i];
-      final isMine = message.senderId == currentUserId;
-      final isLast = i == messages.length - 1;
+      final msg = messages[i];
+      final prev = i > 0 ? messages[i - 1] : null;
+      final next = i < messages.length - 1 ? messages[i + 1] : null;
 
-      // Nhóm tin nhắn theo khoảng thời gian 10 phút
-      if (lastShowedTime == null ||
-          message.createdAt.difference(lastShowedTime).inMinutes.abs() >= 10) {
-        listItems.add(_buildTimeDivider(message.createdAt));
-        lastShowedTime = message.createdAt;
+      // Show time divider nếu cách nhau >= 10 phút hoặc tin nhắn đầu tiên
+      if (prev == null ||
+          msg.createdAt.difference(prev.createdAt).inMinutes.abs() >= 10) {
+        items.add(_MessageListItem.divider(msg.createdAt));
       }
 
-      listItems.add(_MessageBubble(
-        key: ValueKey(message.id),
-        message: message,
-        isMine: isMine,
-        showSeen: isMine && isLast && message.isSeen,
+      // Xác định có phải tin cuối trong nhóm không
+      // (nhóm: cùng người gửi, khoảng cách < 5 phút)
+      final isLastInGroup = next == null ||
+          next.senderId != msg.senderId ||
+          next.createdAt.difference(msg.createdAt).inMinutes.abs() >= 5;
+
+      // Hiện time inline chỉ ở tin cuối của nhóm
+      items.add(_MessageListItem.message(
+        msg,
+        isLastInGroup: isLastInGroup,
+        showInlineTime: isLastInGroup,
       ));
     }
 
+    // Mark as seen
+    final isMine = messages.isNotEmpty &&
+        messages.last.senderId == currentUserId;
+    final lastIsSeen = messages.isNotEmpty && messages.last.isSeen;
+
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      itemCount: listItems.length,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      itemCount: items.length,
       itemBuilder: (context, index) {
-        return listItems[index];
+        final item = items[index];
+        if (item.isDivider) {
+          return _TimeDivider(dateTime: item.dateTime!);
+        }
+        return _MessageBubble(
+          key: ValueKey(item.message!.id),
+          message: item.message!,
+          isMine: item.message!.senderId == currentUserId,
+          showInlineTime: item.showInlineTime,
+          showSeen: isMine &&
+              lastIsSeen &&
+              index == items.length - 1,
+        );
       },
     );
   }
 
   Widget _buildInput(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       padding: EdgeInsets.only(
-        left: 12,
+        left: 8,
         right: 8,
         top: 8,
         bottom: MediaQuery.of(context).padding.bottom + 8,
@@ -274,58 +331,103 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         color: theme.scaffoldBackgroundColor,
         border: Border(
           top: BorderSide(
-            color: theme.dividerColor.withValues(alpha: 0.4),
+            color: theme.dividerColor.withValues(alpha: 0.3),
             width: 0.5,
           ),
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // Image picker button
+          IconButton(
+            onPressed: _sending ? null : _pickAndSendImage,
+            icon: Icon(
+              CupertinoIcons.photo,
+              color: isDark
+                  ? Colors.white60
+                  : Colors.black45,
+              size: 24,
+            ),
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 4),
+
+          // Text field
           Expanded(
-            child: TextField(
-              controller: _messageController,
-              decoration: InputDecoration(
-                hintText: 'Nhắn tin...',
-                hintStyle: AppTextStyles.bodyMedium
-                    .copyWith(color: theme.hintColor),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 120),
+              child: TextField(
+                controller: _messageController,
+                focusNode: _focusNode,
+                decoration: InputDecoration(
+                  hintText: 'Nhắn tin...',
+                  hintStyle: TextStyle(
+                    color: theme.hintColor,
+                    fontSize: 15,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                  fillColor: isDark
+                      ? const Color(0xFF2C2C2E)
+                      : const Color(0xFFF2F2F7),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  isDense: true,
                 ),
-                filled: true,
-                fillColor: theme.colorScheme.surfaceContainerHighest,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 10),
-                isDense: true,
+                maxLines: null,
+                textInputAction: TextInputAction.newline,
+                onSubmitted: (_) => _send(),
               ),
-              maxLines: null,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _send(),
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _send,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-              child: _sending
-                  ? const Center(
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      ),
-                    )
-                  : const Icon(CupertinoIcons.paperplane_fill,
-                      color: Colors.white, size: 20),
-            ),
+          const SizedBox(width: 6),
+
+          // Send button
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _messageController,
+            builder: (context, value, _) {
+              final hasText = value.text.trim().isNotEmpty;
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 150),
+                child: hasText
+                    ? GestureDetector(
+                        key: const ValueKey('send'),
+                        onTap: _send,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: _sending
+                              ? const Center(
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(
+                                  CupertinoIcons.paperplane_fill,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                        ),
+                      )
+                    : const SizedBox(key: ValueKey('empty'), width: 4),
+              );
+            },
           ),
         ],
       ),
@@ -333,15 +435,116 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 }
 
+// ── Helper data class ─────────────────────────────────────────────────────────
+class _MessageListItem {
+  final bool isDivider;
+  final DateTime? dateTime;
+  final MessageModel? message;
+  final bool showInlineTime;
+
+  const _MessageListItem._({
+    required this.isDivider,
+    this.dateTime,
+    this.message,
+    this.showInlineTime = false,
+  });
+
+  factory _MessageListItem.divider(DateTime dt) =>
+      _MessageListItem._(isDivider: true, dateTime: dt);
+
+  factory _MessageListItem.message(
+    MessageModel msg, {
+    bool isLastInGroup = true,
+    bool showInlineTime = true,
+  }) =>
+      _MessageListItem._(
+        isDivider: false,
+        message: msg,
+        showInlineTime: showInlineTime,
+      );
+}
+
+// ── Time Divider ──────────────────────────────────────────────────────────────
+class _TimeDivider extends StatelessWidget {
+  final DateTime dateTime;
+
+  const _TimeDivider({required this.dateTime});
+
+  String _format() {
+    final local = dateTime.isUtc ? dateTime.toLocal() : dateTime;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final sixDaysAgo = today.subtract(const Duration(days: 6));
+    final dateOnly =
+        DateTime(local.year, local.month, local.day);
+    final hhmm = local.localTimeHHmm;
+
+    if (dateOnly == today) {
+      return hhmm;
+    } else if (dateOnly == yesterday) {
+      return 'Hôm qua, $hhmm';
+    } else if (dateOnly.isAfter(sixDaysAgo)) {
+      const days = [
+        'Chủ Nhật',
+        'Thứ Hai',
+        'Thứ Ba',
+        'Thứ Tư',
+        'Thứ Năm',
+        'Thứ Sáu',
+        'Thứ Bảy'
+      ];
+      final idx = local.weekday == 7 ? 0 : local.weekday;
+      return '${days[idx]}, $hhmm';
+    } else {
+      final d = local.day.toString().padLeft(2, '0');
+      final mo = local.month.toString().padLeft(2, '0');
+      return '$d/$mo/${local.year}, $hhmm';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            _format(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: theme.hintColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Message Bubble ────────────────────────────────────────────────────────────
 class _MessageBubble extends StatefulWidget {
   final MessageModel message;
   final bool isMine;
+  final bool showInlineTime;
   final bool showSeen;
 
   const _MessageBubble({
     super.key,
     required this.message,
     required this.isMine,
+    this.showInlineTime = false,
     this.showSeen = false,
   });
 
@@ -350,90 +553,115 @@ class _MessageBubble extends StatefulWidget {
 }
 
 class _MessageBubbleState extends State<_MessageBubble> {
-  bool _showTime = false;
+  bool _tapped = false;
+
+  String get _timeStr {
+    final local = widget.message.createdAt.isUtc
+        ? widget.message.createdAt.toLocal()
+        : widget.message.createdAt;
+    return local.localTimeHHmm;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isMine = widget.isMine;
-    final showSeen = widget.showSeen;
     final message = widget.message;
 
-    final shouldShowTime = _showTime || showSeen;
-    final bubbleTimeStr =
-        '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}';
+    // Colors - Zalo style
+    final myBubbleColor = theme.colorScheme.primary;
+    final theirBubbleColor =
+        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7);
+    const myTextColor = Colors.white;
+    final theirTextColor = theme.textTheme.bodyMedium?.color ?? Colors.black;
+
+    // Show time when: tapped OR (it's the last in group AND showInlineTime)
+    final showTime = _tapped || widget.showInlineTime;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 2),
       child: Column(
         crossAxisAlignment:
             isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onTap: () {
-              setState(() {
-                _showTime = !_showTime;
-              });
-            },
+            onTap: () => setState(() => _tapped = !_tapped),
             child: Row(
               mainAxisAlignment:
                   isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                // Bubble content
                 Container(
                   constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.75,
+                    maxWidth:
+                        MediaQuery.of(context).size.width * 0.72,
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isMine
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(18).copyWith(
-                      bottomRight: isMine ? const Radius.circular(4) : null,
-                      bottomLeft: !isMine ? const Radius.circular(4) : null,
+                    color: isMine ? myBubbleColor : theirBubbleColor,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(18),
+                      topRight: const Radius.circular(18),
+                      bottomLeft: Radius.circular(isMine ? 18 : 4),
+                      bottomRight: Radius.circular(isMine ? 4 : 18),
                     ),
                   ),
-                  child: Text(
-                    message.content ?? '',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: isMine ? Colors.white : null,
-                    ),
-                  ),
+                  child: message.isImage && message.mediaUrl != null
+                      ? _ImageBubble(
+                          url: message.mediaUrl!,
+                          isMine: isMine,
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          child: Text(
+                            message.content ?? '',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: isMine ? myTextColor : theirTextColor,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
                 ),
               ],
             ),
           ),
+
+          // Time + seen indicator (animated)
           AnimatedSize(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeInOut,
-            child: shouldShowTime
+            child: showTime
                 ? Padding(
                     padding: EdgeInsets.only(
-                      top: 4,
-                      left: isMine ? 0 : 8,
-                      right: isMine ? 8 : 0,
-                      bottom: 2,
+                      top: 3,
+                      bottom: 4,
+                      left: isMine ? 0 : 6,
+                      right: isMine ? 6 : 0,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment:
-                          isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                      mainAxisAlignment: isMine
+                          ? MainAxisAlignment.end
+                          : MainAxisAlignment.start,
                       children: [
                         Text(
-                          bubbleTimeStr,
-                          style: AppTextStyles.caption.copyWith(
+                          _timeStr,
+                          style: TextStyle(
                             fontSize: 10,
                             color: theme.hintColor,
                           ),
                         ),
-                        if (showSeen) ...[
+                        if (widget.showSeen) ...[
                           const SizedBox(width: 4),
                           Text(
                             '• Đã xem',
-                            style: AppTextStyles.caption.copyWith(
+                            style: TextStyle(
                               fontSize: 10,
                               color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -443,6 +671,59 @@ class _MessageBubbleState extends State<_MessageBubble> {
                 : const SizedBox(width: double.infinity, height: 0),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Image Bubble ──────────────────────────────────────────────────────────────
+class _ImageBubble extends StatelessWidget {
+  final String url;
+  final bool isMine;
+
+  const _ImageBubble({required this.url, required this.isMine});
+
+  bool get _isLocalPath =>
+      !url.startsWith('http') && !url.startsWith('blob');
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.only(
+        topLeft: const Radius.circular(18),
+        topRight: const Radius.circular(18),
+        bottomLeft: Radius.circular(isMine ? 18 : 4),
+        bottomRight: Radius.circular(isMine ? 4 : 18),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.65,
+          maxHeight: 300,
+        ),
+        child: _isLocalPath && !kIsWeb
+            ? Image.file(
+                io.File(url),
+                fit: BoxFit.cover,
+              )
+            : CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => Container(
+                  width: 200,
+                  height: 160,
+                  color: Colors.grey.withValues(alpha: 0.2),
+                  child: const Center(
+                    child: CupertinoActivityIndicator(),
+                  ),
+                ),
+                errorWidget: (_, __, ___) => Container(
+                  width: 200,
+                  height: 160,
+                  color: Colors.grey.withValues(alpha: 0.2),
+                  child: const Icon(CupertinoIcons.photo,
+                      color: Colors.grey),
+                ),
+              ),
       ),
     );
   }

@@ -2,13 +2,15 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../screens/gallery_screen.dart';
+import '../../domain/post_model.dart';
+import '../../../../shared/widgets/app_video_player.dart';
 
 import '../../../../core/constants/app_colors.dart';
 
 class ImageCarousel extends StatefulWidget {
-  final List<String> imageUrls;
+  final List<PostMedia> media;
 
-  const ImageCarousel({super.key, required this.imageUrls});
+  const ImageCarousel({super.key, required this.media});
 
   @override
   State<ImageCarousel> createState() => _ImageCarouselState();
@@ -31,7 +33,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final hasMultiple = widget.imageUrls.length > 1;
+    final hasMultiple = widget.media.length > 1;
 
     return Stack(
       children: [
@@ -41,35 +43,46 @@ class _ImageCarouselState extends State<ImageCarousel> {
             controller: _pageController,
             padEnds: false,
             onPageChanged: (i) => setState(() => _currentIndex = i),
-            itemCount: widget.imageUrls.length,
+            itemCount: widget.media.length,
             itemBuilder: (context, index) {
+              final item = widget.media[index];
+              final isVideo = item.type == 'video';
+              final imagesOnly = widget.media.where((m) => m.type == 'image').toList();
+              final imageIndex = imagesOnly.indexOf(item);
+
               return GestureDetector(
-                onTap: () {
-                  Navigator.of(context, rootNavigator: true).push(
-                    MaterialPageRoute(
-                      builder: (_) => GalleryScreen(
-                        imageUrls: widget.imageUrls,
-                        initialIndex: index,
-                      ),
-                    ),
-                  );
-                },
+                onTap: isVideo
+                    ? null
+                    : () {
+                        if (imageIndex != -1) {
+                          Navigator.of(context, rootNavigator: true).push(
+                            MaterialPageRoute(
+                              builder: (_) => GalleryScreen(
+                                imageUrls: imagesOnly.map((m) => m.url).toList(),
+                                initialIndex: imageIndex,
+                              ),
+                            ),
+                          );
+                        }
+                      },
                 child: Padding(
                   padding: const EdgeInsets.only(right: 8.0),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: widget.imageUrls[index],
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        color: AppColors.shimmerBase,
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        color: AppColors.surfaceVariant,
-                        child: const Icon(CupertinoIcons.photo,
-                            color: AppColors.textHint),
-                      ),
-                    ),
+                    child: isVideo
+                        ? AppVideoPlayer(url: item.url)
+                        : CachedNetworkImage(
+                            imageUrl: item.url,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                              color: AppColors.shimmerBase,
+                            ),
+                            errorWidget: (_, __, ___) => Container(
+                              color: AppColors.surfaceVariant,
+                              child: const Icon(CupertinoIcons.photo,
+                                  color: AppColors.textHint),
+                            ),
+                          ),
                   ),
                 ),
               );
@@ -84,7 +97,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
-                widget.imageUrls.length,
+                widget.media.length,
                 (i) => AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -111,7 +124,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                '${_currentIndex + 1}/${widget.imageUrls.length}',
+                '${_currentIndex + 1}/${widget.media.length}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 11,

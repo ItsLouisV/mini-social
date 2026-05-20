@@ -62,8 +62,10 @@ class AccountSettingsScreen extends ConsumerWidget {
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
-      child: SafeArea(
-        child: ListView(
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 16),
           children: [
             // ── Avatar + tên + email ─────────────────────────────
@@ -124,7 +126,6 @@ class AccountSettingsScreen extends ConsumerWidget {
                           '',
                       color: labelColor,
                     ),
-                    onTap: () => context.push('/profile/edit'),
                   ),
                 ],
               ),
@@ -191,63 +192,13 @@ class AccountSettingsScreen extends ConsumerWidget {
               ),
             ),
 
-            // ── Đăng xuất ───────────────────────────────────────
-            const SizedBox(height: 32),
-            _SectionCard(
-              bg: cardBg,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _showLogoutDialog(context, ref),
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 15),
-                    child: Center(
-                      child: Text(
-                        'Đăng xuất',
-                        style: TextStyle(
-                          color: theme.colorScheme.error,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
             const SizedBox(height: 40),
           ],
         ),
       ),
-    );
-  }
-
-  void _showLogoutDialog(BuildContext context, WidgetRef ref) {
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Đăng xuất'),
-        content:
-            const Text('Bạn có chắc muốn đăng xuất khỏi ứng dụng?'),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => ctx.pop(),
-            child: const Text('Huỷ'),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () {
-              ctx.pop();
-              ref.read(authRepositoryProvider).signOut();
-              context.go('/login');
-            },
-            child: const Text('Đăng xuất'),
-          ),
-        ],
-      ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -354,23 +305,29 @@ class _IosRow extends StatelessWidget {
                 child: Icon(icon, color: Colors.white, size: 17),
               ),
               const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: titleColor ??
-                        Theme.of(context).textTheme.bodyLarge?.color,
-                    fontWeight: FontWeight.w400,
-                  ),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: titleColor ??
+                      Theme.of(context).textTheme.bodyLarge?.color,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
               if (trailing != null) ...[
                 const SizedBox(width: 8),
-                trailing!,
-              ] else if (showChevron)
-                Icon(CupertinoIcons.chevron_forward,
-                    size: 16, color: hintColor),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: trailing!,
+                  ),
+                ),
+              ] else ...[
+                const Spacer(),
+                if (showChevron)
+                  Icon(CupertinoIcons.chevron_forward,
+                      size: 16, color: hintColor),
+              ],
             ],
           ),
         ),

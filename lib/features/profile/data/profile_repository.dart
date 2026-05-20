@@ -58,7 +58,7 @@ class ProfileRepository {
   }
 
   Future<String> uploadAvatar(String userId, XFile file) async {
-    final path = 'avatars/$userId/avatar.jpg';
+    final path = '$userId/avatar.jpg';
     return _service.uploadFile(
       bucket: SupabaseConstants.avatarsBucket,
       path: path,
@@ -68,7 +68,7 @@ class ProfileRepository {
   }
 
   Future<String> uploadCover(String userId, XFile file) async {
-    final path = 'covers/$userId/cover.jpg';
+    final path = '$userId/cover.jpg';
     return _service.uploadFile(
       bucket: SupabaseConstants.coversBucket,
       path: path,

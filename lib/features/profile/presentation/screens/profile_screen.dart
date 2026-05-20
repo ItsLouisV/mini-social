@@ -224,22 +224,37 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
                 
                 // Inline Stats
-                Row(
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
                   children: [
-                    Text('${profile.postsCount}',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text(' Bài viết',
-                        style: TextStyle(color: theme.hintColor)),
-                    const SizedBox(width: 12),
-                    Text('${profile.followersCount}',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text(' Người theo dõi',
-                        style: TextStyle(color: theme.hintColor)),
-                    const SizedBox(width: 12),
-                    Text('${profile.followingCount}',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text(' Đang theo dõi',
-                        style: TextStyle(color: theme.hintColor)),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${profile.postsCount}',
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(' Bài viết',
+                            style: TextStyle(color: theme.hintColor)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${profile.followersCount}',
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(' Người theo dõi',
+                            style: TextStyle(color: theme.hintColor)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${profile.followingCount}',
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(' Đang theo dõi',
+                            style: TextStyle(color: theme.hintColor)),
+                      ],
+                    ),
                   ],
                 ),
                 

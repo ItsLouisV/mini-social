@@ -122,7 +122,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           ),
 
         if (post.media.isNotEmpty)
-          ImageCarousel(imageUrls: post.media.map((m) => m.url).toList()),
+          ImageCarousel(media: post.media),
 
         PostActions(post: post),
 
