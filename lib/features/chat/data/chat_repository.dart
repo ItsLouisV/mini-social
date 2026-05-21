@@ -87,6 +87,24 @@ class ChatRepository {
     return ConversationModel.fromJson(created);
   }
 
+  Stream<int> watchTotalUnreadMessagesCount() {
+    final userId = currentUserId!;
+    return _client
+        .from(SupabaseConstants.conversationsTable)
+        .stream(primaryKey: ['id'])
+        .map((data) {
+      int total = 0;
+      for (var row in data) {
+        if (row['participant_1'] == userId) {
+          total += (row['p1_unread_count'] as int?) ?? 0;
+        } else if (row['participant_2'] == userId) {
+          total += (row['p2_unread_count'] as int?) ?? 0;
+        }
+      }
+      return total;
+    });
+  }
+
   // ── Messages ──
   Future<List<MessageModel>> getMessages(String conversationId,
       {int page = 0}) async {

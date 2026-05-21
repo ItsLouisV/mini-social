@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/constants/app_colors.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
@@ -144,54 +145,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leadingWidth: 36,
-        leading: IconButton(
-          icon: Icon(
-            CupertinoIcons.chevron_back,
-            color: theme.colorScheme.primary,
-            size: 22,
-          ),
-          onPressed: () => context.pop(),
-          padding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-        ),
-        title: GestureDetector(
-          onTap: () {
-            if (otherUser != null) {
-              context.push('/profile/${otherUser.id}');
-            }
-          },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppAvatar(
-                imageUrl: otherUser?.avatarUrl,
-                name: otherUser?.displayName,
-                radius: 18,
+        automaticallyImplyLeading: false,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            IconButton(
+              icon: Icon(
+                CupertinoIcons.chevron_back,
+                color: theme.colorScheme.primary,
+                size: 24,
               ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              onPressed: () => context.pop(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+            Flexible(
+              child: GestureDetector(
+                onTap: () {
+                  if (otherUser != null) {
+                    context.push('/profile/${otherUser.id}');
+                  }
+                },
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      otherUserName,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                        letterSpacing: -0.3,
+                    AppAvatar(
+                      imageUrl: otherUser?.avatarUrl,
+                      name: otherUser?.displayName,
+                      radius: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        otherUserName,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-        titleSpacing: 4,
         actions: [
           // Video call
           IconButton(
@@ -394,38 +394,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             valueListenable: _messageController,
             builder: (context, value, _) {
               final hasText = value.text.trim().isNotEmpty;
-              return AnimatedSwitcher(
-                duration: const Duration(milliseconds: 150),
-                child: hasText
-                    ? GestureDetector(
-                        key: const ValueKey('send'),
-                        onTap: _send,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary,
-                            shape: BoxShape.circle,
+              final bgColor = hasText 
+                  ? AppColors.chatInputSendEnabled
+                  : (isDark ? AppColors.darkChatInputSendDisabled : AppColors.chatInputSendDisabled);
+              final iconColor = hasText
+                  ? AppColors.chatInputSendIconEnabled
+                  : AppColors.chatInputSendIconDisabled;
+
+              return GestureDetector(
+                onTap: hasText ? _send : null,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: _sending
+                      ? const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           ),
-                          child: _sending
-                              ? const Center(
-                                  child: SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                )
-                              : const Icon(
-                                  CupertinoIcons.paperplane_fill,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
+                        )
+                      : Icon(
+                          CupertinoIcons.paperplane_fill,
+                          color: iconColor,
+                          size: 18,
                         ),
-                      )
-                    : const SizedBox(key: ValueKey('empty'), width: 4),
+                ),
               );
             },
           ),
@@ -569,12 +570,11 @@ class _MessageBubbleState extends State<_MessageBubble> {
     final isMine = widget.isMine;
     final message = widget.message;
 
-    // Colors - Zalo style
-    final myBubbleColor = theme.colorScheme.primary;
-    final theirBubbleColor =
-        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7);
-    const myTextColor = Colors.white;
-    final theirTextColor = theme.textTheme.bodyMedium?.color ?? Colors.black;
+    // Colors - Using AppColors
+    final myBubbleColor = isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender;
+    final theirBubbleColor = isDark ? AppColors.darkChatBubbleReceiver : AppColors.chatBubbleReceiver;
+    final myTextColor = isDark ? AppColors.darkChatTextSender : AppColors.chatTextSender;
+    final theirTextColor = isDark ? AppColors.darkChatTextReceiver : AppColors.chatTextReceiver;
 
     // Show time when: tapped OR (it's the last in group AND showInlineTime)
     final showTime = _tapped || widget.showInlineTime;

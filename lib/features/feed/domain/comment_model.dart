@@ -4,7 +4,10 @@ class CommentModel {
   final String id;
   final String postId;
   final String userId;
+  final String? parentId;
   final String content;
+  final int likesCount;
+  final bool isLiked;
   final DateTime createdAt;
   final ProfileModel? author;
 
@@ -12,17 +15,23 @@ class CommentModel {
     required this.id,
     required this.postId,
     required this.userId,
+    this.parentId,
     required this.content,
+    this.likesCount = 0,
+    this.isLiked = false,
     required this.createdAt,
     this.author,
   });
 
-  factory CommentModel.fromJson(Map<String, dynamic> json) {
+  factory CommentModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
     return CommentModel(
       id: json['id'] as String,
       postId: json['post_id'] as String,
       userId: json['user_id'] as String,
+      parentId: json['parent_id'] as String?,
       content: json['content'] as String,
+      likesCount: json['likes_count'] as int? ?? 0,
+      isLiked: isLiked,
       createdAt: DateTime.parse(json['created_at'] as String),
       author: json['profiles'] != null
           ? ProfileModel.fromJson(

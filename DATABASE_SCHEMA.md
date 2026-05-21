@@ -195,12 +195,13 @@ create trigger likes_count_trigger
 
 ```sql
 create table comments (
-  id         uuid primary key default gen_random_uuid(),
-  post_id    uuid references posts(id) on delete cascade not null,
-  user_id    uuid references profiles(id) on delete cascade not null,
-  parent_id  uuid references comments(id) on delete cascade,  -- null = top-level, có giá trị = reply
-  content    text not null,
-  created_at timestamptz default now()
+  id          uuid primary key default gen_random_uuid(),
+  post_id     uuid references posts(id) on delete cascade not null,
+  user_id     uuid references profiles(id) on delete cascade not null,
+  parent_id   uuid references comments(id) on delete cascade,  -- null = top-level, có giá trị = reply
+  content     text not null,
+  likes_count int default 0,
+  created_at  timestamptz default now()
 );
 
 -- Index để lấy replies của 1 comment nhanh
@@ -208,14 +209,14 @@ create index on comments (parent_id) where parent_id is not null;
 -- Index để lấy top-level comments của 1 post
 create index on comments (post_id, created_at) where parent_id is null;
 
--- Trigger: chỉ cộng comments_count cho comment gốc (không cộng reply)
+-- Trigger: cộng comments_count cho TẤT CẢ comment (bao gồm cả reply)
 create or replace function update_comments_count()
 returns trigger as $$
 begin
-  if TG_OP = 'INSERT' and NEW.parent_id is null then
-    update posts set comments_count = comments_count + 1 where id = NEW.post_id;
-  elsif TG_OP = 'DELETE' and OLD.parent_id is null then
-    update posts set comments_count = greatest(comments_count - 1, 0) where id = OLD.post_id;
+  if TG_OP = 'INSERT' then
+    update posts set comments_count = coalesce(comments_count, 0) + 1 where id = NEW.post_id;
+  elsif TG_OP = 'DELETE' then
+    update posts set comments_count = greatest(coalesce(comments_count, 0) - 1, 0) where id = OLD.post_id;
   end if;
   return null;
 end;
@@ -238,6 +239,49 @@ order by created_at asc;
 select * from comments
 where parent_id = '...'
 order by created_at asc;
+```
+
+---
+
+## 5b. `comment_likes` — Like bình luận ⭐ mới
+
+```sql
+create table comment_likes (
+  id         uuid primary key default gen_random_uuid(),
+  comment_id uuid references comments(id) on delete cascade not null,
+  user_id    uuid references profiles(id) on delete cascade not null,
+  created_at timestamptz default now(),
+  unique (comment_id, user_id)
+);
+
+-- Trigger: tự động tăng/giảm likes_count mỗi khi có người like/unlike
+create or replace function update_comment_likes_count()
+returns trigger as $$
+begin
+  if TG_OP = 'INSERT' then
+    update comments set likes_count = likes_count + 1 where id = NEW.comment_id;
+  elsif TG_OP = 'DELETE' then
+    update comments set likes_count = greatest(likes_count - 1, 0) where id = OLD.comment_id;
+  end if;
+  return null;
+end;
+$$ language plpgsql;
+
+create trigger comment_likes_count_trigger
+  after insert or delete on comment_likes
+  for each row execute procedure update_comment_likes_count();
+
+-- Row Level Security
+alter table comment_likes enable row level security;
+
+create policy "Cho phép xem lượt thích bình luận"
+on comment_likes for select using (true);
+
+create policy "Cho phép thêm lượt thích"
+on comment_likes for insert with check (auth.uid() = user_id);
+
+create policy "Cho phép huỷ lượt thích"
+on comment_likes for delete using (auth.uid() = user_id);
 ```
 
 ---
@@ -344,15 +388,14 @@ where status = 'accepted'
 > **Thiết kế:** Flat table với đúng 3 cột nullable — mỗi loại thông báo chỉ dùng cột cần thiết, còn lại để `null`. Không cần bảng trung gian, query 1 lần là đủ.
 
 ```
-type             post_id   comment_id   conversation_id   navigate đến
+type             post_id   comment_id   navigate đến
 ────────────────────────────────────────────────────────────────────────
-like           │   ✓    │    null    │      null       │ PostDetailScreen
-comment        │   ✓    │     ✓      │      null       │ PostDetailScreen (cuộn đến comment)
-reply          │   ✓    │     ✓      │      null       │ PostDetailScreen (cuộn đến reply)
-follow         │  null  │    null    │      null       │ ProfileScreen (sender_id)
-friend_request │  null  │    null    │      null       │ ProfileScreen (sender_id)
-friend_accept  │  null  │    null    │      null       │ ProfileScreen (sender_id)
-message        │  null  │    null    │       ✓         │ ChatScreen
+like           │   ✓    │    null    │ PostDetailScreen
+comment        │   ✓    │     ✓      │ PostDetailScreen (cuộn đến comment)
+reply          │   ✓    │     ✓      │ PostDetailScreen (cuộn đến reply)
+follow         │  null  │    null    │ ProfileScreen (sender_id)
+friend_request │  null  │    null    │ ProfileScreen (sender_id)
+friend_accept  │  null  │    null    │ ProfileScreen (sender_id)
 ```
 
 ```sql
@@ -362,8 +405,7 @@ create type notification_type as enum (
   'reply',           -- reply vào comment của mình
   'follow',
   'friend_request',  -- có người gửi lời mời kết bạn
-  'friend_accept',   -- lời mời kết bạn được chấp nhận
-  'message'
+  'friend_accept'    -- lời mời kết bạn được chấp nhận
 );
 
 create table notifications (
@@ -372,10 +414,10 @@ create table notifications (
   sender_id       uuid references profiles(id) on delete cascade not null,
   type            notification_type not null,
 
-  -- 3 cột nullable — mỗi loại chỉ dùng đúng cột cần thiết
+  -- Các cột nullable — mỗi loại chỉ dùng đúng cột cần thiết
   post_id         uuid references posts(id)         on delete cascade,
   comment_id      uuid references comments(id)      on delete cascade,
-  conversation_id uuid references conversations(id) on delete cascade,
+  content         text,                             -- Nội dung thông báo (vd: nội dung comment)
 
   is_read         boolean default false,
   created_at      timestamptz default now()
@@ -486,26 +528,6 @@ create trigger on_friend_request_changed
   after insert or update on friend_requests
   for each row execute procedure notify_on_friend_request();
 
--- Khi có tin nhắn mới (thông báo ngoài app)
-create or replace function notify_on_message()
-returns trigger as $$
-declare other_participant uuid;
-begin
-  -- Lấy participant còn lại trong conversation
-  select
-    case when participant_1 = NEW.sender_id then participant_2 else participant_1 end
-  into other_participant
-  from conversations where id = NEW.conversation_id;
-
-  insert into notifications (receiver_id, sender_id, type, conversation_id)
-  values (other_participant, NEW.sender_id, 'message', NEW.conversation_id);
-  return NEW;
-end;
-$$ language plpgsql security definer;
-
-create trigger on_message_created_notify
-  after insert on messages
-  for each row execute procedure notify_on_message();
 ```
 
 **Phía Flutter — navigate khi nhấn thông báo:**
@@ -522,9 +544,6 @@ void onTapNotification(NotificationModel n) {
     case 'friend_request':
     case 'friend_accept':
       context.push('/profile/${n.senderId}');
-
-    case 'message':
-      context.push('/chat/${n.conversationId}');
   }
 }
 
@@ -540,6 +559,8 @@ create table conversations (
   last_message    text,               -- nội dung tin nhắn cuối ⭐
   last_message_at timestamptz,        -- thời điểm tin nhắn cuối ⭐
   last_message_id uuid,               -- FK trỏ vào messages
+  p1_unread_count int default 0,      -- đếm tin nhắn chưa đọc của người 1
+  p2_unread_count int default 0,      -- đếm tin nhắn chưa đọc của người 2
   created_at      timestamptz default now(),
   unique (participant_1, participant_2),
   check (participant_1 < participant_2)  -- enforce thứ tự để tránh duplicate (A,B) vs (B,A)
@@ -581,16 +602,25 @@ alter table conversations
   add constraint fk_last_message
   foreign key (last_message_id) references messages(id) on delete set null;
 
--- Trigger: tự cập nhật last_message_id trên conversations
+-- Trigger: tự cập nhật last_message_id và đếm số chưa đọc
 create or replace function update_last_message()
 returns trigger as $$
+declare
+  conv_p1 uuid;
+  conv_p2 uuid;
 begin
+  select participant_1, participant_2 into conv_p1, conv_p2 
+  from conversations where id = NEW.conversation_id;
+
   update conversations
   set 
     last_message_id = NEW.id,
     last_message = NEW.content,
-    last_message_at = NEW.created_at
+    last_message_at = NEW.created_at,
+    p1_unread_count = case when NEW.sender_id = conv_p2 then p1_unread_count + 1 else p1_unread_count end,
+    p2_unread_count = case when NEW.sender_id = conv_p1 then p2_unread_count + 1 else p2_unread_count end
   where id = NEW.conversation_id;
+  
   return NEW;
 end;
 $$ language plpgsql;
@@ -599,12 +629,24 @@ create trigger on_message_created
   after insert on messages
   for each row execute procedure update_last_message();
 
--- Trigger: tự set seen_at khi mark as seen
+-- Trigger: tự set seen_at và reset số lượng chưa đọc khi mark as seen
 create or replace function set_seen_at()
 returns trigger as $$
+declare
+  conv_p1 uuid;
+  conv_p2 uuid;
 begin
   if NEW.is_seen = true and OLD.is_seen = false then
     NEW.seen_at = now();
+    
+    select participant_1, participant_2 into conv_p1, conv_p2 
+    from conversations where id = NEW.conversation_id;
+
+    update conversations
+    set 
+      p1_unread_count = case when NEW.sender_id = conv_p2 then 0 else p1_unread_count end,
+      p2_unread_count = case when NEW.sender_id = conv_p1 then 0 else p2_unread_count end
+    where id = NEW.conversation_id;
   end if;
   return NEW;
 end;

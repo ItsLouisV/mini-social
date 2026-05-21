@@ -9,6 +9,7 @@ import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
+import '../../features/chat/providers/chat_provider.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/feed/presentation/widgets/feed_drawer.dart';
@@ -230,7 +231,10 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final unreadCount = ref.watch(unreadNotificationsCountProvider);
+    final unreadNotifCount = ref.watch(unreadNotificationsCountProvider);
+    final unreadMsgAsync = ref.watch(unreadMessagesCountProvider);
+    final unreadMsgCount = unreadMsgAsync.valueOrNull ?? 0;
+    
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return NotificationListener<OpenDrawerNotification>(
@@ -244,7 +248,8 @@ class _MainShellState extends ConsumerState<MainShell> {
         body: widget.navigationShell,
         bottomNavigationBar: _IosTabBar(
           visualIndex: _visualIndex,
-          unreadCount: unreadCount,
+          unreadNotifCount: unreadNotifCount,
+          unreadMsgCount: unreadMsgCount,
           isDark: isDark,
           onTap: _onTap,
         ),
@@ -258,13 +263,15 @@ class _MainShellState extends ConsumerState<MainShell> {
 // ─────────────────────────────────────────────────────────────────────────────
 class _IosTabBar extends StatelessWidget {
   final int visualIndex;
-  final int unreadCount;
+  final int unreadNotifCount;
+  final int unreadMsgCount;
   final bool isDark;
   final void Function(int) onTap;
 
   const _IosTabBar({
     required this.visualIndex,
-    required this.unreadCount,
+    required this.unreadNotifCount,
+    required this.unreadMsgCount,
     required this.isDark,
     required this.onTap,
   });
@@ -308,6 +315,7 @@ class _IosTabBar extends StatelessWidget {
                 icon: CupertinoIcons.chat_bubble_2,
                 activeIcon: CupertinoIcons.chat_bubble_2_fill,
                 label: 'Tin nhắn',
+                badge: unreadMsgCount > 0 ? '$unreadMsgCount' : null,
                 onTap: onTap,
               ),
               // ── Centre create button ──
@@ -353,7 +361,7 @@ class _IosTabBar extends StatelessWidget {
                 icon: CupertinoIcons.bell,
                 activeIcon: CupertinoIcons.bell_fill,
                 label: 'Thông báo',
-                badge: unreadCount > 0 ? '$unreadCount' : null,
+                badge: unreadNotifCount > 0 ? '$unreadNotifCount' : null,
                 onTap: onTap,
               ),
               _TabItem(

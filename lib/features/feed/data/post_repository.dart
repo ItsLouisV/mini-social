@@ -1,3 +1,4 @@
+import 'package:async/async.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -31,10 +32,19 @@ class PostRepository {
   }
 
   Stream<List<PostModel>> watchPosts() {
-    return _client
+    // Merge 3 streams: posts, likes, comments — any change triggers a fresh fetch
+    final postsStream = _client
         .from(SupabaseConstants.postsTable)
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false)
+        .stream(primaryKey: ['id']);
+    final likesStream = _client
+        .from(SupabaseConstants.likesTable)
+        .stream(primaryKey: ['id']);
+    final commentsStream = _client
+        .from(SupabaseConstants.commentsTable)
+        .stream(primaryKey: ['id']);
+
+    // Combine all 3 streams: whenever any one emits, fetch the full feed
+    return StreamGroup.merge([postsStream, likesStream, commentsStream])
         .asyncMap((_) => getFeedPosts());
   }
 
@@ -134,13 +144,34 @@ class PostRepository {
 
   // ── Comments ──
   Future<List<CommentModel>> getComments(String postId) async {
-    final data = await _client
+    final userId = currentUserId;
+    
+    final commentsData = await _client
         .from(SupabaseConstants.commentsTable)
         .select('*, profiles(*)')
         .eq('post_id', postId)
         .order('created_at', ascending: true);
 
-    return (data as List).map((e) => CommentModel.fromJson(e)).toList();
+    final commentsList = commentsData as List;
+    if (commentsList.isEmpty) return [];
+
+    if (userId == null) {
+      return commentsList.map((e) => CommentModel.fromJson(e)).toList();
+    }
+
+    // Fetch likes for these comments by current user
+    final commentIds = commentsList.map((e) => e['id']).toList();
+    final likedCommentsData = await _client
+        .from('comment_likes')
+        .select('comment_id')
+        .eq('user_id', userId)
+        .inFilter('comment_id', commentIds);
+
+    final likedCommentIds = (likedCommentsData as List).map((e) => e['comment_id'] as String).toSet();
+
+    return commentsList.map((e) {
+      return CommentModel.fromJson(e, isLiked: likedCommentIds.contains(e['id']));
+    }).toList();
   }
 
   Stream<List<CommentModel>> watchComments(String postId) {
@@ -152,13 +183,14 @@ class PostRepository {
         .asyncMap((_) => getComments(postId));
   }
 
-  Future<CommentModel> addComment(String postId, String content) async {
+  Future<CommentModel> addComment(String postId, String content, {String? parentId}) async {
     final data = await _client
         .from(SupabaseConstants.commentsTable)
         .insert({
           'post_id': postId,
           'user_id': currentUserId,
           'content': content,
+          if (parentId != null) 'parent_id': parentId,
         })
         .select('*, profiles(*)')
         .single();
@@ -170,5 +202,21 @@ class PostRepository {
         .from(SupabaseConstants.commentsTable)
         .delete()
         .eq('id', commentId);
+  }
+
+  // ── Comment Likes ──
+  Future<void> likeComment(String commentId) async {
+    await _client.from('comment_likes').insert({
+      'comment_id': commentId,
+      'user_id': currentUserId,
+    });
+  }
+
+  Future<void> unlikeComment(String commentId) async {
+    await _client
+        .from('comment_likes')
+        .delete()
+        .eq('comment_id', commentId)
+        .eq('user_id', currentUserId!);
   }
 }

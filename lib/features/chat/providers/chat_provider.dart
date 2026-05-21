@@ -18,3 +18,8 @@ final realtimeMessagesProvider =
         (ref, conversationId) {
   return ref.watch(chatRepositoryProvider).watchMessages(conversationId);
 });
+
+// Total unread messages count
+final unreadMessagesCountProvider = StreamProvider.autoDispose<int>((ref) {
+  return ref.watch(chatRepositoryProvider).watchTotalUnreadMessagesCount();
+});

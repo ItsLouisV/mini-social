@@ -35,12 +35,24 @@ class SocialRepository {
 
   // Notifications
   Stream<List<Map<String, dynamic>>> watchNotifications() {
+    // Use notifications stream as trigger, then fetch with profile join
     return _client
         .from(SupabaseConstants.notificationsTable)
         .stream(primaryKey: ['id'])
         .eq('receiver_id', currentUserId!)
         .order('created_at', ascending: false)
+        .limit(50)
+        .asyncMap((_) => _getNotificationsWithProfiles());
+  }
+
+  Future<List<Map<String, dynamic>>> _getNotificationsWithProfiles() async {
+    final data = await _client
+        .from(SupabaseConstants.notificationsTable)
+        .select('*, profiles!notifications_sender_id_fkey(id, full_name, username, avatar_url)')
+        .eq('receiver_id', currentUserId!)
+        .order('created_at', ascending: false)
         .limit(50);
+    return List<Map<String, dynamic>>.from(data as List);
   }
 
   Future<void> markAllAsRead() async {

@@ -46,12 +46,14 @@ class ProfileScreen extends ConsumerWidget {
 
   Widget _buildBody(BuildContext context, WidgetRef ref, ProfileModel profile,
       bool isMine) {
-    return CustomScrollView(
-      slivers: [
-        _buildSliverAppBar(context, ref, profile, isMine),
-        SliverToBoxAdapter(
-          child: _buildProfileInfo(context, ref, profile, isMine),
-        ),
+    return MediaQuery.removePadding(
+      context: context,
+      removeTop: true,
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: _buildHeader(context, ref, profile, isMine),
+          ),
         SliverPersistentHeader(
           pinned: true,
           delegate: _SliverAppBarDelegate(
@@ -77,210 +79,147 @@ class ProfileScreen extends ConsumerWidget {
         ),
         ProfilePostsGrid(userId: profile.id),
       ],
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildSliverAppBar(BuildContext context, WidgetRef ref,
-      ProfileModel profile, bool isMine) {
-    return SliverAppBar(
-      expandedHeight: 200,
-      pinned: true,
-      leading: context.canPop()
-          ? IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
-                  color: Colors.black38,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(CupertinoIcons.chevron_back,
-                    size: 16, color: Colors.white),
-              ),
-              onPressed: () => context.pop(),
-            )
-          : null,
-      actions: [
-        if (isMine)
-          IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                color: Colors.black38,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(CupertinoIcons.pencil, size: 16, color: Colors.white),
-            ),
-            onPressed: () => context.push('/profile/edit'),
-          ),
-      ],
-      flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
+  Widget _buildHeader(BuildContext context, WidgetRef ref, ProfileModel profile, bool isMine) {
+    final theme = Theme.of(context);
+    final topPadding = MediaQuery.of(context).padding.top;
+    
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            profile.coverUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: profile.coverUrl!,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(color: Theme.of(context).colorScheme.primary),
-                    errorWidget: (_, __, ___) =>
-                        Container(color: Theme.of(context).colorScheme.primary),
-                  )
-                : Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.secondary],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+            // Cover Image
+            SizedBox(
+              height: 200,
+              width: double.infinity,
+              child: profile.coverUrl != null && profile.coverUrl!.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: profile.coverUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(color: theme.colorScheme.surfaceVariant),
+                      errorWidget: (_, __, ___) => Container(color: theme.colorScheme.surfaceVariant),
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                       ),
                     ),
-                  ),
-            // Gradient Overlay
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: 100,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Theme.of(context).scaffoldBackgroundColor,
-                      Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0),
+            ),
+            
+            // Profile Info
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 56, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(profile.displayName, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text('@${profile.username}', style: TextStyle(fontSize: 15, color: theme.hintColor)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      isMine
+                          ? OutlinedButton(
+                              onPressed: () => context.push('/profile/edit'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                              child: const Text('Chỉnh sửa hồ sơ', style: TextStyle(fontWeight: FontWeight.bold)),
+                            )
+                          : _buildFollowButton(context, ref, profile),
                     ],
                   ),
-                ),
+                  if (profile.bio?.isNotEmpty == true) ...[
+                    const SizedBox(height: 12),
+                    Text(profile.bio!, style: theme.textTheme.bodyMedium),
+                  ],
+                  const SizedBox(height: 16),
+                  
+                  // Inline Stats
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 4,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${profile.followersCount}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(width: 4),
+                          Text('Người theo dõi', style: TextStyle(color: theme.hintColor, fontSize: 15)),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${profile.followingCount}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(width: 4),
+                          Text('Đang theo dõi', style: TextStyle(color: theme.hintColor, fontSize: 15)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildProfileInfo(BuildContext context, WidgetRef ref,
-      ProfileModel profile, bool isMine) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 16, bottom: 8),
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: theme.scaffoldBackgroundColor,
-                      width: 4,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: AppAvatar(
-                    imageUrl: profile.avatarUrl,
-                    name: profile.displayName,
-                    radius: 46,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(profile.displayName,
-                  style: theme.textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: theme.dividerColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '@${profile.username}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.hintColor,
-                    ),
-                  ),
-                ),
-                if (profile.bio?.isNotEmpty == true) ...[
-                  const SizedBox(height: 12),
-                  Text(profile.bio!, style: theme.textTheme.bodyMedium),
-                ],
-                const SizedBox(height: 16),
-                
-                // Inline Stats
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 4,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('${profile.postsCount}',
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(' Bài viết',
-                            style: TextStyle(color: theme.hintColor)),
-                      ],
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('${profile.followersCount}',
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(' Người theo dõi',
-                            style: TextStyle(color: theme.hintColor)),
-                      ],
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('${profile.followingCount}',
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(' Đang theo dõi',
-                            style: TextStyle(color: theme.hintColor)),
-                      ],
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Full width actions
-                SizedBox(
-                  width: double.infinity,
-                  child: isMine
-                      ? OutlinedButton(
-                          onPressed: () => context.push('/profile/edit'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: const Text('Chỉnh sửa trang cá nhân',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                        )
-                      : _buildFollowButton(context, ref, profile),
-                ),
-              ],
+        
+        // Avatar (Overlapping cover)
+        Positioned(
+          top: 200 - 46, // Cover height minus avatar radius
+          left: 16,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: theme.scaffoldBackgroundColor, width: 4),
             ),
-        ],
-      ),
+            child: AppAvatar(
+              imageUrl: profile.avatarUrl,
+              name: profile.displayName,
+              radius: 46,
+            ),
+          ),
+        ),
+        
+        // Floating Back Button
+        if (context.canPop())
+          Positioned(
+            top: topPadding > 0 ? topPadding + 8 : 16, // Adjust for safe area
+            left: 8,
+            child: IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Colors.black38,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(CupertinoIcons.chevron_back, size: 20, color: Colors.white),
+              ),
+              onPressed: () => context.pop(),
+            ),
+          ),
+      ],
     );
   }
 
@@ -300,10 +239,10 @@ class ProfileScreen extends ConsumerWidget {
           backgroundColor:
               isFollowing ? Theme.of(context).dividerColor.withValues(alpha: 0.1) : Theme.of(context).colorScheme.primary,
           foregroundColor: isFollowing ? Theme.of(context).textTheme.bodyLarge?.color : Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(20),
           ),
         ),
         child: Text(
@@ -311,7 +250,7 @@ class ProfileScreen extends ConsumerWidget {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-      loading: () => const Center(child: LoadingIndicator()),
+      loading: () => const SizedBox(width: 100, child: Center(child: CupertinoActivityIndicator())),
       error: (_, __) => const SizedBox(),
     );
   }

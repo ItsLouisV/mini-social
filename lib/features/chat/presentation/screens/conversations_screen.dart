@@ -175,8 +175,7 @@ class _ConversationTile extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final hasUnread = conv.lastMessageSenderId != currentUserId &&
-        conv.lastMessage != null;
+    final hasUnread = (currentUserId != null) && (conv.getUnreadCount(currentUserId!) > 0);
     final titleColor = theme.textTheme.titleMedium?.color;
     final hintColor = theme.hintColor;
 

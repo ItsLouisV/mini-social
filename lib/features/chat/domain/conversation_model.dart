@@ -8,6 +8,8 @@ class ConversationModel {
   final DateTime? lastMessageAt;
   final DateTime createdAt;
   final String? lastMessageSenderId;
+  final int p1UnreadCount;
+  final int p2UnreadCount;
   final ProfileModel? otherUser; // populated on the fly
 
   const ConversationModel({
@@ -18,6 +20,8 @@ class ConversationModel {
     this.lastMessageAt,
     required this.createdAt,
     this.lastMessageSenderId,
+    this.p1UnreadCount = 0,
+    this.p2UnreadCount = 0,
     this.otherUser,
   });
 
@@ -35,11 +39,17 @@ class ConversationModel {
       lastMessageSenderId: json['last_message_sender'] != null
           ? (json['last_message_sender'] is Map ? json['last_message_sender']['sender_id'] as String? : null)
           : null,
+      p1UnreadCount: json['p1_unread_count'] as int? ?? 0,
+      p2UnreadCount: json['p2_unread_count'] as int? ?? 0,
       otherUser: otherUser,
     );
   }
 
   String getOtherUserId(String currentUserId) {
     return participant1 == currentUserId ? participant2 : participant1;
+  }
+
+  int getUnreadCount(String currentUserId) {
+    return participant1 == currentUserId ? p1UnreadCount : p2UnreadCount;
   }
 }
