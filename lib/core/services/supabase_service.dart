@@ -18,12 +18,20 @@ class SupabaseService {
     bool upsert = true,
   }) async {
     final bytes = await file.readAsBytes();
-    
+    final ext = file.name.split('.').last.toLowerCase();
+    final contentType = switch (ext) {
+      'png' => 'image/png',
+      'gif' => 'image/gif',
+      'webp' => 'image/webp',
+      'heic' => 'image/heic',
+      _ => 'image/jpeg',
+    };
+
     await client.storage.from(bucket).uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(
-            contentType: 'image/jpeg',
+            contentType: contentType,
             upsert: upsert,
           ),
         );

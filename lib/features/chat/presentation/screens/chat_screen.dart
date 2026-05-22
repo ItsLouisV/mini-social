@@ -1,4 +1,5 @@
 import 'dart:io' as io;
+import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -28,6 +29,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
   bool _sending = false;
+  XFile? _pendingImage;
+  Uint8List? _pendingImagePreviewBytes;
 
   @override
   void initState() {
@@ -60,53 +63,67 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _send() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty || _sending) return;
+    final image = _pendingImage;
 
-    setState(() => _sending = true);
+    if (text.isEmpty && image == null) return;
+    if (_sending) return;
+
+    setState(() {
+      _sending = true;
+      _pendingImage = null;
+      _pendingImagePreviewBytes = null;
+    });
     _messageController.clear();
 
     try {
-      await ref
-          .read(chatRepositoryProvider)
-          .sendMessage(widget.conversationId, text);
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _scrollToBottom());
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không gửi được: ${e.toString()}')),
-        );
+      // Gửi ảnh trước (nếu có)
+      if (image != null) {
+        await ref
+            .read(chatRepositoryProvider)
+            .sendImageMessage(widget.conversationId, image);
       }
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  Future<void> _pickAndSendImage() async {
-    final picker = ImagePicker();
-    final picked =
-        await picker.pickImage(source: ImageSource.gallery);
-    if (picked == null || !mounted) return;
-
-    setState(() => _sending = true);
-    try {
-      await ref
-          .read(chatRepositoryProvider)
-          .sendImageMessage(widget.conversationId, picked);
+      // Gửi text sau (nếu có — dùng như caption)
+      if (text.isNotEmpty) {
+        await ref
+            .read(chatRepositoryProvider)
+            .sendMessage(widget.conversationId, text);
+      }
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gửi ảnh thất bại: ${e.toString()}'),
+            content: Text('Gửi thất bại: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
+        debugPrint('Gửi thất bại: ${e.toString()}');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  /// Chọn ảnh từ thư viện → hiển thị preview trên thanh input (chưa gửi)
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+
+    // Trên web cần đọc bytes trước để hiện preview
+    Uint8List? previewBytes;
+    if (kIsWeb) {
+      previewBytes = await picked.readAsBytes();
+    }
+
+    setState(() {
+      _pendingImage = picked;
+      _pendingImagePreviewBytes = previewBytes;
+    });
   }
 
   @override
@@ -318,120 +335,244 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Widget _buildInput(ThemeData theme) {
+  // ── Image Preview (kiểu Zalo) ────────────────────────────────────────────────
+  Widget _buildImagePreview(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
+    final image = _pendingImage!;
+
+    Widget thumbnail;
+    if (kIsWeb && _pendingImagePreviewBytes != null) {
+      thumbnail = Image.memory(
+        _pendingImagePreviewBytes!,
+        width: 72,
+        height: 72,
+        fit: BoxFit.cover,
+      );
+    } else if (!kIsWeb) {
+      thumbnail = Image.file(
+        io.File(image.path),
+        width: 72,
+        height: 72,
+        fit: BoxFit.cover,
+      );
+    } else {
+      // web nhưng chưa load bytes xong
+      thumbnail = Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(CupertinoIcons.photo, color: theme.hintColor, size: 28),
+      );
+    }
+
     return Container(
-      padding: EdgeInsets.only(
-        left: 8,
-        right: 8,
-        top: 8,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
-      ),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
         border: Border(
           top: BorderSide(
-            color: theme.dividerColor.withValues(alpha: 0.3),
+            color: theme.dividerColor.withValues(alpha: 0.2),
             width: 0.5,
           ),
         ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Image picker button
-          IconButton(
-            onPressed: _sending ? null : _pickAndSendImage,
-            icon: Icon(
-              CupertinoIcons.photo,
-              color: isDark
-                  ? Colors.white60
-                  : Colors.black45,
-              size: 24,
-            ),
-            padding: const EdgeInsets.all(8),
-            constraints: const BoxConstraints(),
-          ),
-          const SizedBox(width: 4),
-
-          // Text field
-          Expanded(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 120),
-              child: TextField(
-                controller: _messageController,
-                focusNode: _focusNode,
-                decoration: InputDecoration(
-                  hintText: 'Nhắn tin...',
-                  hintStyle: TextStyle(
-                    color: theme.hintColor,
-                    fontSize: 15,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: isDark
-                      ? const Color(0xFF2C2C2E)
-                      : const Color(0xFFF2F2F7),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  isDense: true,
-                ),
-                maxLines: null,
-                textInputAction: TextInputAction.newline,
-                onSubmitted: (_) => _send(),
+          // Thumbnail + nút xoá
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: thumbnail,
               ),
-            ),
-          ),
-          const SizedBox(width: 6),
-
-          // Send button
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: _messageController,
-            builder: (context, value, _) {
-              final hasText = value.text.trim().isNotEmpty;
-              final bgColor = hasText 
-                  ? AppColors.chatInputSendEnabled
-                  : (isDark ? AppColors.darkChatInputSendDisabled : AppColors.chatInputSendDisabled);
-              final iconColor = hasText
-                  ? AppColors.chatInputSendIconEnabled
-                  : AppColors.chatInputSendIconDisabled;
-
-              return GestureDetector(
-                onTap: hasText ? _send : null,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    shape: BoxShape.circle,
+              Positioned(
+                top: -6,
+                right: -6,
+                child: GestureDetector(
+                  onTap: () => setState(() {
+                    _pendingImage = null;
+                    _pendingImagePreviewBytes = null;
+                  }),
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[600] : Colors.grey[700],
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.xmark,
+                      size: 11,
+                      color: Colors.white,
+                    ),
                   ),
-                  child: _sending
-                      ? const Center(
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          ),
-                        )
-                      : Icon(
-                          CupertinoIcons.paperplane_fill,
-                          color: iconColor,
-                          size: 18,
-                        ),
                 ),
-              );
-            },
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          // Tên file
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '1 ảnh đã chọn',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  image.name,
+                  style: TextStyle(fontSize: 11, color: theme.hintColor),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  // ── Input bar ────────────────────────────────────────────────────────────────
+  Widget _buildInput(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    final hasPendingImage = _pendingImage != null;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Zalo-style: hiện preview ảnh đang chờ gửi
+        if (hasPendingImage) _buildImagePreview(theme),
+
+        // Thanh nhập liệu
+        Container(
+          padding: EdgeInsets.only(
+            left: 8,
+            right: 8,
+            top: 8,
+            bottom: MediaQuery.of(context).padding.bottom + 8,
+          ),
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            border: Border(
+              top: BorderSide(
+                color: theme.dividerColor.withValues(alpha: 0.3),
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Nút chọn ảnh (icon sáng khi đã chọn)
+              IconButton(
+                onPressed: _sending ? null : _pickImage,
+                icon: Icon(
+                  CupertinoIcons.photo,
+                  color: hasPendingImage
+                      ? theme.colorScheme.primary
+                      : (isDark ? Colors.white60 : Colors.black45),
+                  size: 24,
+                ),
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 4),
+
+              // Text field
+              Expanded(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 120),
+                  child: TextField(
+                    controller: _messageController,
+                    focusNode: _focusNode,
+                    decoration: InputDecoration(
+                      hintText:
+                          hasPendingImage ? 'Thêm chú thích...' : 'Nhắn tin...',
+                      hintStyle:
+                          TextStyle(color: theme.hintColor, fontSize: 15),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: isDark
+                          ? const Color(0xFF2C2C2E)
+                          : const Color(0xFFF2F2F7),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      isDense: true,
+                    ),
+                    maxLines: null,
+                    textInputAction: TextInputAction.newline,
+                    onSubmitted: (_) => _send(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // Nút gửi — sáng khi có text HOẶC có ảnh pending
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _messageController,
+                builder: (context, value, _) {
+                  final hasContent =
+                      value.text.trim().isNotEmpty || hasPendingImage;
+                  final bgColor = hasContent
+                      ? AppColors.chatInputSendEnabled
+                      : (isDark
+                          ? AppColors.darkChatInputSendDisabled
+                          : AppColors.chatInputSendDisabled);
+                  final iconColor = hasContent
+                      ? AppColors.chatInputSendIconEnabled
+                      : AppColors.chatInputSendIconDisabled;
+
+                  return GestureDetector(
+                    onTap: (hasContent && !_sending) ? _send : null,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: _sending
+                          ? const Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              CupertinoIcons.paperplane_fill,
+                              color: iconColor,
+                              size: 18,
+                            ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

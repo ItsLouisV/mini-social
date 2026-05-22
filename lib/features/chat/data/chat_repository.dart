@@ -4,7 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../domain/conversation_model.dart';
 import '../domain/message_model.dart';
 import '../../profile/domain/profile_model.dart';
-// import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../core/constants/supabase_constants.dart';
 import '../../../core/services/supabase_service.dart';
 
@@ -150,7 +150,7 @@ class ChatRepository {
     final path = '$userId/$conversationId/$imageId.$ext';
 
     final url = await _service.uploadFile(
-      bucket: 'chat-images',
+      bucket: SupabaseConstants.messagesBucket,
       path: path,
       file: imageFile,
     );
@@ -170,9 +170,8 @@ class ChatRepository {
     await _client
         .from(SupabaseConstants.conversationsTable)
         .update({
-          'last_message': '📷 Hình ảnh',
+          'last_message': 'Hình ảnh',
           'last_message_at': DateTime.now().toUtc().toIso8601String(),
-          'last_message_sender_id': userId,
         })
         .eq('id', conversationId);
 

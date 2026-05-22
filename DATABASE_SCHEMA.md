@@ -812,7 +812,7 @@ insert into storage.buckets (id, name, public) values
   ('avatars',  'avatars',  true),
   ('covers',   'covers',   true),
   ('posts',    'posts',    true),
-  ('messages', 'messages', false);
+  ('messages', 'messages', true);  -- public=true để getPublicUrl() hoạt động
 ```
 
 ### Quy ước đường dẫn file
@@ -822,7 +822,7 @@ insert into storage.buckets (id, name, public) values
 | avatars  | `{userId}/avatar.jpg`              | `abc123/avatar.jpg`    |
 | covers   | `{userId}/cover.jpg`               | `abc123/cover.jpg`     |
 | posts    | `{userId}/{postId}/{index}.jpg`    | `abc123/post456/0.jpg` |
-| messages | `{conversationId}/{messageId}.jpg` | `conv789/msg012.jpg`   |
+| messages | `{userId}/{conversationId}/{messageId}.jpg` | `abc123/conv789/msg012.jpg` |
 
 ### Storage Policies (RLS)
 
@@ -845,8 +845,17 @@ create policy "Delete own post media"   on storage.objects for delete using (
   bucket_id = 'posts' and auth.uid()::text = (storage.foldername(name))[1]
 );
 
--- Messages: chỉ participant mới xem và upload
-create policy "Participants read message files" on storage.objects for select using (
+-- Messages: public read, chỉ participant (folder = userId) mới upload/xoá
+create policy "Public read message files" on storage.objects for select using (
+  bucket_id = 'messages'
+);
+create policy "Users upload message images" on storage.objects for insert with check (
+  bucket_id = 'messages' and auth.uid()::text = (storage.foldername(name))[1]
+);
+create policy "Users update own message files" on storage.objects for update using (
+  bucket_id = 'messages' and auth.uid()::text = (storage.foldername(name))[1]
+);
+create policy "Users delete own message files" on storage.objects for delete using (
   bucket_id = 'messages' and auth.uid()::text = (storage.foldername(name))[1]
 );
 ```
