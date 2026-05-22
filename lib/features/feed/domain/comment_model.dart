@@ -39,4 +39,28 @@ class CommentModel {
           : null,
     );
   }
+
+  CommentModel copyWith({
+    String? id,
+    String? postId,
+    String? userId,
+    String? parentId,
+    String? content,
+    int? likesCount,
+    bool? isLiked,
+    DateTime? createdAt,
+    ProfileModel? author,
+  }) {
+    return CommentModel(
+      id: id ?? this.id,
+      postId: postId ?? this.postId,
+      userId: userId ?? this.userId,
+      parentId: parentId ?? this.parentId,
+      content: content ?? this.content,
+      likesCount: likesCount ?? this.likesCount,
+      isLiked: isLiked ?? this.isLiked,
+      createdAt: createdAt ?? this.createdAt,
+      author: author ?? this.author,
+    );
+  }
 }

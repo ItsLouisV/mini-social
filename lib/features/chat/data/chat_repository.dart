@@ -118,14 +118,14 @@ class ChatRepository {
   }
 
   Future<MessageModel> sendMessage(
-      String conversationId, String content) async {
+      String conversationId, String content, {String messageType = 'text'}) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
         .insert({
           'conversation_id': conversationId,
           'sender_id': currentUserId,
           'content': content,
-          'message_type': 'text',
+          'message_type': messageType,
         })
         .select()
         .single();

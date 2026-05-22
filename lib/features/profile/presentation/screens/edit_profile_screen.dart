@@ -337,6 +337,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 maxLines: 4,
                                 maxLength: 150,
                                 prefixIcon: CupertinoIcons.info,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
                               ),
                             ],
                           ),

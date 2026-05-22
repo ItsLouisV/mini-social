@@ -34,4 +34,5 @@ class MessageModel {
 
   bool get isText => messageType == 'text';
   bool get isImage => messageType == 'image';
+  bool get isCall => messageType == 'call_log';
 }

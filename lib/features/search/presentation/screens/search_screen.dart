@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../shared/widgets/app_avatar.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../../social/providers/follow_provider.dart';
 import '../../providers/search_provider.dart';
 
@@ -111,45 +112,46 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                 style: AppTextStyles.titleSmall),
                             subtitle: Text('@${user.username}',
                                 style: AppTextStyles.caption),
-                            trailing: isFollowingAsync.when(
-                              data: (isFollowing) => OutlinedButton(
-                                onPressed: () {
-                                  if (isFollowing) {
-                                    ref
-                                        .read(followActionsProvider.notifier)
-                                        .unfollow(user.id);
-                                  } else {
-                                    ref
-                                        .read(followActionsProvider.notifier)
-                                        .follow(user.id);
-                                  }
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 6),
-                                  minimumSize: Size.zero,
-                                  side: BorderSide(
-                                    color: isFollowing
-                                        ? Theme.of(context).dividerColor
-                                        : Theme.of(context).colorScheme.primary,
+                            trailing: user.id == ref.watch(currentUserIdProvider)
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Text('Tôi', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  )
+                                : isFollowingAsync.when(
+                                    data: (isFollowing) => OutlinedButton(
+                                      onPressed: () {
+                                        ref.read(isFollowingProvider(user.id).notifier).toggleFollow();
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14, vertical: 6),
+                                        minimumSize: Size.zero,
+                                        side: BorderSide(
+                                          color: isFollowing
+                                              ? Theme.of(context).dividerColor
+                                              : Theme.of(context).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        isFollowing ? 'Đang theo dõi' : 'Theo dõi',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isFollowing
+                                              ? Theme.of(context).hintColor
+                                              : Theme.of(context).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    loading: () => const SizedBox(
+                                      width: 80,
+                                      child: LinearProgressIndicator(),
+                                    ),
+                                    error: (_, __) => const SizedBox(),
                                   ),
-                                ),
-                                child: Text(
-                                  isFollowing ? 'Đang theo dõi' : 'Theo dõi',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isFollowing
-                                        ? Theme.of(context).hintColor
-                                        : Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                              ),
-                              loading: () => const SizedBox(
-                                width: 80,
-                                child: LinearProgressIndicator(),
-                              ),
-                              error: (_, __) => const SizedBox(),
-                            ),
                             onTap: () => context.push('/profile/${user.id}'),
                           );
                         },

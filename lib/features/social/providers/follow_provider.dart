@@ -3,42 +3,58 @@ import '../data/social_repository.dart';
 import '../../../shared/providers/supabase_provider.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 
+import '../../profile/providers/profile_provider.dart';
+
 final socialRepositoryProvider = Provider<SocialRepository>((ref) {
   return SocialRepository(ref.watch(supabaseClientProvider));
 });
 
-final isFollowingProvider =
-    FutureProvider.family<bool, String>((ref, userId) async {
-  final currentUserId = ref.watch(currentUserIdProvider);
-  if (currentUserId == null || currentUserId == userId) return false;
-  return ref.watch(socialRepositoryProvider).isFollowing(userId);
+final isFollowingProvider = StateNotifierProvider.family<IsFollowingNotifier, AsyncValue<bool>, String>((ref, userId) {
+  return IsFollowingNotifier(ref, userId);
 });
 
-// Follow action notifier
-class FollowActionsNotifier extends StateNotifier<Set<String>> {
-  final SocialRepository _repo;
+class IsFollowingNotifier extends StateNotifier<AsyncValue<bool>> {
+  final Ref ref;
+  final String userId;
 
-  FollowActionsNotifier(this._repo) : super({});
-
-  Future<void> follow(String userId) async {
-    try {
-      await _repo.follow(userId);
-      state = {...state, userId};
-    } catch (_) {}
+  IsFollowingNotifier(this.ref, this.userId) : super(const AsyncValue.loading()) {
+    _init();
   }
 
-  Future<void> unfollow(String userId) async {
+  Future<void> _init() async {
     try {
-      await _repo.unfollow(userId);
-      state = state.where((id) => id != userId).toSet();
-    } catch (_) {}
+      final currentUserId = ref.read(currentUserIdProvider);
+      if (currentUserId == null || currentUserId == userId) {
+        if (mounted) state = const AsyncValue.data(false);
+        return;
+      }
+      final isFollowing = await ref.read(socialRepositoryProvider).isFollowing(userId);
+      if (mounted) state = AsyncValue.data(isFollowing);
+    } catch (e, st) {
+      if (mounted) state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<void> toggleFollow() async {
+    final previousState = state.valueOrNull ?? false;
+    
+    // Optimistic Update: Update UI immediately
+    state = AsyncValue.data(!previousState);
+
+    try {
+      if (previousState) {
+        await ref.read(socialRepositoryProvider).unfollow(userId);
+      } else {
+        await ref.read(socialRepositoryProvider).follow(userId);
+      }
+      // Invalidate profile to update follower counts in real-time
+      ref.invalidate(profileProvider(userId));
+    } catch (e) {
+      // Revert if API call fails
+      if (mounted) state = AsyncValue.data(previousState);
+    }
   }
 }
-
-final followActionsProvider =
-    StateNotifierProvider<FollowActionsNotifier, Set<String>>((ref) {
-  return FollowActionsNotifier(ref.watch(socialRepositoryProvider));
-});
 
 // Notifications stream
 final notificationsProvider =

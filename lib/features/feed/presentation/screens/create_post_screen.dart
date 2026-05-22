@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/image_utils.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/app_button.dart';
@@ -383,6 +384,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               animation: _captionController,
               builder: (context, _) {
                 final hasContent = _captionController.text.trim().isNotEmpty || _media.isNotEmpty;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                
+                final bgColor = hasContent
+                    ? AppColors.chatInputSendEnabled
+                    : (isDark
+                        ? AppColors.darkChatInputSendDisabled
+                        : AppColors.chatInputSendDisabled);
+                final textColor = hasContent
+                    ? AppColors.chatInputSendIconEnabled
+                    : AppColors.chatInputSendIconDisabled;
+
                 return AppButton(
                   label: 'Đăng',
                   onPressed: hasContent ? _post : null,
@@ -390,9 +402,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   width: 80,
                   height: 36,
                   borderRadius: 24,
-                  backgroundColor: hasContent 
-                      ? theme.colorScheme.primary 
-                      : theme.colorScheme.primary.withValues(alpha: 0.4),
+                  backgroundColor: bgColor,
+                  textColor: textColor,
                 );
               },
             ),

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../constants/app_colors.dart';
 import '../utils/notifications.dart';
@@ -21,8 +22,10 @@ import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/account_settings_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
+import '../../features/social/presentation/screens/follow_list_screen.dart';
 import '../../features/social/presentation/screens/notification_screen.dart';
 import '../../features/social/providers/follow_provider.dart';
+import '../../features/call/presentation/screens/call_screens.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _feedTabKey = GlobalKey<NavigatorState>(debugLabel: 'feedTab');
@@ -117,6 +120,60 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
+      // ── Call routes ──────────────────────────────────────────────────
+      GoRoute(
+        path: '/call/outgoing',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return CupertinoPage(
+            fullscreenDialog: true,
+            child: OutgoingCallScreen(
+              conversationId:  extra['conversationId'] as String? ?? '',
+              calleeId:        extra['calleeId']       as String? ?? '',
+              calleeName:      extra['calleeName']     as String? ?? '',
+              calleeAvatarUrl: extra['avatarUrl']      as String?,
+              isVideo:         extra['isVideo']        as bool?   ?? false,
+              onCancel:        extra['onCancel']       as VoidCallback?,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/call/incoming',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return CupertinoPage(
+            fullscreenDialog: true,
+            child: IncomingCallScreen(
+              callModel:       extra['callModel'], // CallModel
+              callerName:      extra['callerName'] as String? ?? '',
+              callerAvatarUrl: extra['avatarUrl']  as String?,
+              isVideo:         extra['isVideo']    as bool?   ?? false,
+              onAccept:        extra['onAccept']   as VoidCallback?,
+              onDecline:       extra['onDecline']  as VoidCallback?,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/call/active',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return CupertinoPage(
+            fullscreenDialog: true,
+            child: ActiveCallScreen(
+              callModel:      extra['callModel'], // CallModel
+              otherName:      extra['otherName']  as String? ?? '',
+              otherAvatarUrl: extra['avatarUrl']  as String?,
+              isVideo:        extra['isVideo']    as bool?   ?? false,
+              onEnd:          extra['onEnd']      as VoidCallback?,
+            ),
+          );
+        },
+      ),
       GoRoute(
         path: '/feed/post/:id',
         parentNavigatorKey: _rootNavigatorKey,
@@ -142,6 +199,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) => CupertinoPage(
           child: ProfileScreen(userId: state.pathParameters['userId']!),
         ),
+      ),
+      GoRoute(
+        path: '/profile/:userId/follows',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) {
+          final tab = state.uri.queryParameters['tab'];
+          return CupertinoPage(
+            child: FollowListScreen(
+              userId: state.pathParameters['userId']!,
+              initialIndex: tab == 'following' ? 1 : 0,
+            ),
+          );
+        },
       ),
 
       // ── StatefulShellRoute — each tab keeps its own navigator stack ──
@@ -304,16 +374,16 @@ class _IosTabBar extends StatelessWidget {
               _TabItem(
                 visualIdx: 0,
                 currentVisualIdx: visualIndex,
-                icon: CupertinoIcons.house,
-                activeIcon: CupertinoIcons.house_fill,
-                label: 'Trang chủ',
+                icon: FontAwesomeIcons.house,
+                activeIcon: FontAwesomeIcons.houseUser,
+                label: '',
                 onTap: onTap,
               ),
               _TabItem(
                 visualIdx: 1,
                 currentVisualIdx: visualIndex,
-                icon: CupertinoIcons.chat_bubble_2,
-                activeIcon: CupertinoIcons.chat_bubble_2_fill,
+                icon: FontAwesomeIcons.message,
+                activeIcon: FontAwesomeIcons.solidMessage,
                 label: 'Tin nhắn',
                 badge: unreadMsgCount > 0 ? '$unreadMsgCount' : null,
                 onTap: onTap,
@@ -358,8 +428,8 @@ class _IosTabBar extends StatelessWidget {
               _TabItem(
                 visualIdx: 3,
                 currentVisualIdx: visualIndex,
-                icon: CupertinoIcons.bell,
-                activeIcon: CupertinoIcons.bell_fill,
+                icon: FontAwesomeIcons.bell,
+                activeIcon: FontAwesomeIcons.solidBell,
                 label: 'Thông báo',
                 badge: unreadNotifCount > 0 ? '$unreadNotifCount' : null,
                 onTap: onTap,
@@ -367,8 +437,8 @@ class _IosTabBar extends StatelessWidget {
               _TabItem(
                 visualIdx: 4,
                 currentVisualIdx: visualIndex,
-                icon: CupertinoIcons.person_circle,
-                activeIcon: CupertinoIcons.person_circle_fill,
+                icon: FontAwesomeIcons.user,
+                activeIcon: FontAwesomeIcons.solidUser,
                 label: 'Cài đặt',
                 onTap: onTap,
               ),
@@ -383,8 +453,8 @@ class _IosTabBar extends StatelessWidget {
 class _TabItem extends StatelessWidget {
   final int visualIdx;
   final int currentVisualIdx;
-  final IconData icon;
-  final IconData activeIcon;
+  final dynamic icon;
+  final dynamic activeIcon;
   final String label;
   final String? badge;
   final void Function(int) onTap;
@@ -420,7 +490,7 @@ class _TabItem extends StatelessWidget {
                     scale: anim,
                     child: FadeTransition(opacity: anim, child: child),
                   ),
-                  child: Icon(
+                  child: FaIcon(
                     isActive ? activeIcon : icon,
                     key: ValueKey(isActive),
                     color: color,
@@ -454,16 +524,6 @@ class _TabItem extends StatelessWidget {
                     ),
                   ),
               ],
-            ),
-            const SizedBox(height: 3),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-              ),
-              child: Text(label),
             ),
           ],
         ),

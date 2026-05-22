@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/profile_repository.dart';
 import '../domain/profile_model.dart';
 import '../../../core/services/supabase_service.dart';
@@ -9,6 +10,52 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
 
 final profileProvider =
     FutureProvider.family<ProfileModel, String>((ref, userId) async {
+  final supabase = ref.watch(supabaseServiceProvider).client;
+  
+  final channel = supabase.channel('public:profile_$userId');
+  
+  channel.onPostgresChanges(
+    event: PostgresChangeEvent.all,
+    schema: 'public',
+    table: 'follows',
+    filter: PostgresChangeFilter(
+      type: PostgresChangeFilterType.eq,
+      column: 'following_id',
+      value: userId,
+    ),
+    callback: (payload) {
+      ref.invalidateSelf();
+    },
+  ).onPostgresChanges(
+    event: PostgresChangeEvent.all,
+    schema: 'public',
+    table: 'follows',
+    filter: PostgresChangeFilter(
+      type: PostgresChangeFilterType.eq,
+      column: 'follower_id',
+      value: userId,
+    ),
+    callback: (payload) {
+      ref.invalidateSelf();
+    },
+  ).onPostgresChanges(
+    event: PostgresChangeEvent.update,
+    schema: 'public',
+    table: 'profiles',
+    filter: PostgresChangeFilter(
+      type: PostgresChangeFilterType.eq,
+      column: 'id',
+      value: userId,
+    ),
+    callback: (payload) {
+      ref.invalidateSelf();
+    },
+  ).subscribe();
+
+  ref.onDispose(() {
+    channel.unsubscribe();
+  });
+
   return ref.watch(profileRepositoryProvider).getProfile(userId);
 });
 

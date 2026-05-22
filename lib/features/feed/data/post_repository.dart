@@ -161,13 +161,19 @@ class PostRepository {
 
     // Fetch likes for these comments by current user
     final commentIds = commentsList.map((e) => e['id']).toList();
-    final likedCommentsData = await _client
-        .from('comment_likes')
-        .select('comment_id')
-        .eq('user_id', userId)
-        .inFilter('comment_id', commentIds);
+    Set<String> likedCommentIds = {};
+    try {
+      final likedCommentsData = await _client
+          .from('comment_likes')
+          .select('comment_id')
+          .eq('user_id', userId)
+          .inFilter('comment_id', commentIds);
 
-    final likedCommentIds = (likedCommentsData as List).map((e) => e['comment_id'] as String).toSet();
+      likedCommentIds = (likedCommentsData as List).map((e) => e['comment_id'] as String).toSet();
+    } catch (e) {
+      // Gracefully fall back if the comment_likes table or schema does not exist yet
+      print('Warning: Failed to fetch comment likes: $e');
+    }
 
     return commentsList.map((e) {
       return CommentModel.fromJson(e, isLiked: likedCommentIds.contains(e['id']));

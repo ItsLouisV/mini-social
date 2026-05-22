@@ -161,21 +161,29 @@ class ProfileScreen extends ConsumerWidget {
                     spacing: 16,
                     runSpacing: 4,
                     children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('${profile.followersCount}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(width: 4),
-                          Text('Người theo dõi', style: TextStyle(color: theme.hintColor, fontSize: 15)),
-                        ],
+                      GestureDetector(
+                        onTap: () => context.push('/profile/${profile.id}/follows?tab=followers'),
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('${profile.followersCount}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(width: 4),
+                            Text('Người theo dõi', style: TextStyle(color: theme.hintColor, fontSize: 15)),
+                          ],
+                        ),
                       ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('${profile.followingCount}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(width: 4),
-                          Text('Đang theo dõi', style: TextStyle(color: theme.hintColor, fontSize: 15)),
-                        ],
+                      GestureDetector(
+                        onTap: () => context.push('/profile/${profile.id}/follows?tab=following'),
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('${profile.followingCount}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(width: 4),
+                            Text('Đang theo dõi', style: TextStyle(color: theme.hintColor, fontSize: 15)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -229,16 +237,12 @@ class ProfileScreen extends ConsumerWidget {
     return isFollowingAsync.when(
       data: (isFollowing) => ElevatedButton(
         onPressed: () {
-          if (isFollowing) {
-            ref.read(followActionsProvider.notifier).unfollow(profile.id);
-          } else {
-            ref.read(followActionsProvider.notifier).follow(profile.id);
-          }
+          ref.read(isFollowingProvider(profile.id).notifier).toggleFollow();
         },
         style: ElevatedButton.styleFrom(
           backgroundColor:
-              isFollowing ? Theme.of(context).dividerColor.withValues(alpha: 0.1) : Theme.of(context).colorScheme.primary,
-          foregroundColor: isFollowing ? Theme.of(context).textTheme.bodyLarge?.color : Colors.white,
+              isFollowing ? Theme.of(context).dividerColor.withValues(alpha: 0.1) : Theme.of(context).colorScheme.onSurface,
+          foregroundColor: isFollowing ? Theme.of(context).textTheme.bodyLarge?.color : Theme.of(context).colorScheme.surface,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
           elevation: 0,
           shape: RoundedRectangleBorder(

@@ -228,10 +228,10 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                             ref.invalidate(postDetailProvider(widget.postId));
                             ref.invalidate(feedPostsProvider);
                           },
-                          onLikeToggle: () async {
+                          onLikeToggle: (wasLiked) async {
                             try {
                               final repo = ref.read(postRepositoryProvider);
-                              if (node.comment.isLiked) {
+                              if (wasLiked) {
                                 await repo.unlikeComment(node.comment.id);
                               } else {
                                 await repo.likeComment(node.comment.id);
@@ -246,6 +246,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                   ),
                                 );
                               }
+                              rethrow;
                             }
                           }
                         ))
@@ -359,12 +360,12 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   }
 }
 
-class _CommentTile extends StatelessWidget {
+class _CommentTile extends StatefulWidget {
   final CommentNode node;
   final String? currentUserId;
   final VoidCallback onDelete;
   final VoidCallback onReply;
-  final VoidCallback onLikeToggle;
+  final Future<void> Function(bool wasLiked) onLikeToggle;
 
   const _CommentTile({
     required this.node,
@@ -375,22 +376,79 @@ class _CommentTile extends StatelessWidget {
   });
 
   @override
+  State<_CommentTile> createState() => _CommentTileState();
+}
+
+class _CommentTileState extends State<_CommentTile> {
+  late bool _isLiked;
+  late int _likesCount;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLiked = widget.node.comment.isLiked;
+    _likesCount = widget.node.comment.likesCount;
+  }
+
+  @override
+  void didUpdateWidget(covariant _CommentTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.node.comment != widget.node.comment) {
+      _isLiked = widget.node.comment.isLiked;
+      _likesCount = widget.node.comment.likesCount;
+    }
+  }
+
+  Future<void> _handleLike() async {
+    if (_isLoading) return;
+    
+    final wasLiked = _isLiked;
+    final originalLikesCount = _likesCount;
+
+    // Optimistic UI update
+    setState(() {
+      _isLiked = !wasLiked;
+      _likesCount += !wasLiked ? 1 : -1;
+      _isLoading = true;
+    });
+
+    try {
+      await widget.onLikeToggle(wasLiked);
+    } catch (e) {
+      // Revert on failure
+      if (mounted) {
+        setState(() {
+          _isLiked = wasLiked;
+          _likesCount = originalLikesCount;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final comment = node.comment;
-    final isOwner = comment.userId == currentUserId;
+    final comment = widget.node.comment;
+    final isOwner = comment.userId == widget.currentUserId;
     
     // Level 1: marginLeft = 0, radius = 18
     // Level 2: marginLeft = 40, radius = 14
     // Level 3: marginLeft = 80, radius = 14
     final maxLevel = 3;
-    final level = node.level > maxLevel ? maxLevel : node.level;
+    final level = widget.node.level > maxLevel ? maxLevel : widget.node.level;
     final indent = (level - 1) * 40.0;
     final avatarRadius = level == 1 ? 18.0 : 14.0;
     
     final canReply = level < maxLevel;
 
     return Padding(
-      padding: EdgeInsets.only(left: 12 + indent, right: 12, top: 12),
+      padding: EdgeInsets.only(left: 12.0 + indent, right: 12.0, top: 12.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -426,7 +484,7 @@ class _CommentTile extends StatelessWidget {
                           const Spacer(),
                           if (isOwner)
                             GestureDetector(
-                              onTap: onDelete,
+                              onTap: widget.onDelete,
                               child: Icon(CupertinoIcons.trash,
                                   size: 14, color: Theme.of(context).hintColor),
                             ),
@@ -444,7 +502,7 @@ class _CommentTile extends StatelessWidget {
                     children: [
                       if (canReply)
                         GestureDetector(
-                          onTap: onReply,
+                          onTap: widget.onReply,
                           child: Text(
                             'Trả lời',
                             style: AppTextStyles.caption.copyWith(
@@ -455,27 +513,25 @@ class _CommentTile extends StatelessWidget {
                         ),
                       const Spacer(),
                       GestureDetector(
-                        onTap: onLikeToggle,
+                        onTap: _handleLike,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (comment.likesCount > 0) ...[
-                              Text(
-                                '${comment.likesCount}',
-                                style: AppTextStyles.caption.copyWith(
-                                  fontSize: 12,
-                                  fontWeight: comment.isLiked ? FontWeight.w600 : FontWeight.w500,
-                                  color: comment.isLiked 
-                                      ? Theme.of(context).colorScheme.primary 
-                                      : Theme.of(context).hintColor,
-                                ),
+                            Text(
+                              '$_likesCount',
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 12,
+                                fontWeight: _isLiked ? FontWeight.w600 : FontWeight.w500,
+                                color: _isLiked 
+                                    ? Theme.of(context).colorScheme.primary 
+                                    : Theme.of(context).hintColor,
                               ),
-                              const SizedBox(width: 4),
-                            ],
+                            ),
+                            const SizedBox(width: 4),
                             Icon(
-                              comment.isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                              _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
                               size: 16,
-                              color: comment.isLiked 
+                              color: _isLiked 
                                   ? Theme.of(context).colorScheme.primary 
                                   : Theme.of(context).hintColor,
                             ),

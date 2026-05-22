@@ -33,6 +33,24 @@ class SocialRepository {
         .eq('following_id', targetUserId);
   }
 
+  Future<List<Map<String, dynamic>>> getFollowers(String userId) async {
+    final data = await _client
+        .from(SupabaseConstants.followsTable)
+        .select('profiles!follows_follower_id_fkey(*)')
+        .eq('following_id', userId)
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(data.map((x) => x['profiles']));
+  }
+
+  Future<List<Map<String, dynamic>>> getFollowing(String userId) async {
+    final data = await _client
+        .from(SupabaseConstants.followsTable)
+        .select('profiles!follows_following_id_fkey(*)')
+        .eq('follower_id', userId)
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(data.map((x) => x['profiles']));
+  }
+
   // Notifications
   Stream<List<Map<String, dynamic>>> watchNotifications() {
     // Use notifications stream as trigger, then fetch with profile join

@@ -217,7 +217,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               color: theme.colorScheme.primary,
               size: 24,
             ),
-            onPressed: () {},
+            onPressed: () {
+              if (otherUser?.id == null) return;
+              context.push('/call/outgoing', extra: {
+                'conversationId': widget.conversationId,
+                'calleeId': otherUser!.id,
+                'calleeName': otherUserName,
+                'avatarUrl':  otherUser.avatarUrl,
+                'isVideo':    true,
+              });
+            },
             tooltip: 'Gọi video',
           ),
           // Voice call
@@ -227,7 +236,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               color: theme.colorScheme.primary,
               size: 20,
             ),
-            onPressed: () {},
+            onPressed: () {
+              if (otherUser?.id == null) return;
+              context.push('/call/outgoing', extra: {
+                'conversationId': widget.conversationId,
+                'calleeId': otherUser!.id,
+                'calleeName': otherUserName,
+                'avatarUrl':  otherUser.avatarUrl,
+                'isVideo':    false,
+              });
+            },
             tooltip: 'Gọi thoại',
           ),
           // More options
@@ -753,9 +771,11 @@ class _MessageBubbleState extends State<_MessageBubble> {
                           url: message.mediaUrl!,
                           isMine: isMine,
                         )
-                      : Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
+                      : message.isCall
+                          ? _CallLogBubble(message: message, isMine: isMine)
+                          : Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
                           child: Text(
                             message.content ?? '',
                             style: TextStyle(
@@ -865,6 +885,58 @@ class _ImageBubble extends StatelessWidget {
                       color: Colors.grey),
                 ),
               ),
+      ),
+    );
+  }
+}
+
+// ── Call Log Bubble ───────────────────────────────────────────────────────────
+class _CallLogBubble extends StatelessWidget {
+  final MessageModel message;
+  final bool isMine;
+
+  const _CallLogBubble({required this.message, required this.isMine});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isMine 
+        ? (isDark ? AppColors.darkChatTextSender : AppColors.chatTextSender)
+        : (isDark ? AppColors.darkChatTextReceiver : AppColors.chatTextReceiver);
+    
+    final content = message.content ?? '';
+    final isMissed = content.toLowerCase().contains('nhỡ') || content.toLowerCase().contains('từ chối') || content.toLowerCase().contains('đã hủy');
+    final isVideo = content.toLowerCase().contains('video');
+    final color = isMissed ? AppColors.error : textColor;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isMine ? Colors.white.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isVideo ? CupertinoIcons.videocam_fill : CupertinoIcons.phone_fill,
+              color: color,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            content,
+            style: TextStyle(
+              fontSize: 15,
+              color: isMissed ? color : textColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

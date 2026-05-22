@@ -173,16 +173,19 @@ create table likes (
 
 -- Trigger: cập nhật likes_count trên posts
 create or replace function update_likes_count()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
 begin
   if TG_OP = 'INSERT' then
-    update posts set likes_count = likes_count + 1 where id = NEW.post_id;
+    update posts set likes_count = coalesce(likes_count, 0) + 1 where id = NEW.post_id;
   elsif TG_OP = 'DELETE' then
-    update posts set likes_count = greatest(likes_count - 1, 0) where id = OLD.post_id;
+    update posts set likes_count = greatest(coalesce(likes_count, 0) - 1, 0) where id = OLD.post_id;
   end if;
   return null;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger likes_count_trigger
   after insert or delete on likes
@@ -211,7 +214,10 @@ create index on comments (post_id, created_at) where parent_id is null;
 
 -- Trigger: cộng comments_count cho TẤT CẢ comment (bao gồm cả reply)
 create or replace function update_comments_count()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
 begin
   if TG_OP = 'INSERT' then
     update posts set comments_count = coalesce(comments_count, 0) + 1 where id = NEW.post_id;
@@ -220,7 +226,7 @@ begin
   end if;
   return null;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger comments_count_trigger
   after insert or delete on comments
@@ -256,16 +262,19 @@ create table comment_likes (
 
 -- Trigger: tự động tăng/giảm likes_count mỗi khi có người like/unlike
 create or replace function update_comment_likes_count()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
 begin
   if TG_OP = 'INSERT' then
-    update comments set likes_count = likes_count + 1 where id = NEW.comment_id;
+    update comments set likes_count = coalesce(likes_count, 0) + 1 where id = NEW.comment_id;
   elsif TG_OP = 'DELETE' then
-    update comments set likes_count = greatest(likes_count - 1, 0) where id = OLD.comment_id;
+    update comments set likes_count = greatest(coalesce(likes_count, 0) - 1, 0) where id = OLD.comment_id;
   end if;
   return null;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger comment_likes_count_trigger
   after insert or delete on comment_likes
@@ -897,6 +906,11 @@ create policy "Comments viewable by everyone" on comments for select using (true
 create policy "Users create comments"         on comments for insert with check (auth.uid() = user_id);
 create policy "Users delete own comments"     on comments for delete using (auth.uid() = user_id);
 
+-- comment_likes
+alter table comment_likes enable row level security;
+create policy "Comment likes viewable by everyone" on comment_likes for select using (true);
+create policy "Users manage own comment likes"     on comment_likes for all   using (auth.uid() = user_id);
+
 -- follows
 alter table follows enable row level security;
 create policy "Follows viewable by everyone" on follows for select using (true);
@@ -946,6 +960,15 @@ create policy "Mark messages as seen"  on messages
       select participant_2 from conversations where id = conversation_id
     )
   );
+
+-- calls
+alter table calls enable row level security;
+create policy "Participants view calls" on calls
+  for select using (auth.uid() = caller_id or auth.uid() = callee_id);
+create policy "Users create calls" on calls
+  for insert with check (auth.uid() = caller_id);
+create policy "Participants update call status" on calls
+  for update using (auth.uid() = caller_id or auth.uid() = callee_id);
 ```
 
 ---
@@ -953,8 +976,15 @@ create policy "Mark messages as seen"  on messages
 ## 13. Realtime
 
 ```sql
+-- Thêm các bảng cần đồng bộ realtime vào publication
+alter publication supabase_realtime add table posts;
+alter publication supabase_realtime add table likes;
+alter publication supabase_realtime add table comments;
+alter publication supabase_realtime add table comment_likes;
+alter publication supabase_realtime add table conversations;
 alter publication supabase_realtime add table messages;
 alter publication supabase_realtime add table notifications;
+alter publication supabase_realtime add table calls;
 ```
 
 ---
@@ -969,6 +999,7 @@ profiles ──< posts ──< post_media
          ──< friend_requests >── profiles  (pending/accepted/rejected/cancelled)
          ──< notifications
          ──< messages     >── conversations >── profiles (x2)
+         ──< calls        >── conversations >── profiles (x2)
 ```
 
 | Quan hệ             | Bảng                     | Cardinality                |
@@ -982,3 +1013,39 @@ profiles ──< posts ──< post_media
 | User kết bạn user   | friend_requests          | N:M (hai chiều, có status) |
 | User nhận thông báo | notifications            | N:1                        |
 | User chat user      | conversations + messages | N:M                        |
+| User gọi user       | calls                    | N:M                        |
+
+---
+
+## 15. `calls` — Cuộc gọi thoại & Video
+
+```sql
+create type call_status as enum (
+  'ringing',   -- đang đổ chuông
+  'accepted',  -- đã chấp nhận, đang kết nối
+  'declined',  -- bị từ chối
+  'ended',     -- đã kết thúc
+  'missed',    -- không nhấc máy (timeout 60s)
+  'cancelled'  -- người gọi tự huỷ trước khi được nhấc
+);
+
+create type call_type as enum ('voice', 'video');
+
+create table calls (
+  id              uuid primary key default gen_random_uuid(),
+  conversation_id uuid references conversations(id) on delete cascade not null,
+  caller_id       uuid references profiles(id)      on delete cascade not null,
+  callee_id       uuid references profiles(id)      on delete cascade not null,
+  type            call_type   not null default 'voice',
+  status          call_status not null default 'ringing',
+  room_name       text        not null,         -- Tên phòng LiveKit (UUID duy nhất)
+  started_at      timestamptz default now(),    -- lúc bắt đầu đổ chuông
+  connected_at    timestamptz,                  -- lúc callee nhấc máy
+  ended_at        timestamptz,                  -- lúc kết thúc cuộc gọi
+  duration_sec    int                           -- thời lượng (giây)
+);
+
+create index on calls (callee_id, status, started_at desc);
+create index on calls (caller_id, started_at desc);
+create index on calls (conversation_id, started_at desc);
+```
