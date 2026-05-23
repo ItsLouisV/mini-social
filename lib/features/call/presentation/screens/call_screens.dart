@@ -793,13 +793,25 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _disconnectRoom() async {
+    if (_room == null) return;
+    final r = _room;
+    _room = null; // Tránh ngắt kết nối nhiều lần
+    r?.removeListener(_onRoomEvent);
+    try {
+      await r?.disconnect();
+    } catch (_) {}
+  }
+
   Future<void> _endCall() async {
-    _room?.disconnect();
+    await _disconnectRoom();
     
     if (widget.callModel != null) {
       final call = widget.callModel!;
       _sendLog(call);
-      await ref.read(callRepositoryProvider).updateStatus(call.id, CallStatus.ended);
+      try {
+        await ref.read(callRepositoryProvider).updateStatus(call.id, CallStatus.ended);
+      } catch (_) {}
     }
     
     widget.onEnd?.call();
@@ -809,8 +821,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    _room?.removeListener(_onRoomEvent);
-    _room?.disconnect();
+    _disconnectRoom();
     super.dispose();
   }
 
@@ -832,7 +843,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
           final call = next.value!;
           if (call.status == CallStatus.ended || call.status == CallStatus.declined) {
             _sendLog(call);
-            _room?.disconnect();
+            _disconnectRoom();
             if (mounted) context.pop();
           }
         }
