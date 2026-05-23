@@ -105,12 +105,50 @@ class ChatRepository {
     });
   }
 
+  // ── Conversation Actions ──
+  Future<void> togglePin(ConversationModel conv) async {
+    final userId = currentUserId!;
+    final isP1 = conv.participant1 == userId;
+    final currentlyPinned = isP1 ? conv.p1IsPinned : conv.p2IsPinned;
+
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      if (isP1) 'p1_is_pinned': !currentlyPinned,
+      if (!isP1) 'p2_is_pinned': !currentlyPinned,
+    }).eq('id', conv.id);
+  }
+
+  Future<void> toggleHide(ConversationModel conv) async {
+    final userId = currentUserId!;
+    final isP1 = conv.participant1 == userId;
+    final currentlyHidden = isP1 ? conv.p1IsHidden : conv.p2IsHidden;
+
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      if (isP1) 'p1_is_hidden': !currentlyHidden,
+      if (!isP1) 'p2_is_hidden': !currentlyHidden,
+    }).eq('id', conv.id);
+  }
+
+  Future<void> markAsRead(ConversationModel conv) async {
+    final userId = currentUserId!;
+    final isP1 = conv.participant1 == userId;
+
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      if (isP1) 'p1_unread_count': 0,
+      if (!isP1) 'p2_unread_count': 0,
+    }).eq('id', conv.id);
+  }
+
+  Future<void> deleteConversation(String convId) async {
+    // Để xoá conversation 2 chiều, xoá thẳng record.
+    await _client.from(SupabaseConstants.conversationsTable).delete().eq('id', convId);
+  }
+
   // ── Messages ──
   Future<List<MessageModel>> getMessages(String conversationId,
       {int page = 0}) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
-        .select()
+        .select('*, reply_to_message:reply_to_message_id(*)')
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true);
 
@@ -121,7 +159,7 @@ class ChatRepository {
       {required int limit, required int offset}) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
-        .select()
+        .select('*, reply_to_message:reply_to_message_id(*)')
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: false) // Tải từ mới nhất
         .range(offset, offset + limit - 1);
@@ -130,7 +168,7 @@ class ChatRepository {
   }
 
   Future<MessageModel> sendMessage(
-      String conversationId, String content, {String messageType = 'text'}) async {
+      String conversationId, String content, {String messageType = 'text', String? replyToMessageId}) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
         .insert({
@@ -138,6 +176,7 @@ class ChatRepository {
           'sender_id': currentUserId,
           'content': content,
           'message_type': messageType,
+          if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
         })
         .select()
         .single();
@@ -154,27 +193,30 @@ class ChatRepository {
     return MessageModel.fromJson(data);
   }
 
-  Future<MessageModel> sendImageMessage(
-      String conversationId, XFile imageFile) async {
-    final userId = currentUserId!;
-    final imageId = _uuid.v4();
-    final ext = imageFile.name.split('.').last.toLowerCase();
-    final path = '$userId/$conversationId/$imageId.$ext';
+  Future<MessageModel> sendImageMessage(String conversationId, XFile image, {String? caption, String? replyToMessageId}) async {
+    final ext = image.name.contains('.') ? image.name.split('.').last.toLowerCase() : 'jpg';
+    final fileName = '$currentUserId/${_uuid.v4()}.$ext';
+    final bytes = await image.readAsBytes();
+    final contentType = ext == 'png' ? 'image/png' : (ext == 'gif' ? 'image/gif' : 'image/jpeg');
 
-    final url = await _service.uploadFile(
-      bucket: SupabaseConstants.messagesBucket,
-      path: path,
-      file: imageFile,
-    );
+    await _client.storage.from(SupabaseConstants.messagesBucket).uploadBinary(
+          fileName,
+          bytes,
+          fileOptions: FileOptions(contentType: contentType),
+        );
+
+    final url =
+        _client.storage.from(SupabaseConstants.messagesBucket).getPublicUrl(fileName);
 
     final data = await _client
         .from(SupabaseConstants.messagesTable)
         .insert({
           'conversation_id': conversationId,
-          'sender_id': userId,
-          'content': null,
+          'sender_id': currentUserId,
+          'content': caption ?? 'Đã gửi một ảnh',
           'media_url': url,
           'message_type': 'image',
+          if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
         })
         .select()
         .single();

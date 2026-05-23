@@ -10,6 +10,10 @@ class ConversationModel {
   final String? lastMessageSenderId;
   final int p1UnreadCount;
   final int p2UnreadCount;
+  final bool p1IsPinned;
+  final bool p2IsPinned;
+  final bool p1IsHidden;
+  final bool p2IsHidden;
   final ProfileModel? otherUser; // populated on the fly
 
   const ConversationModel({
@@ -22,6 +26,10 @@ class ConversationModel {
     this.lastMessageSenderId,
     this.p1UnreadCount = 0,
     this.p2UnreadCount = 0,
+    this.p1IsPinned = false,
+    this.p2IsPinned = false,
+    this.p1IsHidden = false,
+    this.p2IsHidden = false,
     this.otherUser,
   });
 
@@ -41,6 +49,10 @@ class ConversationModel {
           : null,
       p1UnreadCount: json['p1_unread_count'] as int? ?? 0,
       p2UnreadCount: json['p2_unread_count'] as int? ?? 0,
+      p1IsPinned: json['p1_is_pinned'] as bool? ?? false,
+      p2IsPinned: json['p2_is_pinned'] as bool? ?? false,
+      p1IsHidden: json['p1_is_hidden'] as bool? ?? false,
+      p2IsHidden: json['p2_is_hidden'] as bool? ?? false,
       otherUser: otherUser,
     );
   }
@@ -51,5 +63,13 @@ class ConversationModel {
 
   int getUnreadCount(String currentUserId) {
     return participant1 == currentUserId ? p1UnreadCount : p2UnreadCount;
+  }
+
+  bool isPinned(String currentUserId) {
+    return participant1 == currentUserId ? p1IsPinned : p2IsPinned;
+  }
+
+  bool isHidden(String currentUserId) {
+    return participant1 == currentUserId ? p1IsHidden : p2IsHidden;
   }
 }

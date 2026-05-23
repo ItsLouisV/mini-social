@@ -1,9 +1,9 @@
 import 'dart:io' as io;
-import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -31,6 +31,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _sending = false;
   XFile? _pendingImage;
   Uint8List? _pendingImagePreviewBytes;
+  MessageModel? _replyingToMessage;
+
+  // Quản lý GlobalKey cho việc cuộn tới tin nhắn được trả lời
+  final Map<String, GlobalKey<_MessageBubbleState>> _messageKeys = {};
 
   @override
   void initState() {
@@ -69,9 +73,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  // Cuộn tới tin nhắn gốc và tạo hiệu ứng nhấp nháy
+  void _scrollToMessage(String msgId) {
+    final key = _messageKeys[msgId];
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.5, // Cuộn sao cho phần tử nằm ở giữa màn hình
+      );
+      key.currentState?.highlight();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tin nhắn gốc đã cũ hoặc không tìm thấy'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
   Future<void> _send() async {
     final text = _messageController.text.trim();
     final image = _pendingImage;
+    final replyId = _replyingToMessage?.id;
 
     if (text.isEmpty && image == null) return;
     if (_sending) return;
@@ -80,22 +106,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _sending = true;
       _pendingImage = null;
       _pendingImagePreviewBytes = null;
+      _replyingToMessage = null; // Xoá reply preview ngay lập tức
     });
     _messageController.clear();
 
     try {
-      // Gửi ảnh trước (nếu có)
       if (image != null) {
+        // Gửi tin nhắn ảnh kèm chú thích (caption) và đính kèm ID reply (nếu có)
         await ref
             .read(chatRepositoryProvider)
-            .sendImageMessage(widget.conversationId, image);
+            .sendImageMessage(
+              widget.conversationId, 
+              image,
+              caption: text.isNotEmpty ? text : null,
+              replyToMessageId: replyId,
+            );
+      } else {
+        // Chỉ gửi tin nhắn chữ và đính kèm ID reply (nếu có)
+        if (text.isNotEmpty) {
+          await ref
+              .read(chatRepositoryProvider)
+              .sendMessage(
+                widget.conversationId, 
+                text,
+                replyToMessageId: replyId,
+              );
+        }
       }
-      // Gửi text sau (nếu có — dùng như caption)
-      if (text.isNotEmpty) {
-        await ref
-            .read(chatRepositoryProvider)
-            .sendMessage(widget.conversationId, text);
-      }
+
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
@@ -284,7 +322,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             Expanded(
               child: messagesAsync.when(
                 data: (messages) =>
-                    _buildMessageList(messages, currentUserId),
+                    _buildMessageList(messages, currentUserId, otherUserName),
                 loading: () =>
                     const Center(child: CupertinoActivityIndicator()),
                 error: (e, _) => Center(child: Text(e.toString())),
@@ -298,7 +336,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildMessageList(
-      List<MessageModel> messages, String currentUserId) {
+      List<MessageModel> messages, String currentUserId, String otherUserName) {
     if (messages.isEmpty) {
       return Center(
         child: Text(
@@ -362,14 +400,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         if (item.isDivider) {
           return _TimeDivider(dateTime: item.dateTime!);
         }
+
+        final msgId = item.message!.id;
+        final bubbleKey = _messageKeys.putIfAbsent(msgId, () => GlobalKey<_MessageBubbleState>());
+
         return _MessageBubble(
-          key: ValueKey(item.message!.id),
+          key: bubbleKey,
           message: item.message!,
           isMine: item.message!.senderId == currentUserId,
           showInlineTime: item.showInlineTime,
           showSeen: isMine &&
               lastIsSeen &&
               index == 0, // Mới nhất là index 0
+          currentUserId: currentUserId,
+          otherUserName: otherUserName,
+          onSwipeToReply: () {
+            setState(() {
+              _replyingToMessage = item.message;
+              _focusNode.requestFocus();
+            });
+          },
+          onTapReply: (replyMsgId) => _scrollToMessage(replyMsgId),
         );
       },
     );
@@ -485,6 +536,115 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  // ── Reply Preview ─────────────────────────────────────────────────────────────
+  Widget _buildReplyPreview(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    final currentUserId = ref.watch(currentUserIdProvider) ?? '';
+    
+    // Lấy info người kia từ conversations provider
+    final convAsync = ref.watch(conversationsProvider);
+    final otherUser = convAsync.whenData((convs) {
+      try {
+        return convs
+            .firstWhere((c) => c.id == widget.conversationId)
+            .otherUser;
+      } catch (_) {
+        return null;
+      }
+    }).valueOrNull;
+    final otherUserName = otherUser?.displayName ?? 'Người dùng';
+
+    final senderName = _replyingToMessage!.senderId == currentUserId
+        ? 'Bạn'
+        : otherUserName;
+
+    final replyContent = _replyingToMessage!.isText 
+        ? _replyingToMessage!.content 
+        : (_replyingToMessage!.isImage ? 'Hình ảnh' : 'Cuộc gọi');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+        border: Border(
+          bottom: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.15),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Cột màu dọc bên trái phong cách Zalo
+          Container(
+            width: 3,
+            height: 36,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          
+          // Chi tiết tin nhắn reply
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Trả lời $senderName',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  replyContent ?? '',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.hintColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          
+          // Hiển thị thumbnail ảnh nhỏ nếu phản hồi một tin nhắn ảnh
+          if (_replyingToMessage!.isImage && _replyingToMessage!.mediaUrl != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 12, left: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: CachedNetworkImage(
+                  imageUrl: _replyingToMessage!.mediaUrl!,
+                  width: 32,
+                  height: 32,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(color: Colors.grey.withValues(alpha: 0.2), width: 32, height: 32),
+                  errorWidget: (_, __, ___) => const Icon(CupertinoIcons.photo, size: 16),
+                ),
+              ),
+            ),
+            
+          // Nút huỷ reply
+          IconButton(
+            onPressed: () => setState(() => _replyingToMessage = null),
+            icon: const Icon(CupertinoIcons.xmark, size: 16),
+            color: theme.hintColor,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Input bar ────────────────────────────────────────────────────────────────
   Widget _buildInput(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
@@ -493,6 +653,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Hiển thị tin nhắn đang Reply
+        if (_replyingToMessage != null) _buildReplyPreview(theme),
+
         // Zalo-style: hiện preview ảnh đang chờ gửi
         if (hasPendingImage) _buildImagePreview(theme),
 
@@ -721,6 +884,10 @@ class _MessageBubble extends StatefulWidget {
   final bool isMine;
   final bool showInlineTime;
   final bool showSeen;
+  final VoidCallback? onSwipeToReply;
+  final String currentUserId;
+  final String otherUserName;
+  final ValueChanged<String>? onTapReply;
 
   const _MessageBubble({
     super.key,
@@ -728,6 +895,10 @@ class _MessageBubble extends StatefulWidget {
     required this.isMine,
     this.showInlineTime = false,
     this.showSeen = false,
+    this.onSwipeToReply,
+    required this.currentUserId,
+    required this.otherUserName,
+    this.onTapReply,
   });
 
   @override
@@ -736,12 +907,104 @@ class _MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<_MessageBubble> {
   bool _tapped = false;
+  bool _isHighlighted = false;
 
   String get _timeStr {
     final local = widget.message.createdAt.isUtc
         ? widget.message.createdAt.toLocal()
         : widget.message.createdAt;
     return local.localTimeHHmm;
+  }
+
+  // Hàm kích hoạt hiệu ứng highlight (nhấp nháy bong bóng) khi click từ reply
+  void highlight() {
+    setState(() => _isHighlighted = true);
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      if (mounted) {
+        setState(() => _isHighlighted = false);
+      }
+    });
+  }
+
+  // Hiển thị Context Menu khi nhấn giữ (Mobile) hoặc chuột phải (Web/Desktop)
+  void _showContextMenu(BuildContext context, Offset globalPosition) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final messenger = ScaffoldMessenger.of(context);
+
+    final List<PopupMenuEntry<String>> menuItems = [
+      PopupMenuItem<String>(
+        value: 'reply',
+        child: Row(
+          children: [
+            Icon(
+              CupertinoIcons.reply,
+              size: 18,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Trả lời',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
+      if (widget.message.isText && widget.message.content != null)
+        PopupMenuItem<String>(
+          value: 'copy',
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.doc_on_doc,
+                size: 18,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Sao chép',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ),
+    ];
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        globalPosition.dx + 1,
+        globalPosition.dy + 1,
+      ),
+      items: menuItems,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+    ).then((value) {
+      if (!mounted || value == null) return;
+      if (value == 'reply') {
+        widget.onSwipeToReply?.call();
+      } else if (value == 'copy') {
+        final text = widget.message.content;
+        if (text != null) {
+          Clipboard.setData(ClipboardData(text: text));
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Đã sao chép tin nhắn vào bộ nhớ tạm'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+      }
+    });
   }
 
   @override
@@ -760,6 +1023,11 @@ class _MessageBubbleState extends State<_MessageBubble> {
     // Show time when: tapped OR (it's the last in group AND showInlineTime)
     final showTime = _tapped || widget.showInlineTime;
 
+    final hasCaption = message.isImage &&
+        message.content != null &&
+        message.content != 'Đã gửi một ảnh' &&
+        message.content!.trim().isNotEmpty;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Column(
@@ -768,45 +1036,202 @@ class _MessageBubbleState extends State<_MessageBubble> {
         children: [
           GestureDetector(
             onTap: () => setState(() => _tapped = !_tapped),
+            onDoubleTap: widget.onSwipeToReply, // Double tap để reply nhanh
+            onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition), // Chuột phải trên Web
+            onLongPressStart: (details) => _showContextMenu(context, details.globalPosition), // Nhấn giữ trên Mobile
             child: Row(
               mainAxisAlignment:
                   isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Bubble content
-                Container(
-                  constraints: BoxConstraints(
-                    maxWidth:
-                        MediaQuery.of(context).size.width * 0.72,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isMine ? myBubbleColor : theirBubbleColor,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(isMine ? 18 : 4),
-                      bottomRight: Radius.circular(isMine ? 4 : 18),
+                // Bubble content wrapped in Dismissible for swipe-to-reply (hỗ trợ vuốt cả 2 hướng)
+                Flexible(
+                  child: Dismissible(
+                    key: ValueKey(message.id),
+                    direction: DismissDirection.horizontal,
+                    confirmDismiss: (direction) async {
+                      widget.onSwipeToReply?.call();
+                      return false; // Spring back
+                    },
+                    background: Container(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Icon(CupertinoIcons.reply, color: theme.colorScheme.primary, size: 20),
+                    ),
+                    secondaryBackground: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Icon(CupertinoIcons.reply, color: theme.colorScheme.primary, size: 20),
+                    ),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      constraints: BoxConstraints(
+                        maxWidth:
+                            MediaQuery.of(context).size.width * 0.72,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _isHighlighted
+                            ? theme.colorScheme.primary.withValues(alpha: 0.25)
+                            : (message.isImage && !hasCaption
+                                ? Colors.transparent
+                                : (isMine ? myBubbleColor : theirBubbleColor)),
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(18),
+                          topRight: const Radius.circular(18),
+                          bottomLeft: Radius.circular(isMine ? 18 : 4),
+                          bottomRight: Radius.circular(isMine ? 4 : 18),
+                        ),
+                        // Viền nhấp nháy khi highlight (dùng transparent khi bình thường tránh bị giật layout)
+                        border: Border.all(
+                          color: _isHighlighted
+                              ? theme.colorScheme.primary
+                              : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(18),
+                          topRight: const Radius.circular(18),
+                          bottomLeft: Radius.circular(isMine ? 18 : 4),
+                          bottomRight: Radius.circular(isMine ? 4 : 18),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Nếu có tin nhắn được reply, hiển thị Quote Box giống Zalo
+                            if (message.replyToMessage != null)
+                              GestureDetector(
+                                onTap: () {
+                                  if (message.replyToMessageId != null) {
+                                    widget.onTapReply?.call(message.replyToMessageId!);
+                                  }
+                                },
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: message.isImage
+                                        ? (isMine ? myBubbleColor : theirBubbleColor)
+                                        : (isMine
+                                            ? (isDark ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.15))
+                                            : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05))),
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: const Radius.circular(18),
+                                      topRight: const Radius.circular(18),
+                                      bottomLeft: message.isImage ? const Radius.circular(12) : Radius.zero,
+                                      bottomRight: message.isImage ? const Radius.circular(12) : Radius.zero,
+                                    ),
+                                  ),
+                                  margin: EdgeInsets.only(bottom: message.isImage ? 4 : 0),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  child: IntrinsicHeight(
+                                    child: Row(
+                                      children: [
+                                        // Cột màu dọc bên trái
+                                        Container(
+                                          width: 3,
+                                          decoration: BoxDecoration(
+                                            color: isMine ? Colors.white70 : theme.colorScheme.primary,
+                                            borderRadius: BorderRadius.circular(2),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                message.replyToMessage!.senderId == widget.currentUserId
+                                                    ? 'Bạn'
+                                                    : widget.otherUserName,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isMine ? Colors.white : theme.colorScheme.primary,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                message.replyToMessage!.isText
+                                                    ? (message.replyToMessage!.content ?? '')
+                                                    : (message.replyToMessage!.isImage ? 'Hình ảnh' : 'Cuộc gọi'),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: isMine ? Colors.white70 : (isDark ? Colors.white70 : Colors.black54),
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // Thumbnail hình ảnh nhỏ bên phải nếu reply tin nhắn ảnh
+                                        if (message.replyToMessage!.isImage && message.replyToMessage!.mediaUrl != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 8),
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(4),
+                                              child: CachedNetworkImage(
+                                                imageUrl: message.replyToMessage!.mediaUrl!,
+                                                width: 32,
+                                                height: 32,
+                                                fit: BoxFit.cover,
+                                                placeholder: (_, __) => Container(color: Colors.grey.withValues(alpha: 0.2), width: 32, height: 32),
+                                                errorWidget: (_, __, ___) => const Icon(CupertinoIcons.photo, size: 16),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                            // Tin nhắn gốc
+                            message.isImage && message.mediaUrl != null
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _ImageBubble(
+                                        url: message.mediaUrl!,
+                                        isMine: isMine,
+                                        hasCaption: hasCaption,
+                                      ),
+                                      if (hasCaption)
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 10),
+                                          child: Text(
+                                            message.content!,
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              color: isMine ? myTextColor : theirTextColor,
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  )
+                                : message.isCall
+                                    ? _CallLogBubble(message: message, isMine: isMine)
+                                    : Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14, vertical: 10),
+                                        child: Text(
+                                          message.content ?? '',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            color: isMine ? myTextColor : theirTextColor,
+                                            height: 1.35,
+                                          ),
+                                        ),
+                                      ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  child: message.isImage && message.mediaUrl != null
-                      ? _ImageBubble(
-                          url: message.mediaUrl!,
-                          isMine: isMine,
-                        )
-                      : message.isCall
-                          ? _CallLogBubble(message: message, isMine: isMine)
-                          : Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 10),
-                          child: Text(
-                            message.content ?? '',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: isMine ? myTextColor : theirTextColor,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
                 ),
               ],
             ),
@@ -863,8 +1288,13 @@ class _MessageBubbleState extends State<_MessageBubble> {
 class _ImageBubble extends StatelessWidget {
   final String url;
   final bool isMine;
+  final bool hasCaption;
 
-  const _ImageBubble({required this.url, required this.isMine});
+  const _ImageBubble({
+    required this.url,
+    required this.isMine,
+    this.hasCaption = false,
+  });
 
   bool get _isLocalPath =>
       !url.startsWith('http') && !url.startsWith('blob');
@@ -875,8 +1305,8 @@ class _ImageBubble extends StatelessWidget {
       borderRadius: BorderRadius.only(
         topLeft: const Radius.circular(18),
         topRight: const Radius.circular(18),
-        bottomLeft: Radius.circular(isMine ? 18 : 4),
-        bottomRight: Radius.circular(isMine ? 4 : 18),
+        bottomLeft: Radius.circular(hasCaption ? 0 : (isMine ? 18 : 4)),
+        bottomRight: Radius.circular(hasCaption ? 0 : (isMine ? 4 : 18)),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(

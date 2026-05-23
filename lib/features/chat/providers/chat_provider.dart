@@ -44,11 +44,29 @@ class ChatMessagesNotifier extends AutoDisposeFamilyAsyncNotifier<List<MessageMo
         column: 'conversation_id',
         value: arg,
       ),
-      callback: (payload) {
-        final newMsg = MessageModel.fromJson(payload.newRecord);
-        final current = state.valueOrNull ?? [];
-        // Chèn vào đầu vì danh sách UI bị đảo ngược (mới nhất ở index 0)
-        state = AsyncData([newMsg, ...current]);
+      callback: (payload) async {
+        try {
+          // Lấy tin nhắn đầy đủ (bao gồm relation reply_to_message)
+          final fullMsgData = await ref.read(supabaseServiceProvider).client
+              .from('messages')
+              .select('*, reply_to_message:reply_to_message_id(*)')
+              .eq('id', payload.newRecord['id'])
+              .single();
+          final newMsg = MessageModel.fromJson(fullMsgData);
+          
+          final current = state.valueOrNull ?? [];
+          if (!current.any((m) => m.id == newMsg.id)) {
+            state = AsyncData([newMsg, ...current]);
+          }
+        } catch (_) {
+          // Fallback nếu không fetch được relation
+          final newMsg = MessageModel.fromJson(payload.newRecord);
+          
+          final current = state.valueOrNull ?? [];
+          if (!current.any((m) => m.id == newMsg.id)) {
+            state = AsyncData([newMsg, ...current]);
+          }
+        }
       },
     ).subscribe();
 

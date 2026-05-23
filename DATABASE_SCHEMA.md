@@ -570,6 +570,10 @@ create table conversations (
   last_message_id uuid,               -- FK trỏ vào messages
   p1_unread_count int default 0,      -- đếm tin nhắn chưa đọc của người 1
   p2_unread_count int default 0,      -- đếm tin nhắn chưa đọc của người 2
+  p1_is_pinned    boolean default false, -- ghim hội thoại cho người 1
+  p2_is_pinned    boolean default false, -- ghim hội thoại cho người 2
+  p1_is_hidden    boolean default false, -- ẩn hội thoại cho người 1
+  p2_is_hidden    boolean default false, -- ẩn hội thoại cho người 2
   created_at      timestamptz default now(),
   unique (participant_1, participant_2),
   check (participant_1 < participant_2)  -- enforce thứ tự để tránh duplicate (A,B) vs (B,A)
@@ -601,6 +605,7 @@ create table messages (
   message_type    text not null default 'text',  -- 'text' | 'image' | 'voice'
   is_seen         boolean default false,
   seen_at         timestamptz,                   -- thời điểm đã xem ⭐
+  reply_to_message_id uuid references messages(id) on delete set null, -- reply tin nhắn ⭐
   created_at      timestamptz default now()
 );
 

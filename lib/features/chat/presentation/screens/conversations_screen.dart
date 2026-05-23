@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../domain/conversation_model.dart';
 import '../../providers/chat_provider.dart';
+import '../../providers/hidden_chat_provider.dart';
 import '../widgets/new_message_modal.dart';
+import '../widgets/passcode_dialog.dart';
 
 class ConversationsScreen extends ConsumerStatefulWidget {
   const ConversationsScreen({super.key});
@@ -54,6 +57,33 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
         actions: [
           IconButton(
             onPressed: () async {
+              final convs = ref.read(conversationsProvider).valueOrNull ?? [];
+              final currentUserId = ref.read(currentUserIdProvider);
+              final hiddenCount = currentUserId == null ? 0 : convs.where((c) => c.isHidden(currentUserId!)).length;
+
+              if (hiddenCount == 0) {
+                // Xoá passcode cũ vì không còn cuộc trò chuyện ẩn nào
+                await ref.read(hiddenChatProvider.notifier).removePasscode();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Chưa có cuộc trò chuyện nào bị ẩn')),
+                  );
+                }
+              } else {
+                final success = await PasscodeDialog.show(context, mode: PasscodeMode.verify);
+                if (success == true && context.mounted) {
+                  context.push('/chat/hidden');
+                }
+              }
+            },
+            icon: Icon(
+              CupertinoIcons.eye_slash,
+              color: theme.colorScheme.primary,
+              size: 24,
+            ),
+          ),
+          IconButton(
+            onPressed: () async {
               final result = await showModalBottomSheet<String>(
                 context: context,
                 isScrollControlled: true,
@@ -84,11 +114,25 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
       body: convAsync.when(
         data: (conversations) {
           final filteredConvs = conversations.where((c) {
+            if (currentUserId != null && c.isHidden(currentUserId)) return false;
             final name = c.otherUser?.displayName.toLowerCase() ?? '';
             final username = c.otherUser?.username.toLowerCase() ?? '';
             return name.contains(_searchQuery.toLowerCase()) ||
                 username.contains(_searchQuery.toLowerCase());
           }).toList();
+
+          // Sắp xếp: Pinned lên trên
+          if (currentUserId != null) {
+            filteredConvs.sort((a, b) {
+              final aPinned = a.isPinned(currentUserId) ? 1 : 0;
+              final bPinned = b.isPinned(currentUserId) ? 1 : 0;
+              if (aPinned != bPinned) return bPinned.compareTo(aPinned);
+              // Fallback to lastMessageAt
+              final aTime = a.lastMessageAt ?? a.createdAt;
+              final bTime = b.lastMessageAt ?? b.createdAt;
+              return bTime.compareTo(aTime);
+            });
+          }
 
           return Column(
             children: [
@@ -159,7 +203,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
   }
 }
 
-class _ConversationTile extends StatelessWidget {
+class _ConversationTile extends ConsumerWidget {
   final ConversationModel conv;
   final String? currentUserId;
   final VoidCallback onTap;
@@ -171,7 +215,7 @@ class _ConversationTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -179,104 +223,205 @@ class _ConversationTile extends StatelessWidget {
     final titleColor = theme.textTheme.titleMedium?.color;
     final hintColor = theme.hintColor;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Unread dot
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: EdgeInsets.only(right: hasUnread ? 8 : 0),
-                width: hasUnread ? 8 : 0,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF007AFF),
-                  shape: BoxShape.circle,
-                ),
-              ),
+    return Slidable(
+      key: ValueKey(conv.id),
+      // Vuốt từ Trái -> Phải: Ghim / Bỏ ghim
+      startActionPane: ActionPane(
+        motion: const ScrollMotion(),
+        children: [
+          SlidableAction(
+            onPressed: (context) {
+              ref.read(chatRepositoryProvider).togglePin(conv);
+            },
+            backgroundColor: const Color(0xFF007AFF), // Blue iOS
+            foregroundColor: Colors.white,
+            icon: conv.isPinned(currentUserId ?? '') 
+                ? CupertinoIcons.pin_slash_fill 
+                : CupertinoIcons.pin_fill,
+            label: conv.isPinned(currentUserId ?? '') ? 'Bỏ ghim' : 'Ghim',
+          ),
+        ],
+      ),
+      // Vuốt từ Phải -> Trái: Ẩn và Xoá
+      endActionPane: ActionPane(
+        motion: const ScrollMotion(),
+        children: [
+          SlidableAction(
+            onPressed: (context) async {
+              final convs = ref.read(conversationsProvider).valueOrNull ?? [];
+              final hiddenCount = currentUserId == null ? 0 : convs.where((c) => c.isHidden(currentUserId!)).length;
 
-              // Avatar
-              AppAvatar(
-                imageUrl: conv.otherUser?.avatarUrl,
-                name: conv.otherUser?.displayName,
-                radius: 28,
-              ),
-              const SizedBox(width: 14),
-
-              // Text content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      conv.otherUser?.displayName ?? 'Người dùng',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: hasUnread
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: titleColor,
-                        letterSpacing: -0.2,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+              if (hiddenCount == 0) {
+                // Reset mã pin vì chưa có ai bị ẩn
+                await ref.read(hiddenChatProvider.notifier).removePasscode();
+                if (!context.mounted) return;
+                
+                final success = await PasscodeDialog.show(context, mode: PasscodeMode.setup);
+                if (success == true) {
+                  ref.read(chatRepositoryProvider).toggleHide(conv);
+                }
+              } else {
+                // Đã có hội thoại ẩn, tự động ẩn luôn
+                ref.read(chatRepositoryProvider).toggleHide(conv);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Đã chuyển vào cuộc trò chuyện bị ẩn')),
+                  );
+                }
+              }
+            },
+            backgroundColor: const Color(0xFF8E8E93), // Gray
+            foregroundColor: Colors.white,
+            icon: CupertinoIcons.eye_slash_fill,
+            label: 'Ẩn',
+          ),
+          SlidableAction(
+            onPressed: (context) {
+              showCupertinoDialog(
+                context: context,
+                builder: (ctx) => CupertinoAlertDialog(
+                  title: const Text('Xoá cuộc trò chuyện?'),
+                  content: const Text('Thao tác này sẽ xoá toàn bộ tin nhắn ở cả 2 phía. Bạn có chắc chắn không?'),
+                  actions: [
+                    CupertinoDialogAction(
+                      child: const Text('Huỷ'),
+                      onPressed: () => Navigator.pop(ctx),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      (conv.lastMessage != null)
-                          ? (conv.lastMessageSenderId == currentUserId
-                              ? 'Bạn: ${conv.lastMessage}'
-                              : conv.lastMessage!)
-                          : 'Bắt đầu cuộc trò chuyện',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: hasUnread
-                            ? (isDark ? Colors.white : Colors.black)
-                            : hintColor,
-                        fontWeight: hasUnread
-                            ? FontWeight.w500
-                            : FontWeight.w400,
-                        fontSize: 14,
-                      ),
+                    CupertinoDialogAction(
+                      isDestructiveAction: true,
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        ref.read(chatRepositoryProvider).deleteConversation(conv.id);
+                      },
+                      child: const Text('Xoá'),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 10),
-
-              // Time & chevron
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    conv.lastMessageAt?.chatTimestamp ?? '',
-                    style: TextStyle(
-                      color: hasUnread
-                          ? const Color(0xFF007AFF)
-                          : hintColor,
-                      fontSize: 12,
-                      fontWeight: hasUnread
-                          ? FontWeight.w500
-                          : FontWeight.w400,
+              );
+            },
+            backgroundColor: const Color(0xFFFF3B30), // Red iOS
+            foregroundColor: Colors.white,
+            icon: CupertinoIcons.delete_solid,
+            label: 'Xoá',
+          ),
+        ],
+      ),
+      child: Material(
+        color: conv.isPinned(currentUserId ?? '') 
+            ? (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03)) 
+            : Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Unread dot
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: EdgeInsets.only(right: hasUnread ? 8 : 0),
+                  width: hasUnread ? 8 : 0,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF007AFF),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+  
+                // Avatar
+                AppAvatar(
+                  imageUrl: conv.otherUser?.avatarUrl,
+                  name: conv.otherUser?.displayName,
+                  radius: 28,
+                ),
+                const SizedBox(width: 14),
+  
+                // Text content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              conv.otherUser?.displayName ?? 'Người dùng',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: hasUnread
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                color: titleColor,
+                                letterSpacing: -0.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (conv.isPinned(currentUserId ?? ''))
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(
+                                CupertinoIcons.pin_fill,
+                                size: 12,
+                                color: hintColor,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        (conv.lastMessage != null)
+                            ? (conv.lastMessageSenderId == currentUserId
+                                ? 'Bạn: ${conv.lastMessage}'
+                                : conv.lastMessage!)
+                            : 'Bắt đầu cuộc trò chuyện',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: hasUnread
+                              ? (isDark ? Colors.white : Colors.black)
+                              : hintColor,
+                          fontWeight: hasUnread
+                              ? FontWeight.w500
+                              : FontWeight.w400,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+  
+                // Time & chevron
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      conv.lastMessageAt?.chatTimestamp ?? '',
+                      style: TextStyle(
+                        color: hasUnread
+                            ? const Color(0xFF007AFF)
+                            : hintColor,
+                        fontSize: 12,
+                        fontWeight: hasUnread
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Icon(
-                    CupertinoIcons.chevron_forward,
-                    size: 14,
-                    color: hintColor.withValues(alpha: 0.4),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(height: 4),
+                    Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: 14,
+                      color: hintColor.withValues(alpha: 0.4),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
