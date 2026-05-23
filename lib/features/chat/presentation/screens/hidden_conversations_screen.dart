@@ -1,9 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
+import '../../../../core/extensions/date_extension.dart';
+import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../domain/conversation_model.dart';
@@ -66,25 +69,27 @@ class HiddenConversationsScreen extends ConsumerWidget {
             );
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.only(top: 8),
-            itemCount: filteredConvs.length,
-            separatorBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.only(left: 76),
-              child: Divider(
-                height: 0.5,
-                thickness: 0.5,
-                color: theme.dividerColor.withValues(alpha: 0.25),
+          return SlidableAutoCloseBehavior(
+            child: ListView.separated(
+              padding: const EdgeInsets.only(top: 8),
+              itemCount: filteredConvs.length,
+              separatorBuilder: (context, index) => Padding(
+                padding: const EdgeInsets.only(left: 76),
+                child: Divider(
+                  height: 0.5,
+                  thickness: 0.5,
+                  color: theme.dividerColor.withValues(alpha: 0.25),
+                ),
               ),
+              itemBuilder: (context, index) {
+                final conv = filteredConvs[index];
+                return _HiddenConversationTile(
+                  conv: conv,
+                  currentUserId: currentUserId,
+                  onTap: () => context.push('/chat/${conv.id}'),
+                );
+              },
             ),
-            itemBuilder: (context, index) {
-              final conv = filteredConvs[index];
-              return _HiddenConversationTile(
-                conv: conv,
-                currentUserId: currentUserId,
-                onTap: () => context.push('/chat/${conv.id}'),
-              );
-            },
           );
         },
         loading: () => const Center(child: CupertinoActivityIndicator()),
@@ -119,27 +124,65 @@ class _HiddenConversationTile extends ConsumerWidget {
 
     return Slidable(
       key: ValueKey(conv.id),
-      // Vuốt từ Trái -> Phải: Bỏ ẩn
+      // Vuốt từ Trái -> Phải: Bỏ ẩn với StretchMotion & ExtentRatio
       startActionPane: ActionPane(
-        motion: const ScrollMotion(),
+        motion: const StretchMotion(),
+        extentRatio: 0.22,
         children: [
-          SlidableAction(
+          CustomSlidableAction(
             onPressed: (context) {
+              HapticFeedback.lightImpact();
               ref.read(chatRepositoryProvider).toggleHide(conv);
             },
-            backgroundColor: const Color(0xFF34C759), // Green iOS
-            foregroundColor: Colors.white,
-            icon: CupertinoIcons.eye_fill,
-            label: 'Bỏ ẩn',
+            backgroundColor: Colors.transparent,
+            child: Container(
+              alignment: Alignment.center,
+              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF34C759), // Green iOS
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF34C759).withValues(alpha: 0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
+                    return const SizedBox.shrink();
+                  }
+                  return const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.eye_fill, color: Colors.white, size: 20),
+                      SizedBox(height: 4),
+                      Text(
+                        'Bỏ ẩn',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+              ),
+            ),
           ),
         ],
       ),
-      // Vuốt từ Phải -> Trái: Xoá
+      // Vuốt từ Phải -> Trái: Xoá với StretchMotion & ExtentRatio
       endActionPane: ActionPane(
-        motion: const ScrollMotion(),
+        motion: const StretchMotion(),
+        extentRatio: 0.22,
         children: [
-          SlidableAction(
+          CustomSlidableAction(
             onPressed: (context) {
+              HapticFeedback.lightImpact();
               showCupertinoDialog(
                 context: context,
                 builder: (ctx) => CupertinoAlertDialog(
@@ -153,6 +196,7 @@ class _HiddenConversationTile extends ConsumerWidget {
                     CupertinoDialogAction(
                       isDestructiveAction: true,
                       onPressed: () {
+                        HapticFeedback.mediumImpact();
                         Navigator.pop(ctx);
                         ref.read(chatRepositoryProvider).deleteConversation(conv.id);
                       },
@@ -162,45 +206,153 @@ class _HiddenConversationTile extends ConsumerWidget {
                 ),
               );
             },
-            backgroundColor: const Color(0xFFFF3B30), // Red iOS
-            foregroundColor: Colors.white,
-            icon: CupertinoIcons.delete_solid,
-            label: 'Xoá',
+            backgroundColor: Colors.transparent,
+            child: Container(
+              alignment: Alignment.center,
+              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF3B30), // Red iOS
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF3B30).withValues(alpha: 0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
+                    return const SizedBox.shrink();
+                  }
+                  return const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.trash_fill, color: Colors.white, size: 20),
+                      SizedBox(height: 4),
+                      Text(
+                        'Xoá',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+              ),
+            ),
           ),
         ],
       ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Stack(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: isDark ? Colors.grey[800] : Colors.grey[300],
-              backgroundImage: conv.otherUser?.avatarUrl != null
-                  ? NetworkImage(conv.otherUser!.avatarUrl!)
-                  : null,
-              child: conv.otherUser?.avatarUrl == null
-                  ? const Icon(CupertinoIcons.person_fill, color: Colors.white)
-                  : null,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), // Slim vertical padding for iOS feel
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Unread dot column to prevent avatar shifting layout jumps
+                SizedBox(
+                  width: 14,
+                  child: hasUnread
+                      ? Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF007AFF),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+
+                // Avatar
+                AppAvatar(
+                  imageUrl: conv.otherUser?.avatarUrl,
+                  name: conv.otherUser?.displayName,
+                  radius: 25, // Sleek 50px avatar
+                ),
+                const SizedBox(width: 12),
+
+                // Text content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        conv.otherUser?.displayName ?? 'Người dùng',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: hasUnread
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: titleColor,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        (conv.lastMessage != null)
+                            ? (conv.lastMessageSenderId == currentUserId
+                                ? 'Bạn: ${conv.lastMessage}'
+                                : conv.lastMessage!)
+                            : 'Chưa có tin nhắn',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: hasUnread
+                              ? (isDark ? Colors.white : Colors.black)
+                              : hintColor,
+                          fontWeight: hasUnread
+                              ? FontWeight.w500
+                              : FontWeight.w400,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+
+                // Time & chevron
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      conv.lastMessageAt?.chatTimestamp ?? '',
+                      style: TextStyle(
+                        color: hasUnread
+                            ? const Color(0xFF007AFF)
+                            : hintColor,
+                        fontSize: 12,
+                        fontWeight: hasUnread
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: 14,
+                      color: hintColor.withValues(alpha: 0.4),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
-        title: Text(
-          conv.otherUser?.displayName ?? 'Người dùng',
-          style: TextStyle(
-            fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
-            color: titleColor,
           ),
-        ),
-        subtitle: Text(
-          conv.lastMessage ?? 'Chưa có tin nhắn',
-          style: TextStyle(
-            color: hasUnread ? theme.colorScheme.onSurface : hintColor,
-            fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
       ),
     );

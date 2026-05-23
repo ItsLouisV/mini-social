@@ -1,4 +1,5 @@
 import 'dart:io' as io;
+import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -13,6 +14,7 @@ import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../domain/message_model.dart';
+import '../../domain/pinned_message_model.dart';
 import '../../providers/chat_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -32,6 +34,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   XFile? _pendingImage;
   Uint8List? _pendingImagePreviewBytes;
   MessageModel? _replyingToMessage;
+  bool _pinnedListExpanded = false;
 
   // Quản lý GlobalKey cho việc cuộn tới tin nhắn được trả lời
   final Map<String, GlobalKey<_MessageBubbleState>> _messageKeys = {};
@@ -84,14 +87,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         alignment: 0.5, // Cuộn sao cho phần tử nằm ở giữa màn hình
       );
       key.currentState?.highlight();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Tin nhắn gốc đã cũ hoặc không tìm thấy'),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      return;
     }
+
+    // Nếu không tìm thấy Context nhưng tin nhắn có trong state (ngoài viewport)
+    final messages = ref.read(realtimeMessagesProvider(widget.conversationId)).valueOrNull ?? [];
+    final index = messages.indexWhere((m) => m.id == msgId);
+    if (index != -1 && _scrollController.hasClients) {
+      final estOffset = index * 110.0; // Ước lượng 110px mỗi bubble
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final target = estOffset.clamp(0.0, maxScroll);
+      
+      _scrollController.jumpTo(target);
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final retryKey = _messageKeys[msgId];
+        if (retryKey?.currentContext != null) {
+          Scrollable.ensureVisible(
+            retryKey!.currentContext!,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            alignment: 0.5,
+          );
+          retryKey.currentState?.highlight();
+        }
+      });
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Tin nhắn gốc đã cũ hoặc không tìm thấy'),
+        duration: Duration(seconds: 1),
+      ),
+    );
   }
 
   Future<void> _send() async {
@@ -176,6 +205,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final messagesAsync =
         ref.watch(realtimeMessagesProvider(widget.conversationId));
+    final pinnedAsync = ref.watch(pinnedMessagesProvider(widget.conversationId));
+    final pinnedMessages = pinnedAsync.valueOrNull ?? [];
+    final pinnedIds = pinnedMessages.map((pm) => pm.messageId).toSet();
+
     final currentUserId = ref.watch(currentUserIdProvider) ?? '';
     final theme = Theme.of(context);
 
@@ -319,10 +352,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            if (pinnedMessages.isNotEmpty) _buildPinnedMessagesBar(theme, pinnedMessages, currentUserId, otherUserName),
             Expanded(
               child: messagesAsync.when(
                 data: (messages) =>
-                    _buildMessageList(messages, currentUserId, otherUserName),
+                    _buildMessageList(messages, currentUserId, otherUserName, pinnedIds),
                 loading: () =>
                     const Center(child: CupertinoActivityIndicator()),
                 error: (e, _) => Center(child: Text(e.toString())),
@@ -336,7 +370,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildMessageList(
-      List<MessageModel> messages, String currentUserId, String otherUserName) {
+      List<MessageModel> messages, String currentUserId, String otherUserName, Set<String> pinnedIds) {
     if (messages.isEmpty) {
       return Center(
         child: Text(
@@ -414,6 +448,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               index == 0, // Mới nhất là index 0
           currentUserId: currentUserId,
           otherUserName: otherUserName,
+          isPinned: pinnedIds.contains(msgId),
+          onPin: () async {
+            try {
+              await ref.read(chatRepositoryProvider).pinMessage(widget.conversationId, msgId);
+              ref.invalidate(pinnedMessagesProvider(widget.conversationId));
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Ghim thất bại: ${e.toString()}')),
+                );
+              }
+            }
+          },
+          onUnpin: () async {
+            try {
+              await ref.read(chatRepositoryProvider).unpinMessage(widget.conversationId, msgId);
+              ref.invalidate(pinnedMessagesProvider(widget.conversationId));
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Bỏ ghim thất bại: ${e.toString()}')),
+                );
+              }
+            }
+          },
           onSwipeToReply: () {
             setState(() {
               _replyingToMessage = item.message;
@@ -423,6 +482,256 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           onTapReply: (replyMsgId) => _scrollToMessage(replyMsgId),
         );
       },
+    );
+  }
+
+  // ── Jump to Pinned Message (Cuộn & Tải tin cũ nếu cần) ──────────────────────
+  Future<void> _jumpToPinnedMessage(PinnedMessageModel pin) async {
+    final msgId = pin.messageId;
+    
+    // Kiểm tra xem tin nhắn đã có trong state hiện tại không
+    final notifier = ref.read(realtimeMessagesProvider(widget.conversationId).notifier);
+    final messages = ref.read(realtimeMessagesProvider(widget.conversationId)).valueOrNull ?? [];
+    final hasMsg = messages.any((m) => m.id == msgId);
+
+    if (hasMsg) {
+      _scrollToMessage(msgId);
+      return;
+    }
+
+    // Nếu không có, tiến hành tải thêm từ DB
+    final msg = pin.message;
+    if (msg == null) return;
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              CupertinoActivityIndicator(color: Colors.white),
+              SizedBox(width: 12),
+              Text('Đang tải tin nhắn gốc...'),
+            ],
+          ),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+
+    try {
+      await notifier.loadUpToMessage(msg.createdAt);
+      // Đợi UI rebuild và cuộn
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToMessage(msgId);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể tải tin nhắn gốc: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  // ── Pinned Messages Bar (kiểu Zalo) ──────────────────────────────────────────
+  Widget _buildPinnedMessagesBar(
+    ThemeData theme,
+    List<PinnedMessageModel> pinnedList,
+    String currentUserId,
+    String otherUserName,
+  ) {
+    final isDark = theme.brightness == Brightness.dark;
+    // Tin ghim mới nhất (đứng đầu danh sách)
+    final latestPin = pinnedList.first;
+    final latestMsg = latestPin.message;
+
+    if (latestMsg == null) return const SizedBox.shrink();
+
+    // Định dạng nội dung hiển thị
+    String contentSnippet = '';
+    if (latestMsg.isText) {
+      contentSnippet = latestMsg.content ?? '';
+    } else if (latestMsg.isImage) {
+      contentSnippet = '[Hình ảnh]';
+    } else if (latestMsg.isCall) {
+      contentSnippet = '[Cuộc gọi]';
+    } else {
+      contentSnippet = '[Tin nhắn]';
+    }
+
+    final senderName = latestMsg.senderId == currentUserId ? 'Bạn' : otherUserName;
+
+    // Chiều cao / màu sắc
+    final barBgColor = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFE8F4FD);
+    final textStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w500,
+      color: isDark ? Colors.white : const Color(0xFF0068FF),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Thanh ghim chính
+        GestureDetector(
+          onTap: () {
+            if (pinnedList.length > 1) {
+              setState(() {
+                _pinnedListExpanded = !_pinnedListExpanded;
+              });
+            } else {
+              _jumpToPinnedMessage(latestPin);
+            }
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: barBgColor,
+              border: Border(
+                bottom: BorderSide(
+                  color: theme.dividerColor.withValues(alpha: 0.15),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  CupertinoIcons.pin_fill,
+                  size: 16,
+                  color: isDark ? Colors.white70 : const Color(0xFF0068FF),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Ghim: $senderName: $contentSnippet',
+                    style: textStyle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Nút thao tác bên phải
+                if (pinnedList.length > 1)
+                  Icon(
+                    _pinnedListExpanded
+                        ? CupertinoIcons.chevron_up
+                        : CupertinoIcons.chevron_down,
+                    size: 16,
+                    color: theme.hintColor,
+                  )
+                else
+                  // Nếu chỉ có 1 tin ghim, cho phép bấm trực tiếp X để bỏ ghim
+                  GestureDetector(
+                    onTap: () async {
+                      try {
+                        await ref
+                            .read(chatRepositoryProvider)
+                            .unpinMessage(widget.conversationId, latestPin.messageId);
+                        ref.invalidate(pinnedMessagesProvider(widget.conversationId));
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Bỏ ghim thất bại: ${e.toString()}')),
+                          );
+                        }
+                      }
+                    },
+                    child: Icon(
+                      CupertinoIcons.xmark,
+                      size: 14,
+                      color: theme.hintColor,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+
+        // Danh sách ghim mở rộng (nếu có nhiều tin ghim và đang expanded)
+        if (_pinnedListExpanded && pinnedList.length > 1)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 200),
+            color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: pinnedList.length,
+              separatorBuilder: (context, index) => Divider(
+                height: 0.5,
+                thickness: 0.5,
+                color: theme.dividerColor.withValues(alpha: 0.2),
+              ),
+              itemBuilder: (context, index) {
+                final pin = pinnedList[index];
+                final msg = pin.message;
+                if (msg == null) return const SizedBox.shrink();
+
+                String pinSnippet = '';
+                if (msg.isText) {
+                  pinSnippet = msg.content ?? '';
+                } else if (msg.isImage) {
+                  pinSnippet = '[Hình ảnh]';
+                } else if (msg.isCall) {
+                  pinSnippet = '[Cuộc gọi]';
+                } else {
+                  pinSnippet = '[Tin nhắn]';
+                }
+
+                final pinSender = msg.senderId == currentUserId ? 'Bạn' : otherUserName;
+
+                return ListTile(
+                  dense: true,
+                  leading: Icon(
+                    CupertinoIcons.pin,
+                    size: 14,
+                    color: theme.colorScheme.primary,
+                  ),
+                  title: Text(
+                    '$pinSender: $pinSnippet',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  onTap: () {
+                    _jumpToPinnedMessage(pin);
+                  },
+                  trailing: GestureDetector(
+                    onTap: () async {
+                      try {
+                        await ref
+                            .read(chatRepositoryProvider)
+                            .unpinMessage(widget.conversationId, pin.messageId);
+                        ref.invalidate(pinnedMessagesProvider(widget.conversationId));
+                        // Nếu sau khi unpin chỉ còn <= 1 tin, tự động thu gọn
+                        if (pinnedList.length <= 2) {
+                          setState(() {
+                            _pinnedListExpanded = false;
+                          });
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Bỏ ghim thất bại: ${e.toString()}')),
+                          );
+                        }
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                      child: Icon(
+                        CupertinoIcons.trash,
+                        size: 14,
+                        color: theme.colorScheme.error.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 
@@ -888,6 +1197,9 @@ class _MessageBubble extends StatefulWidget {
   final String currentUserId;
   final String otherUserName;
   final ValueChanged<String>? onTapReply;
+  final bool isPinned;
+  final VoidCallback? onPin;
+  final VoidCallback? onUnpin;
 
   const _MessageBubble({
     super.key,
@@ -899,6 +1211,9 @@ class _MessageBubble extends StatefulWidget {
     required this.currentUserId,
     required this.otherUserName,
     this.onTapReply,
+    this.isPinned = false,
+    this.onPin,
+    this.onUnpin,
   });
 
   @override
@@ -953,6 +1268,26 @@ class _MessageBubbleState extends State<_MessageBubble> {
           ],
         ),
       ),
+      PopupMenuItem<String>(
+        value: widget.isPinned ? 'unpin' : 'pin',
+        child: Row(
+          children: [
+            Icon(
+              widget.isPinned ? CupertinoIcons.pin_slash : CupertinoIcons.pin,
+              size: 18,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              widget.isPinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
       if (widget.message.isText && widget.message.content != null)
         PopupMenuItem<String>(
           value: 'copy',
@@ -992,6 +1327,10 @@ class _MessageBubbleState extends State<_MessageBubble> {
       if (!mounted || value == null) return;
       if (value == 'reply') {
         widget.onSwipeToReply?.call();
+      } else if (value == 'pin') {
+        widget.onPin?.call();
+      } else if (value == 'unpin') {
+        widget.onUnpin?.call();
       } else if (value == 'copy') {
         final text = widget.message.content;
         if (text != null) {
@@ -1046,23 +1385,8 @@ class _MessageBubbleState extends State<_MessageBubble> {
               children: [
                 // Bubble content wrapped in Dismissible for swipe-to-reply (hỗ trợ vuốt cả 2 hướng)
                 Flexible(
-                  child: Dismissible(
-                    key: ValueKey(message.id),
-                    direction: DismissDirection.horizontal,
-                    confirmDismiss: (direction) async {
-                      widget.onSwipeToReply?.call();
-                      return false; // Spring back
-                    },
-                    background: Container(
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Icon(CupertinoIcons.reply, color: theme.colorScheme.primary, size: 20),
-                    ),
-                    secondaryBackground: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Icon(CupertinoIcons.reply, color: theme.colorScheme.primary, size: 20),
-                    ),
+                  child: SwipeToReply(
+                    onReply: () => widget.onSwipeToReply?.call(),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       constraints: BoxConstraints(
@@ -1387,6 +1711,197 @@ class _CallLogBubble extends StatelessWidget {
               color: isMissed ? color : textColor,
               fontWeight: FontWeight.w500,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Custom iOS SwipeToReply Widget (Telegram/Zalo Style) ─────────────────────
+class SpringCurve extends Curve {
+  final double damping;
+
+  const SpringCurve({this.damping = 0.65});
+
+  @override
+  double transformInternal(double t) {
+    // Damped harmonic oscillation curve for premium spring bounce back:
+    // f(t) = 1 - e^(-5t) * cos(3 * pi * t)
+    return 1.0 - math.exp(-5.0 * t) * math.cos(3.0 * math.pi * t);
+  }
+}
+
+class SwipeToReply extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onReply;
+  final bool enabled;
+
+  const SwipeToReply({
+    super.key,
+    required this.child,
+    required this.onReply,
+    this.enabled = true,
+  });
+
+  @override
+  State<SwipeToReply> createState() => _SwipeToReplyState();
+}
+
+class _SwipeToReplyState extends State<SwipeToReply> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late Animation<double> _animation;
+  double _dragOffset = 0.0;
+  bool _isTriggered = false;
+
+  // Ngưỡng kích hoạt phản hồi
+  static const double _triggerThreshold = 55.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400), // Slightly longer for the springy bounce to resolve nicely
+    );
+    _controller.addListener(() {
+      if (_controller.isAnimating) {
+        setState(() {
+          _dragOffset = _animation.value;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onHorizontalDragStart(DragStartDetails details) {
+    _controller.stop();
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    if (!widget.enabled) return;
+    
+    setState(() {
+      final double delta = details.delta.dx;
+      double newOffset = _dragOffset + delta;
+      
+      // Swipe left only: dragOffset must be <= 0.0
+      if (newOffset > 0.0) {
+        newOffset = 0.0;
+      } else {
+        final double absoluteOffset = newOffset.abs();
+        if (absoluteOffset > _triggerThreshold) {
+          final double excess = absoluteOffset - _triggerThreshold;
+          // Apply rubber-band effect (friction decay formula)
+          final double rubberBandedExcess = excess / (1.0 + excess * 0.015);
+          newOffset = -(_triggerThreshold + rubberBandedExcess);
+        }
+      }
+      
+      _dragOffset = newOffset;
+
+      final absoluteOffset = _dragOffset.abs();
+      if (absoluteOffset >= _triggerThreshold && !_isTriggered) {
+        _isTriggered = true;
+        HapticFeedback.mediumImpact(); // Firm, crisp iOS impact vibration
+      } else if (absoluteOffset < _triggerThreshold && _isTriggered) {
+        _isTriggered = false;
+      }
+    });
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    if (!widget.enabled) return;
+
+    if (_dragOffset.abs() >= _triggerThreshold) {
+      widget.onReply();
+    }
+
+    _isTriggered = false;
+    
+    // Set up spring-back tween animation
+    final double startOffset = _dragOffset;
+    _animation = Tween<double>(begin: startOffset, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const SpringCurve(damping: 0.65),
+      ),
+    );
+    
+    _controller.forward(from: 0.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final absoluteOffset = _dragOffset.abs();
+    final progress = (absoluteOffset / _triggerThreshold).clamp(0.0, 1.0);
+    final theme = Theme.of(context);
+
+    // Fade in icon as drag progresses
+    final iconOpacity = progress.clamp(0.0, 1.0);
+
+    return GestureDetector(
+      onHorizontalDragStart: _onHorizontalDragStart,
+      onHorizontalDragUpdate: _onHorizontalDragUpdate,
+      onHorizontalDragEnd: _onHorizontalDragEnd,
+      behavior: HitTestBehavior.translucent,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Background Reply Icon (revealed underneath when bubble is pulled left)
+          Positioned(
+            right: 16,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Opacity(
+                opacity: iconOpacity,
+                child: AnimatedScale(
+                  scale: _isTriggered ? 1.25 : progress,
+                  duration: const Duration(milliseconds: 150),
+                  curve: Curves.easeOutBack,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _isTriggered 
+                          ? theme.colorScheme.primary 
+                          : theme.colorScheme.primary.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                      boxShadow: _isTriggered
+                          ? [
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withValues(alpha: 0.25),
+                                blurRadius: 6,
+                                spreadRadius: 1,
+                                offset: const Offset(0, 2),
+                              )
+                            ]
+                          : [],
+                    ),
+                    child: Transform.rotate(
+                      angle: -progress * 0.25 * math.pi, // Rotate icon up to 45 deg during drag
+                      child: Icon(
+                        CupertinoIcons.reply,
+                        size: 16,
+                        color: _isTriggered ? Colors.white : theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Dragged chat bubble
+          Transform.translate(
+            offset: Offset(_dragOffset, 0.0),
+            child: widget.child,
           ),
         ],
       ),

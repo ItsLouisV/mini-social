@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/chat_repository.dart';
 import '../domain/conversation_model.dart';
 import '../domain/message_model.dart';
+import '../domain/pinned_message_model.dart';
 import '../../../core/services/supabase_service.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
@@ -97,6 +98,21 @@ class ChatMessagesNotifier extends AutoDisposeFamilyAsyncNotifier<List<MessageMo
       _isLoadingMore = false;
     }
   }
+
+  Future<void> loadUpToMessage(DateTime targetCreatedAt) async {
+    if (_isLoadingMore) return;
+    _isLoadingMore = true;
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+      final messages = await repo.getMessagesUpToDate(arg, targetCreatedAt);
+      state = AsyncData(messages);
+      _hasMore = true;
+    } catch (_) {
+      // Bỏ qua lỗi
+    } finally {
+      _isLoadingMore = false;
+    }
+  }
 }
 
 final realtimeMessagesProvider =
@@ -108,3 +124,46 @@ final realtimeMessagesProvider =
 final unreadMessagesCountProvider = StreamProvider.autoDispose<int>((ref) {
   return ref.watch(chatRepositoryProvider).watchTotalUnreadMessagesCount();
 });
+
+// Pinned messages realtime notifier
+class PinnedMessagesNotifier extends AutoDisposeFamilyAsyncNotifier<List<PinnedMessageModel>, String> {
+  RealtimeChannel? _channel;
+
+  @override
+  Future<List<PinnedMessageModel>> build(String arg) async {
+    final repo = ref.watch(chatRepositoryProvider);
+    final pinned = await repo.getPinnedMessages(arg);
+
+    // Lắng nghe thay đổi realtime trên bảng pinned_messages (không dùng filter tĩnh để bắt được sự kiện DELETE)
+    _channel = ref.watch(supabaseServiceProvider).client.channel('public:pinned_messages:$arg');
+    _channel!.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'pinned_messages',
+      callback: (payload) async {
+        final newRecord = payload.newRecord;
+        final convId = newRecord.isEmpty ? null : newRecord['conversation_id'];
+        // convId = null có nghĩa là sự kiện DELETE (chỉ có oldRecord được gửi và không chứa các cột khác ngoài PK)
+        if (convId == null || convId == arg) {
+          try {
+            final updatedList = await repo.getPinnedMessages(arg);
+            state = AsyncValue.data(updatedList);
+          } catch (_) {
+            // Bỏ qua lỗi
+          }
+        }
+      },
+    ).subscribe();
+
+    ref.onDispose(() {
+      _channel?.unsubscribe();
+    });
+
+    return pinned;
+  }
+}
+
+final pinnedMessagesProvider =
+    AsyncNotifierProvider.autoDispose.family<PinnedMessagesNotifier, List<PinnedMessageModel>, String>(
+  PinnedMessagesNotifier.new,
+);

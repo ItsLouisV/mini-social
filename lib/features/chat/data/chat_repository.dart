@@ -3,8 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../domain/conversation_model.dart';
 import '../domain/message_model.dart';
+import '../domain/pinned_message_model.dart';
 import '../../profile/domain/profile_model.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../core/constants/supabase_constants.dart';
 import '../../../core/services/supabase_service.dart';
 
@@ -253,5 +253,43 @@ class ChatRepository {
           // Đảo ngược lại để hiển thị đúng thứ tự từ trên xuống dưới trên UI
           return messages.reversed.toList();
         });
+  }
+
+  // ── Pinned Messages ──
+  Future<void> pinMessage(String conversationId, String messageId) async {
+    await _client.from('pinned_messages').insert({
+      'conversation_id': conversationId,
+      'message_id': messageId,
+      'pinned_by': currentUserId,
+    });
+  }
+
+  Future<void> unpinMessage(String conversationId, String messageId) async {
+    await _client
+        .from('pinned_messages')
+        .delete()
+        .eq('conversation_id', conversationId)
+        .eq('message_id', messageId);
+  }
+
+  Future<List<PinnedMessageModel>> getPinnedMessages(String conversationId) async {
+    final data = await _client
+        .from('pinned_messages')
+        .select('*, message:message_id(*, reply_to_message:reply_to_message_id(*))')
+        .eq('conversation_id', conversationId)
+        .order('pinned_at', ascending: false);
+
+    return (data as List).map((e) => PinnedMessageModel.fromJson(e)).toList();
+  }
+
+  Future<List<MessageModel>> getMessagesUpToDate(String conversationId, DateTime date) async {
+    final data = await _client
+        .from(SupabaseConstants.messagesTable)
+        .select('*, reply_to_message:reply_to_message_id(*)')
+        .eq('conversation_id', conversationId)
+        .gte('created_at', date.toUtc().toIso8601String())
+        .order('created_at', ascending: false);
+
+    return (data as List).map((e) => MessageModel.fromJson(e)).toList();
   }
 }

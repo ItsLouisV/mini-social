@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -59,7 +60,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
             onPressed: () async {
               final convs = ref.read(conversationsProvider).valueOrNull ?? [];
               final currentUserId = ref.read(currentUserIdProvider);
-              final hiddenCount = currentUserId == null ? 0 : convs.where((c) => c.isHidden(currentUserId!)).length;
+              final hiddenCount = currentUserId == null ? 0 : convs.where((c) => c.isHidden(currentUserId)).length;
 
               if (hiddenCount == 0) {
                 // Xoá passcode cũ vì không còn cuộc trò chuyện ẩn nào
@@ -167,26 +168,28 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                               : 'Thử tìm kiếm với tên hiển thị khác',
                         ),
                       )
-                    : ListView.separated(
-                        itemCount: filteredConvs.length,
-                        separatorBuilder: (context, index) => Padding(
-                          padding: const EdgeInsets.only(left: 76),
-                          child: Divider(
-                            height: 0.5,
-                            thickness: 0.5,
-                            color:
-                                theme.dividerColor.withValues(alpha: 0.25),
+                    : SlidableAutoCloseBehavior(
+                        child: ListView.separated(
+                          itemCount: filteredConvs.length,
+                          separatorBuilder: (context, index) => Padding(
+                            padding: const EdgeInsets.only(left: 76),
+                            child: Divider(
+                              height: 0.5,
+                              thickness: 0.5,
+                              color:
+                                  theme.dividerColor.withValues(alpha: 0.25),
+                            ),
                           ),
+                          itemBuilder: (context, index) {
+                            final conv = filteredConvs[index];
+                            return _ConversationTile(
+                              conv: conv,
+                              currentUserId: currentUserId,
+                              onTap: () =>
+                                  context.push('/chat/${conv.id}'),
+                            );
+                          },
                         ),
-                        itemBuilder: (context, index) {
-                          final conv = filteredConvs[index];
-                          return _ConversationTile(
-                            conv: conv,
-                            currentUserId: currentUserId,
-                            onTap: () =>
-                                context.push('/chat/${conv.id}'),
-                          );
-                        },
                       ),
               ),
             ],
@@ -225,29 +228,71 @@ class _ConversationTile extends ConsumerWidget {
 
     return Slidable(
       key: ValueKey(conv.id),
-      // Vuốt từ Trái -> Phải: Ghim / Bỏ ghim
+      // Vuốt từ Trái -> Phải: Ghim / Bỏ ghim với StretchMotion & ExtentRatio
       startActionPane: ActionPane(
-        motion: const ScrollMotion(),
+        motion: const StretchMotion(),
+        extentRatio: 0.22,
         children: [
-          SlidableAction(
+          CustomSlidableAction(
             onPressed: (context) {
+              HapticFeedback.lightImpact();
               ref.read(chatRepositoryProvider).togglePin(conv);
             },
-            backgroundColor: const Color(0xFF007AFF), // Blue iOS
-            foregroundColor: Colors.white,
-            icon: conv.isPinned(currentUserId ?? '') 
-                ? CupertinoIcons.pin_slash_fill 
-                : CupertinoIcons.pin_fill,
-            label: conv.isPinned(currentUserId ?? '') ? 'Bỏ ghim' : 'Ghim',
+            backgroundColor: Colors.transparent,
+            child: Container(
+              alignment: Alignment.center,
+              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF007AFF), // Blue iOS
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF007AFF).withValues(alpha: 0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        conv.isPinned(currentUserId ?? '') 
+                            ? CupertinoIcons.pin_slash_fill 
+                            : CupertinoIcons.pin_fill,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        conv.isPinned(currentUserId ?? '') ? 'Bỏ ghim' : 'Ghim',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+              ),
+            ),
           ),
         ],
       ),
-      // Vuốt từ Phải -> Trái: Ẩn và Xoá
+      // Vuốt từ Phải -> Trái: Ẩn và Xoá với StretchMotion & ExtentRatio
       endActionPane: ActionPane(
-        motion: const ScrollMotion(),
+        motion: const StretchMotion(),
+        extentRatio: 0.44,
         children: [
-          SlidableAction(
+          CustomSlidableAction(
             onPressed: (context) async {
+              HapticFeedback.lightImpact();
               final convs = ref.read(conversationsProvider).valueOrNull ?? [];
               final hiddenCount = currentUserId == null ? 0 : convs.where((c) => c.isHidden(currentUserId!)).length;
 
@@ -270,13 +315,48 @@ class _ConversationTile extends ConsumerWidget {
                 }
               }
             },
-            backgroundColor: const Color(0xFF8E8E93), // Gray
-            foregroundColor: Colors.white,
-            icon: CupertinoIcons.eye_slash_fill,
-            label: 'Ẩn',
+            backgroundColor: Colors.transparent,
+            child: Container(
+              alignment: Alignment.center,
+              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF8E8E93), // Gray
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8E8E93).withValues(alpha: 0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
+                    return const SizedBox.shrink();
+                  }
+                  return const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.eye_slash_fill, color: Colors.white, size: 20),
+                      SizedBox(height: 4),
+                      Text(
+                        'Ẩn',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+              ),
+            ),
           ),
-          SlidableAction(
+          CustomSlidableAction(
             onPressed: (context) {
+              HapticFeedback.lightImpact();
               showCupertinoDialog(
                 context: context,
                 builder: (ctx) => CupertinoAlertDialog(
@@ -290,6 +370,7 @@ class _ConversationTile extends ConsumerWidget {
                     CupertinoDialogAction(
                       isDestructiveAction: true,
                       onPressed: () {
+                        HapticFeedback.mediumImpact();
                         Navigator.pop(ctx);
                         ref.read(chatRepositoryProvider).deleteConversation(conv.id);
                       },
@@ -299,43 +380,83 @@ class _ConversationTile extends ConsumerWidget {
                 ),
               );
             },
-            backgroundColor: const Color(0xFFFF3B30), // Red iOS
-            foregroundColor: Colors.white,
-            icon: CupertinoIcons.delete_solid,
-            label: 'Xoá',
+            backgroundColor: Colors.transparent,
+            child: Container(
+              alignment: Alignment.center,
+              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF3B30), // Red iOS
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF3B30).withValues(alpha: 0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
+                    return const SizedBox.shrink();
+                  }
+                  return const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.trash_fill, color: Colors.white, size: 20),
+                      SizedBox(height: 4),
+                      Text(
+                        'Xoá',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+              ),
+            ),
           ),
         ],
       ),
       child: Material(
         color: conv.isPinned(currentUserId ?? '') 
-            ? (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.03)) 
+            ? (isDark ? Colors.white.withValues(alpha: 0.03) : const Color(0xFFF2F2F7)) 
             : Colors.transparent,
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Unread dot
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: EdgeInsets.only(right: hasUnread ? 8 : 0),
-                  width: hasUnread ? 8 : 0,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF007AFF),
-                    shape: BoxShape.circle,
-                  ),
+                // Unread dot column to prevent avatar shifting layout jumps
+                SizedBox(
+                  width: 14,
+                  child: hasUnread
+                      ? Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF007AFF),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        )
+                      : null,
                 ),
   
                 // Avatar
                 AppAvatar(
                   imageUrl: conv.otherUser?.avatarUrl,
                   name: conv.otherUser?.displayName,
-                  radius: 28,
+                  radius: 25, // Sleek 50px avatar
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
   
                 // Text content
                 Expanded(
