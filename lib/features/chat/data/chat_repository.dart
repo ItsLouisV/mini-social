@@ -117,6 +117,18 @@ class ChatRepository {
     return (data as List).map((e) => MessageModel.fromJson(e)).toList();
   }
 
+  Future<List<MessageModel>> getMessagesPaginated(String conversationId,
+      {required int limit, required int offset}) async {
+    final data = await _client
+        .from(SupabaseConstants.messagesTable)
+        .select()
+        .eq('conversation_id', conversationId)
+        .order('created_at', ascending: false) // Tải từ mới nhất
+        .range(offset, offset + limit - 1);
+
+    return (data as List).map((e) => MessageModel.fromJson(e)).toList();
+  }
+
   Future<MessageModel> sendMessage(
       String conversationId, String content, {String messageType = 'text'}) async {
     final data = await _client
@@ -192,7 +204,12 @@ class ChatRepository {
         .from(SupabaseConstants.messagesTable)
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
-        .order('created_at', ascending: true)
-        .map((data) => data.map((e) => MessageModel.fromJson(e)).toList());
+        .order('created_at', ascending: false) // Tải từ mới nhất về cũ nhất
+        .limit(30) // Chỉ lấy 30 tin nhắn mới nhất
+        .map((data) {
+          final messages = data.map((e) => MessageModel.fromJson(e)).toList();
+          // Đảo ngược lại để hiển thị đúng thứ tự từ trên xuống dưới trên UI
+          return messages.reversed.toList();
+        });
   }
 }

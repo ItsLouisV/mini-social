@@ -35,9 +35,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(chatRepositoryProvider).markAsSeen(widget.conversationId);
     });
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients &&
+        _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      ref.read(realtimeMessagesProvider(widget.conversationId).notifier).loadMore();
+    }
   }
 
   @override
@@ -52,12 +60,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!_scrollController.hasClients) return;
     if (animated) {
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        0.0,
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
       );
     } else {
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      _scrollController.jumpTo(0.0);
     }
   }
 
@@ -136,8 +144,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.listen(realtimeMessagesProvider(widget.conversationId),
         (_, next) {
       next.whenData((_) {
-        WidgetsBinding.instance
-            .addPostFrameCallback((_) => _scrollToBottom());
+        if (_scrollController.hasClients && _scrollController.offset < 100) {
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _scrollToBottom());
+        }
       });
     });
 
@@ -298,19 +308,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
-    // Build message items with grouping logic
+    // Build message items with grouping logic for reversed list
     final items = <_MessageListItem>[];
 
     for (int i = 0; i < messages.length; i++) {
       final msg = messages[i];
-      final prev = i > 0 ? messages[i - 1] : null;
-      final next = i < messages.length - 1 ? messages[i + 1] : null;
-
-      // Show time divider nếu cách nhau >= 10 phút hoặc tin nhắn đầu tiên
-      if (prev == null ||
-          msg.createdAt.difference(prev.createdAt).inMinutes.abs() >= 10) {
-        items.add(_MessageListItem.divider(msg.createdAt));
-      }
+      // chronologically prev message is older (higher index)
+      final prev = i < messages.length - 1 ? messages[i + 1] : null;
+      // chronologically next message is newer (lower index)
+      final next = i > 0 ? messages[i - 1] : null;
 
       // Xác định có phải tin cuối trong nhóm không
       // (nhóm: cùng người gửi, khoảng cách < 5 phút)
@@ -318,24 +324,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           next.senderId != msg.senderId ||
           next.createdAt.difference(msg.createdAt).inMinutes.abs() >= 5;
 
-      // Hiện time inline chỉ ở tin cuối của nhóm
       items.add(_MessageListItem.message(
         msg,
         isLastInGroup: isLastInGroup,
         showInlineTime: isLastInGroup,
       ));
+
+      // Show time divider nếu cách nhau >= 10 phút hoặc tin nhắn đầu tiên
+      if (prev == null ||
+          msg.createdAt.difference(prev.createdAt).inMinutes.abs() >= 10) {
+        items.add(_MessageListItem.divider(msg.createdAt));
+      }
     }
 
     // Mark as seen
     final isMine = messages.isNotEmpty &&
-        messages.last.senderId == currentUserId;
-    final lastIsSeen = messages.isNotEmpty && messages.last.isSeen;
+        messages.first.senderId == currentUserId;
+    final lastIsSeen = messages.isNotEmpty && messages.first.isSeen;
+
+    // Lấy trạng thái loading từ provider
+    final isLoadingMore = ref.read(realtimeMessagesProvider(widget.conversationId).notifier).isLoadingMore;
 
     return ListView.builder(
       controller: _scrollController,
+      reverse: true,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      itemCount: items.length,
+      itemCount: items.length + (isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == items.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CupertinoActivityIndicator()),
+          );
+        }
+
         final item = items[index];
         if (item.isDivider) {
           return _TimeDivider(dateTime: item.dateTime!);
@@ -347,7 +369,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           showInlineTime: item.showInlineTime,
           showSeen: isMine &&
               lastIsSeen &&
-              index == items.length - 1,
+              index == 0, // Mới nhất là index 0
         );
       },
     );
