@@ -732,9 +732,13 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
     if (widget.callModel == null) return;
 
     try {
+      debugPrint('==== BẮT ĐẦU KẾT NỐI LIVEKIT ====');
+      debugPrint('1. Đang lấy token cho room: ${widget.callModel!.roomName}');
       // 1. Fetch token
       final token = await ref.read(callRepositoryProvider).getLiveKitToken(widget.callModel!.roomName);
+      debugPrint('👉 Đã lấy token thành công! Token (50 ký tự đầu): ${token.length > 50 ? token.substring(0, 50) : token}...');
 
+      debugPrint('2. Đang tạo Room và xin quyền...');
       // 2. Connect
       final room = Room();
       
@@ -743,15 +747,21 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
         await [Permission.camera, Permission.microphone].request();
       }
 
+      final url = ref.read(callRepositoryProvider).getLiveKitUrl();
+      debugPrint('3. Đang gọi room.connect tới URL: $url');
+      
       await room.connect(
-        ref.read(callRepositoryProvider).getLiveKitUrl(),
+        url,
         token,
         roomOptions: const RoomOptions(
           adaptiveStream: true,
           dynacast: true,
         ),
       );
+      
+      debugPrint('👉 Đã kết nối WebRTC thành công!');
 
+      debugPrint('4. Đang bật microphone/camera...');
       // 3. Enable tracks
       await room.localParticipant?.setMicrophoneEnabled(true);
       if (widget.isVideo) {
@@ -766,11 +776,14 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
 
         // Listen for participants
         _room?.addListener(_onRoomEvent);
+        debugPrint('==== HOÀN TẤT SETUP KHÔNG CÓ LỖI ====');
       }
-    } catch (e) {
-      debugPrint('LiveKit connection error: $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌❌ LiveKit connection error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi kết nối phòng gọi')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi kết nối phòng gọi: $e')));
         _endCall();
       }
     }
