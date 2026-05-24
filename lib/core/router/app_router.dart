@@ -9,6 +9,7 @@ import '../utils/notifications.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/chat/providers/chat_provider.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
@@ -48,7 +49,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: '/feed',
+    initialLocation: '/splash',
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
@@ -60,9 +61,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (isLoggedIn == null) return null;
 
+      final isSplashRoute = state.matchedLocation == '/splash';
       final isAuthRoute = state.matchedLocation.startsWith('/login') ||
           state.matchedLocation.startsWith('/register') ||
           state.matchedLocation.startsWith('/forgot-password');
+
+      if (isSplashRoute) return null;
 
       if (!isLoggedIn && !isAuthRoute) return '/login';
       if (isLoggedIn && isAuthRoute) return '/feed';
@@ -70,6 +74,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       // ── Auth routes ──────────────────────────────────────────────────
+      GoRoute(
+        path: '/splash',
+        pageBuilder: (_, __) => const CupertinoPage(child: SplashScreen()),
+      ),
       GoRoute(
         path: '/login',
         pageBuilder: (_, __) => const CupertinoPage(child: LoginScreen()),
