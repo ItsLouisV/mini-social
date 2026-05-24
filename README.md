@@ -171,8 +171,11 @@ lib/
 |---|---|
 | 🔐 Xác thực | Đăng ký / Đăng nhập / Quên mật khẩu qua email |
 | 👤 Hồ sơ | Avatar, Cover, Bio, thống kê Follower / Following |
-| 📰 Feed | Bài viết từ những người đang theo dõi |
-| ❤️ Like & Comment | Toggle like, bình luận theo thời gian thực |
+| 📰 Feed | Bài viết từ những người đang theo dõi với hiệu năng cực cao |
+| ❤️ Like & Comment | Toggle like bài viết, bình luận theo thời gian thực |
+| 💬 Thích bình luận | Tương tác thích bình luận riêng lẻ dạng gộp (Batch-fetch) & Optimistic UI |
+| ⚡ Tối ưu Post Likes | Nạp trạng thái thích đồng bộ dạng gộp, triệt tiêu N+1 truy vấn và nhấp nháy UI |
+| 📞 Gọi điện & Video | Gọi thoại / Video realtime chéo nền tảng (Web & Mobile) sử dụng WebRTC + LiveKit |
 | 🤝 Follow | Theo dõi / bỏ theo dõi người dùng |
 | 🔔 Thông báo | Realtime push khi có like, comment, follow mới |
 | 💬 Chat | Nhắn tin 1-1 theo thời gian thực với Supabase Realtime |
