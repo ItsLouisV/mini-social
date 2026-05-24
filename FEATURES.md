@@ -137,7 +137,7 @@ order by created_at desc
 
 ### 6.2 Bảo mật riêng tư (Mã khóa đoạn chat bị ẩn) ⭐ Mới
 - **Passcode Lock cho đoạn chat bị ẩn** (`/chat/hidden`):
-  - Khi mở danh sách đoạn chat bị ẩn, bắt buộc người dùng phải nhập đúng Passcode (Mã khóa bảo mật 4 chữ số) mới được xem.
+  - Khi mở danh sách đoạn chat bị ẩn, bắt buộc người dùng phải nhập đúng Passcode (Mã khóa bảo mật 6 chữ số) mới được xem.
   - Hỗ trợ luồng Thiết lập Passcode lần đầu (`PasscodeMode.setup`) và Xác minh Passcode cho những lần truy cập sau (`PasscodeMode.verify`).
   - Tự động gỡ bỏ passcode nếu không còn bất kỳ cuộc trò chuyện bị ẩn nào nữa để tối giản trải nghiệm.
 
