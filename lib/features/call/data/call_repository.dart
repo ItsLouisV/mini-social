@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -56,24 +57,86 @@ class CallRepository {
     return res.data['token'] as String;
   }
 
-  /// Lắng nghe cuộc gọi đến (Supabase Realtime)
+  /// [ĐÃ SỬA LỖI] Lắng nghe cuộc gọi đến bằng Realtime Channel (Postgres Changes)
   Stream<CallModel?> watchIncomingCall(String currentUserId) {
-    return _client
-        .from('calls')
-        .stream(primaryKey: ['id'])
-        .eq('callee_id', currentUserId)
-        .map((list) {
-      final ringing = list.where((c) => c['status'] == 'ringing').toList();
-      return ringing.isEmpty ? null : CallModel.fromJson(ringing.first);
-    });
+    final controller = StreamController<CallModel?>();
+    
+    // Khởi tạo một channel độc lập cho user
+    final channel = _client.channel('incoming_calls_$currentUserId');
+
+    // 1. Lắng nghe khi có cuộc gọi mới tạo (INSERT) cho mình
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.insert,
+      schema: 'public',
+      table: 'calls',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'callee_id',
+        value: currentUserId,
+      ),
+      callback: (payload) {
+        final data = payload.newRecord;
+        if (data['status'] == 'ringing') {
+          controller.add(CallModel.fromJson(data));
+        }
+      },
+    );
+
+    // 2. Lắng nghe khi cuộc gọi đó bị cập nhật trạng thái (UPDATE) - ví dụ: người gọi bấm Hủy
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'calls',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'callee_id',
+        value: currentUserId,
+      ),
+      callback: (payload) {
+        final data = payload.newRecord;
+        // Nếu cuộc gọi không còn ở trạng thái ringing nữa, bắn null để tắt màn hình đổ chuông
+        if (data['status'] != 'ringing') {
+          controller.add(null);
+        }
+      },
+    );
+
+    channel.subscribe();
+
+    // Hủy channel khi widget không còn lắng nghe stream này nữa để tránh rò rỉ bộ nhớ
+    controller.onCancel = () {
+      _client.removeChannel(channel);
+      controller.close();
+    };
+
+    return controller.stream;
   }
 
-  /// Lắng nghe thay đổi status của 1 cuộc gọi cụ thể
+  /// [ĐÃ SỬA LỖI] Lắng nghe thay đổi status của 1 cuộc gọi cụ thể bằng Realtime Channel
   Stream<CallModel> watchCall(String callId) {
-    return _client
-        .from('calls')
-        .stream(primaryKey: ['id'])
-        .eq('id', callId)
-        .map((list) => CallModel.fromJson(list.first));
+    final controller = StreamController<CallModel>();
+    final channel = _client.channel('call_state_$callId');
+
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'calls',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'id',
+        value: callId,
+      ),
+      callback: (payload) {
+        controller.add(CallModel.fromJson(payload.newRecord));
+      },
+    ).subscribe();
+
+    controller.onCancel = () {
+      _client.removeChannel(channel);
+      controller.close();
+    };
+
+    return controller.stream;
   }
 }
+
