@@ -178,6 +178,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               otherAvatarUrl: extra['avatarUrl']  as String?,
               isVideo:        extra['isVideo']    as bool?   ?? false,
               onEnd:          extra['onEnd']      as VoidCallback?,
+              prePreparedRoom: extra['prePreparedRoom'],
+              preFetchedToken: extra['preFetchedToken'] as String?,
             ),
           );
         },

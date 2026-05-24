@@ -28,7 +28,32 @@ class PostRepository {
         .order('created_at', ascending: false)
         .range(from, to);
 
-    return (data as List).map((e) => PostModel.fromJson(e)).toList();
+    final postsList = data as List;
+    if (postsList.isEmpty) return [];
+
+    final userId = currentUserId;
+    if (userId == null) {
+      return postsList.map((e) => PostModel.fromJson(e)).toList();
+    }
+
+    // Fetch likes for these posts by current user
+    final postIds = postsList.map((e) => e['id']).toList();
+    Set<String> likedPostIds = {};
+    try {
+      final likedPostsData = await _client
+          .from(SupabaseConstants.likesTable)
+          .select('post_id')
+          .eq('user_id', userId)
+          .inFilter('post_id', postIds);
+
+      likedPostIds = (likedPostsData as List).map((e) => e['post_id'] as String).toSet();
+    } catch (e) {
+      print('Warning: Failed to fetch post likes: $e');
+    }
+
+    return postsList.map((e) {
+      return PostModel.fromJson(e, isLiked: likedPostIds.contains(e['id']));
+    }).toList();
   }
 
   Stream<List<PostModel>> watchPosts() {
@@ -105,7 +130,24 @@ class PostRepository {
         .select('*, profiles(*), post_media(*)')
         .eq('id', postId)
         .single();
-    return PostModel.fromJson(data);
+    
+    final userId = currentUserId;
+    bool isLiked = false;
+    if (userId != null) {
+      try {
+        final likedData = await _client
+            .from(SupabaseConstants.likesTable)
+            .select('id')
+            .eq('post_id', postId)
+            .eq('user_id', userId)
+            .maybeSingle();
+        isLiked = likedData != null;
+      } catch (e) {
+        print('Warning: Failed to fetch single post like status: $e');
+      }
+    }
+    
+    return PostModel.fromJson(data, isLiked: isLiked);
   }
 
   Stream<PostModel> watchPost(String postId) {

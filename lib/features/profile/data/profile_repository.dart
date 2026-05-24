@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/profile_model.dart';
 import '../../../core/constants/supabase_constants.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../feed/domain/post_model.dart';
 
 class ProfileRepository {
   final SupabaseService _service;
@@ -77,11 +78,38 @@ class ProfileRepository {
     );
   }
 
-  Future<List<Map<String, dynamic>>> getUserPosts(String userId) async {
-    return await _client
+  Future<List<PostModel>> getUserPosts(String userId) async {
+    final data = await _client
         .from(SupabaseConstants.postsTable)
         .select('*, profiles(*), post_media(*)')
         .eq('user_id', userId)
         .order('created_at', ascending: false);
+
+    final postsList = data as List;
+    if (postsList.isEmpty) return [];
+
+    final currentId = currentUserId;
+    if (currentId == null) {
+      return postsList.map((e) => PostModel.fromJson(e)).toList();
+    }
+
+    // Fetch likes for these posts by current user
+    final postIds = postsList.map((e) => e['id']).toList();
+    Set<String> likedPostIds = {};
+    try {
+      final likedPostsData = await _client
+          .from(SupabaseConstants.likesTable)
+          .select('post_id')
+          .eq('user_id', currentId)
+          .inFilter('post_id', postIds);
+
+      likedPostIds = (likedPostsData as List).map((e) => e['post_id'] as String).toSet();
+    } catch (e) {
+      print('Warning: Failed to fetch user profile post likes: $e');
+    }
+
+    return postsList.map((e) {
+      return PostModel.fromJson(e, isLiked: likedPostIds.contains(e['id']));
+    }).toList();
   }
 }

@@ -17,7 +17,8 @@ class ChatRepository {
   SupabaseClient get _client => _service.client;
   String? get currentUserId => _service.currentUserId;
 
-  // ── Conversations ──
+  // ── Conversations ─────────────────────────────────────────────────────────────
+
   Future<List<ConversationModel>> getConversations() async {
     final userId = currentUserId!;
     final data = await _client
@@ -37,7 +38,8 @@ class ChatRepository {
             .eq('id', otherUserId)
             .single();
         final otherUser = ProfileModel.fromJson(profileData);
-        conversations.add(ConversationModel.fromJson(item, otherUser: otherUser));
+        conversations
+            .add(ConversationModel.fromJson(item, otherUser: otherUser));
       } catch (_) {
         conversations.add(conv);
       }
@@ -60,27 +62,27 @@ class ChatRepository {
       throw Exception('Không thể tạo cuộc trò chuyện với chính mình.');
     }
 
-    // Check existing
     final existing = await _client
         .from(SupabaseConstants.conversationsTable)
         .select()
-        .or('and(participant_1.eq.$userId,participant_2.eq.$otherUserId),and(participant_1.eq.$otherUserId,participant_2.eq.$userId)')
+        .or(
+          'and(participant_1.eq.$userId,participant_2.eq.$otherUserId),'
+          'and(participant_1.eq.$otherUserId,participant_2.eq.$userId)',
+        )
         .maybeSingle();
 
     if (existing != null) {
       return ConversationModel.fromJson(existing);
     }
 
-    final p1 = userId.compareTo(otherUserId) < 0 ? userId : otherUserId;
-    final p2 = userId.compareTo(otherUserId) < 0 ? otherUserId : userId;
+    final p1 =
+        userId.compareTo(otherUserId) < 0 ? userId : otherUserId;
+    final p2 =
+        userId.compareTo(otherUserId) < 0 ? otherUserId : userId;
 
-    // Create new
     final created = await _client
         .from(SupabaseConstants.conversationsTable)
-        .insert({
-          'participant_1': p1,
-          'participant_2': p2,
-        })
+        .insert({'participant_1': p1, 'participant_2': p2})
         .select()
         .single();
 
@@ -91,8 +93,7 @@ class ChatRepository {
     final userId = currentUserId!;
     return _client
         .from(SupabaseConstants.conversationsTable)
-        .stream(primaryKey: ['id'])
-        .map((data) {
+        .stream(primaryKey: ['id']).map((data) {
       int total = 0;
       for (var row in data) {
         if (row['participant_1'] == userId) {
@@ -105,7 +106,8 @@ class ChatRepository {
     });
   }
 
-  // ── Conversation Actions ──
+  // ── Conversation Actions ──────────────────────────────────────────────────────
+
   Future<void> togglePin(ConversationModel conv) async {
     final userId = currentUserId!;
     final isP1 = conv.participant1 == userId;
@@ -139,13 +141,16 @@ class ChatRepository {
   }
 
   Future<void> deleteConversation(String convId) async {
-    // Để xoá conversation 2 chiều, xoá thẳng record.
-    await _client.from(SupabaseConstants.conversationsTable).delete().eq('id', convId);
+    await _client
+        .from(SupabaseConstants.conversationsTable)
+        .delete()
+        .eq('id', convId);
   }
 
-  // ── Messages ──
-  Future<List<MessageModel>> getMessages(String conversationId,
-      {int page = 0}) async {
+  // ── Messages ──────────────────────────────────────────────────────────────────
+
+  /// Lấy toàn bộ tin nhắn (không phân trang) — chỉ dùng cho export / tìm kiếm.
+  Future<List<MessageModel>> getMessages(String conversationId) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
         .select('*, reply_to_message:reply_to_message_id(*)')
@@ -155,20 +160,75 @@ class ChatRepository {
     return (data as List).map((e) => MessageModel.fromJson(e)).toList();
   }
 
-  Future<List<MessageModel>> getMessagesPaginated(String conversationId,
-      {required int limit, required int offset}) async {
+  /// Load trang tin nhắn theo [offset].
+  /// Kết quả trả về: index 0 = tin MỚI NHẤT (descending),
+  /// phù hợp với ListView reverse: true.
+  Future<List<MessageModel>> getMessagesPaginated(
+    String conversationId, {
+    required int limit,
+    required int offset,
+  }) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
         .select('*, reply_to_message:reply_to_message_id(*)')
         .eq('conversation_id', conversationId)
-        .order('created_at', ascending: false) // Tải từ mới nhất
+        .order('created_at', ascending: false)
         .range(offset, offset + limit - 1);
 
     return (data as List).map((e) => MessageModel.fromJson(e)).toList();
   }
 
+  /// Lấy một "window" (cửa sổ) tin nhắn xung quanh [targetDate]:
+  /// - [beforeCount] tin CŨ HƠN hoặc bằng targetDate
+  /// - [afterCount] tin MỚI HƠN targetDate
+  ///
+  /// Dùng để jump-to-message (reply / pin) mà không cần xoá state cũ.
+  Future<List<MessageModel>> getMessagesAroundDate(
+    String conversationId,
+    DateTime targetDate, {
+    int beforeCount = 25,
+    int afterCount = 10,
+  }) async {
+    final targetUtc = targetDate.toUtc().toIso8601String();
+
+    // Lấy [beforeCount] tin cũ hơn hoặc bằng targetDate (bao gồm chính tin đó)
+    final beforeFuture = _client
+        .from(SupabaseConstants.messagesTable)
+        .select('*, reply_to_message:reply_to_message_id(*)')
+        .eq('conversation_id', conversationId)
+        .lte('created_at', targetUtc) // less than or equal → tin CŨ HƠN
+        .order('created_at', ascending: false)
+        .limit(beforeCount);
+
+    // Lấy [afterCount] tin mới hơn targetDate (context phía dưới)
+    final afterFuture = _client
+        .from(SupabaseConstants.messagesTable)
+        .select('*, reply_to_message:reply_to_message_id(*)')
+        .eq('conversation_id', conversationId)
+        .gt('created_at', targetUtc) // greater than → tin MỚI HƠN
+        .order('created_at', ascending: true)
+        .limit(afterCount);
+
+    final results = await Future.wait([beforeFuture, afterFuture]);
+
+    final before =
+        (results[0] as List).map((e) => MessageModel.fromJson(e)).toList();
+    final after =
+        (results[1] as List).map((e) => MessageModel.fromJson(e)).toList();
+
+    // Kết hợp: before đang descending, after đang ascending
+    // → merge rồi sort descending để nhất quán với getMessagesPaginated
+    final all = [...before, ...after];
+    all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return all;
+  }
+
   Future<MessageModel> sendMessage(
-      String conversationId, String content, {String messageType = 'text', String? replyToMessageId}) async {
+    String conversationId,
+    String content, {
+    String messageType = 'text',
+    String? replyToMessageId,
+  }) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
         .insert({
@@ -176,37 +236,46 @@ class ChatRepository {
           'sender_id': currentUserId,
           'content': content,
           'message_type': messageType,
-          if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+          if (replyToMessageId != null)
+            'reply_to_message_id': replyToMessageId,
         })
         .select()
         .single();
 
-    // Update conversation's last message
-    await _client
-        .from(SupabaseConstants.conversationsTable)
-        .update({
-          'last_message': content,
-          'last_message_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', conversationId);
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      'last_message': content,
+      'last_message_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', conversationId);
 
     return MessageModel.fromJson(data);
   }
 
-  Future<MessageModel> sendImageMessage(String conversationId, XFile image, {String? caption, String? replyToMessageId}) async {
-    final ext = image.name.contains('.') ? image.name.split('.').last.toLowerCase() : 'jpg';
+  Future<MessageModel> sendImageMessage(
+    String conversationId,
+    XFile image, {
+    String? caption,
+    String? replyToMessageId,
+  }) async {
+    final ext = image.name.contains('.')
+        ? image.name.split('.').last.toLowerCase()
+        : 'jpg';
     final fileName = '$currentUserId/${_uuid.v4()}.$ext';
     final bytes = await image.readAsBytes();
-    final contentType = ext == 'png' ? 'image/png' : (ext == 'gif' ? 'image/gif' : 'image/jpeg');
+    final contentType = ext == 'png'
+        ? 'image/png'
+        : (ext == 'gif' ? 'image/gif' : 'image/jpeg');
 
-    await _client.storage.from(SupabaseConstants.messagesBucket).uploadBinary(
+    await _client.storage
+        .from(SupabaseConstants.messagesBucket)
+        .uploadBinary(
           fileName,
           bytes,
           fileOptions: FileOptions(contentType: contentType),
         );
 
-    final url =
-        _client.storage.from(SupabaseConstants.messagesBucket).getPublicUrl(fileName);
+    final url = _client.storage
+        .from(SupabaseConstants.messagesBucket)
+        .getPublicUrl(fileName);
 
     final data = await _client
         .from(SupabaseConstants.messagesTable)
@@ -216,18 +285,16 @@ class ChatRepository {
           'content': caption ?? 'Đã gửi một ảnh',
           'media_url': url,
           'message_type': 'image',
-          if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+          if (replyToMessageId != null)
+            'reply_to_message_id': replyToMessageId,
         })
         .select()
         .single();
 
-    await _client
-        .from(SupabaseConstants.conversationsTable)
-        .update({
-          'last_message': 'Hình ảnh',
-          'last_message_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', conversationId);
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      'last_message': 'Hình ảnh',
+      'last_message_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', conversationId);
 
     return MessageModel.fromJson(data);
   }
@@ -241,21 +308,8 @@ class ChatRepository {
         .eq('is_seen', false);
   }
 
-  Stream<List<MessageModel>> watchMessages(String conversationId) {
-    return _client
-        .from(SupabaseConstants.messagesTable)
-        .stream(primaryKey: ['id'])
-        .eq('conversation_id', conversationId)
-        .order('created_at', ascending: false) // Tải từ mới nhất về cũ nhất
-        .limit(30) // Chỉ lấy 30 tin nhắn mới nhất
-        .map((data) {
-          final messages = data.map((e) => MessageModel.fromJson(e)).toList();
-          // Đảo ngược lại để hiển thị đúng thứ tự từ trên xuống dưới trên UI
-          return messages.reversed.toList();
-        });
-  }
+  // ── Pinned Messages ───────────────────────────────────────────────────────────
 
-  // ── Pinned Messages ──
   Future<void> pinMessage(String conversationId, String messageId) async {
     await _client.from('pinned_messages').insert({
       'conversation_id': conversationId,
@@ -266,30 +320,23 @@ class ChatRepository {
 
   Future<void> unpinMessage(String conversationId, String messageId) async {
     await _client
-        .from('pinned_messages')
-        .delete()
-        .eq('conversation_id', conversationId)
-        .eq('message_id', messageId);
+      .from('pinned_messages')
+      .delete()
+      .eq('conversation_id', conversationId)
+      .eq('message_id', messageId);
   }
 
   Future<List<PinnedMessageModel>> getPinnedMessages(String conversationId) async {
     final data = await _client
-        .from('pinned_messages')
-        .select('*, message:message_id(*, reply_to_message:reply_to_message_id(*))')
-        .eq('conversation_id', conversationId)
-        .order('pinned_at', ascending: false);
+      .from('pinned_messages')
+      .select(
+          '*, message:message_id(*, reply_to_message:reply_to_message_id(*))')
+      .eq('conversation_id', conversationId)
+      .order('pinned_at', ascending: false);
 
-    return (data as List).map((e) => PinnedMessageModel.fromJson(e)).toList();
-  }
-
-  Future<List<MessageModel>> getMessagesUpToDate(String conversationId, DateTime date) async {
-    final data = await _client
-        .from(SupabaseConstants.messagesTable)
-        .select('*, reply_to_message:reply_to_message_id(*)')
-        .eq('conversation_id', conversationId)
-        .gte('created_at', date.toUtc().toIso8601String())
-        .order('created_at', ascending: false);
-
-    return (data as List).map((e) => MessageModel.fromJson(e)).toList();
+    return (data as List)
+      .map((e) => PinnedMessageModel.fromJson(e))
+      .toList();
   }
 }
+

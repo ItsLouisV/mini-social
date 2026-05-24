@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 
 import '../../providers/profile_provider.dart';
-import '../../../feed/domain/post_model.dart';
 import '../../../feed/presentation/widgets/post_card.dart';
 
 import '../../../auth/providers/auth_provider.dart';
@@ -41,7 +40,7 @@ class ProfilePostsGrid extends ConsumerWidget {
           );
         }
 
-        final posts = postsData.map((e) => PostModel.fromJson(e)).toList();
+        final posts = postsData;
 
         return SliverList(
           delegate: SliverChildBuilderDelegate(

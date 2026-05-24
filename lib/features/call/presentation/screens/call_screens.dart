@@ -117,6 +117,35 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
   }
 
   CallModel? _currentCall;
+  String? _preFetchedToken;
+  Room? _preparedRoom;
+
+  Future<void> _preWarmConnection(CallModel call) async {
+    try {
+      final repo = ref.read(callRepositoryProvider);
+      debugPrint('⚡⚡ [OutgoingCallScreen] Đang pre-warm LiveKit token & connection...');
+      final token = await repo.getLiveKitToken(call.roomName);
+      if (!mounted) return;
+      _preFetchedToken = token;
+      
+      final url = repo.getLiveKitUrl();
+      final room = Room(
+        roomOptions: const RoomOptions(
+          adaptiveStream: true,
+          dynacast: true,
+        ),
+      );
+      await room.prepareConnection(url, token);
+      if (!mounted) {
+        await room.disconnect();
+        return;
+      }
+      _preparedRoom = room;
+      debugPrint('⚡⚡ [OutgoingCallScreen] Pre-warm LiveKit connection THÀNH CÔNG!');
+    } catch (e) {
+      debugPrint('⚠️ [OutgoingCallScreen] Pre-warm LiveKit connection thất bại: $e');
+    }
+  }
 
   Future<void> _initCall() async {
     try {
@@ -128,6 +157,7 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
       );
       if (mounted) {
         setState(() => _currentCall = call);
+        _preWarmConnection(call);
       }
     } catch (e) {
       if (mounted) {
@@ -156,6 +186,8 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
         'otherName': widget.calleeName,
         'avatarUrl': widget.calleeAvatarUrl,
         'isVideo': widget.isVideo,
+        'prePreparedRoom': _preparedRoom,
+        'preFetchedToken': _preFetchedToken,
       });
     }
   }
@@ -166,6 +198,11 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
     _connectCtrl.dispose();
     _timer?.cancel();
     CallAudioService().stop(); // đảm bảo dừng âm thanh khi out
+    
+    // Ngắt kết nối pre-warmed Room nếu chưa dùng
+    if (_preparedRoom != null && _connecting == false) {
+      _preparedRoom?.disconnect();
+    }
     super.dispose();
   }
 
@@ -436,6 +473,10 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
   late final AnimationController _pulseCtrl;
   late final Animation<double> _shake;
 
+  String? _preFetchedToken;
+  Room? _preparedRoom;
+  bool _accepted = false;
+
   @override
   void initState() {
     super.initState();
@@ -468,6 +509,37 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
 
     // Phát cộng chuông gọi đến
     CallAudioService().playRingtone();
+
+    if (widget.callModel != null) {
+      _preWarmConnection(widget.callModel!);
+    }
+  }
+
+  Future<void> _preWarmConnection(CallModel call) async {
+    try {
+      final repo = ref.read(callRepositoryProvider);
+      debugPrint('⚡⚡ [IncomingCallScreen] Đang pre-warm LiveKit token & connection...');
+      final token = await repo.getLiveKitToken(call.roomName);
+      if (!mounted) return;
+      _preFetchedToken = token;
+      
+      final url = repo.getLiveKitUrl();
+      final room = Room(
+        roomOptions: const RoomOptions(
+          adaptiveStream: true,
+          dynacast: true,
+        ),
+      );
+      await room.prepareConnection(url, token);
+      if (!mounted) {
+        await room.disconnect();
+        return;
+      }
+      _preparedRoom = room;
+      debugPrint('⚡⚡ [IncomingCallScreen] Pre-warm LiveKit connection THÀNH CÔNG!');
+    } catch (e) {
+      debugPrint('⚠️ [IncomingCallScreen] Pre-warm LiveKit connection thất bại: $e');
+    }
   }
 
   @override
@@ -475,6 +547,11 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
     _shakeCtrl.dispose();
     _pulseCtrl.dispose();
     CallAudioService().stop(); // dừng cộng chuông
+    
+    // Ngắt kết nối pre-warmed Room nếu chưa được chấp nhận
+    if (_preparedRoom != null && !_accepted) {
+      _preparedRoom?.disconnect();
+    }
     super.dispose();
   }
 
@@ -642,6 +719,7 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
                           color: AppColors.success,
                           size: 64,
                           onTap: () async {
+                            _accepted = true;
                             CallAudioService().stop();
                             if (widget.callModel != null) {
                               await ref.read(callRepositoryProvider).updateStatus(widget.callModel!.id, CallStatus.accepted);
@@ -653,6 +731,8 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
                                 'otherName': widget.callerName,
                                 'avatarUrl': widget.callerAvatarUrl,
                                 'isVideo': widget.isVideo,
+                                'prePreparedRoom': _preparedRoom,
+                                'preFetchedToken': _preFetchedToken,
                               });
                             }
                           },
@@ -680,6 +760,8 @@ class ActiveCallScreen extends ConsumerStatefulWidget {
   final String? otherAvatarUrl;
   final bool isVideo;
   final VoidCallback? onEnd;
+  final Room? prePreparedRoom;
+  final String? preFetchedToken;
 
   const ActiveCallScreen({
     super.key,
@@ -688,6 +770,8 @@ class ActiveCallScreen extends ConsumerStatefulWidget {
     this.otherAvatarUrl,
     this.isVideo = false,
     this.onEnd,
+    this.prePreparedRoom,
+    this.preFetchedToken,
   });
 
   @override
@@ -733,14 +817,30 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
 
     try {
       debugPrint('==== BẮT ĐẦU KẾT NỐI LIVEKIT ====');
-      debugPrint('1. Đang lấy token cho room: ${widget.callModel!.roomName}');
-      // 1. Fetch token
-      final token = await ref.read(callRepositoryProvider).getLiveKitToken(widget.callModel!.roomName);
-      debugPrint('👉 Đã lấy token thành công! Token (50 ký tự đầu): ${token.length > 50 ? token.substring(0, 50) : token}...');
+      
+      String token;
+      if (widget.preFetchedToken != null) {
+        token = widget.preFetchedToken!;
+        debugPrint('👉 Sử dụng pre-fetched token thành công!');
+      } else {
+        debugPrint('1. Đang lấy token cho room: ${widget.callModel!.roomName}');
+        token = await ref.read(callRepositoryProvider).getLiveKitToken(widget.callModel!.roomName);
+        debugPrint('👉 Đã lấy token thành công! Token (50 ký tự đầu): ${token.length > 50 ? token.substring(0, 50) : token}...');
+      }
 
       debugPrint('2. Đang tạo Room và xin quyền...');
-      // 2. Connect
-      final room = Room();
+      Room room;
+      if (widget.prePreparedRoom != null) {
+        room = widget.prePreparedRoom!;
+        debugPrint('👉 Sử dụng pre-prepared Room instance!');
+      } else {
+        room = Room(
+          roomOptions: const RoomOptions(
+            adaptiveStream: true,
+            dynacast: true,
+          ),
+        );
+      }
       
       // Request permissions
       if (!kIsWeb) {
@@ -753,9 +853,15 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
       await room.connect(
         url,
         token,
-        roomOptions: const RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
+        connectOptions: ConnectOptions(
+          timeouts: Timeouts(
+            connection: const Duration(seconds: 20),
+            peerConnection: const Duration(seconds: 20),
+            publish: const Duration(seconds: 15),
+            subscribe: const Duration(seconds: 15),
+            debounce: const Duration(milliseconds: 100),
+            iceRestart: const Duration(seconds: 15),
+          ),
         ),
       );
       

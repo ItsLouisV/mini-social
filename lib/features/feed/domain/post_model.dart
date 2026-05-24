@@ -47,6 +47,7 @@ class PostModel {
   final int commentsCount;
   final DateTime createdAt;
   final ProfileModel? author;
+  final bool isLiked;
 
   const PostModel({
     required this.id,
@@ -57,9 +58,10 @@ class PostModel {
     this.commentsCount = 0,
     required this.createdAt,
     this.author,
+    this.isLiked = false,
   });
 
-  factory PostModel.fromJson(Map<String, dynamic> json) {
+  factory PostModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
     return PostModel(
       id: json['id'] as String,
       userId: json['user_id'] as String,
@@ -75,6 +77,7 @@ class PostModel {
           ? ProfileModel.fromJson(
               Map<String, dynamic>.from(json['profiles'] as Map))
           : null,
+      isLiked: isLiked,
     );
   }
 
@@ -90,6 +93,7 @@ class PostModel {
   PostModel copyWith({
     int? likesCount,
     int? commentsCount,
+    bool? isLiked,
   }) {
     return PostModel(
       id: id,
@@ -100,6 +104,7 @@ class PostModel {
       commentsCount: commentsCount ?? this.commentsCount,
       createdAt: createdAt,
       author: author,
+      isLiked: isLiked ?? this.isLiked,
     );
   }
 }

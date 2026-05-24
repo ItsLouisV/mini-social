@@ -20,7 +20,12 @@ class PostActions extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final likeState = ref.watch(likeNotifierProvider(post.id));
-    final isLiked = likeState.value ?? false;
+    final isLiked = likeState.value ?? post.isLiked;
+    int likesCount = post.likesCount;
+    if (likeState.value != null && likeState.value != post.isLiked) {
+      likesCount += (likeState.value == true) ? 1 : -1;
+    }
+    if (likesCount < 0) likesCount = 0;
 
     final commentsAsync = ref.watch(commentsProvider(post.id));
     final commentCount = commentsAsync.value?.length ?? post.commentsCount;
@@ -29,15 +34,15 @@ class PostActions extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
       child: Row(
         children: [
-          // Like button (no label)
+          // Like button with live count
           _ActionButton(
             icon: isLiked
                 ? CupertinoIcons.heart_fill
                 : CupertinoIcons.heart,
             color: isLiked ? Colors.red : Theme.of(context).hintColor,
-            label: '',
+            label: '$likesCount',
             onTap: () =>
-                ref.read(likeNotifierProvider(post.id).notifier).toggle(),
+                ref.read(likeNotifierProvider(post.id).notifier).toggle(isLiked),
           ),
           const SizedBox(width: 4),
 
