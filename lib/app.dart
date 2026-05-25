@@ -19,33 +19,52 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
       };
 }
 
-class MiniSocialApp extends ConsumerWidget {
+class MiniSocialApp extends ConsumerStatefulWidget {
   const MiniSocialApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(appRouterProvider);
-    final themeMode = ref.watch(themeModeProvider);
+  ConsumerState<MiniSocialApp> createState() => _MiniSocialAppState();
+}
 
-    // Lắng nghe cuộc gọi đến
-    ref.listen(incomingCallProvider, (prev, next) async {
-      final call = next.value;
-      if (call != null && call.status == CallStatus.ringing) {
-        // Tránh push nhiều lần nếu app rebuild
-        final currentLocation = router.routerDelegate.currentConfiguration.uri.toString();
-        if (currentLocation.startsWith('/call')) return;
+class _MiniSocialAppState extends ConsumerState<MiniSocialApp> {
+  bool _isShowingIncomingCall = false;
 
-        try {
-          final callerProfile = await ref.read(profileRepositoryProvider).getProfile(call.callerId);
-          router.push('/call/incoming', extra: {
-            'callModel': call,
-            'callerName': callerProfile.displayName,
-            'avatarUrl': callerProfile.avatarUrl,
-            'isVideo': call.type == CallType.video,
-          });
-        } catch (_) {}
+  @override
+  void initState() {
+    super.initState();
+
+    ref.listenManual<AsyncValue<CallModel?>>(incomingCallProvider, (prev, next) async {
+      final call = next.valueOrNull;
+
+      if (call == null) {
+        _isShowingIncomingCall = false;
+        return;
+      }
+
+      if (_isShowingIncomingCall) return;
+      if (call.status != CallStatus.ringing) return;
+
+      _isShowingIncomingCall = true;
+
+      try {
+        final callerProfile = await ref.read(profileRepositoryProvider).getProfile(call.callerId);
+        final router = ref.read(appRouterProvider);
+        router.push('/call/incoming', extra: {
+          'callModel': call,
+          'callerName': callerProfile.displayName,
+          'avatarUrl': callerProfile.avatarUrl,
+          'isVideo': call.type == CallType.video,
+        });
+      } catch (_) {
+        _isShowingIncomingCall = false;
       }
     });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final router = ref.watch(appRouterProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
       title: 'MiniSocial',

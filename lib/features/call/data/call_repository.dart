@@ -32,7 +32,7 @@ class CallRepository {
   /// Cập nhật trạng thái cuộc gọi
   Future<void> updateStatus(String callId, CallStatus status) async {
     final updates = <String, dynamic>{'status': status.name};
-    
+
     if (status == CallStatus.accepted) {
       updates['connected_at'] = DateTime.now().toUtc().toIso8601String();
     }
@@ -61,34 +61,7 @@ class CallRepository {
   Stream<CallModel?> watchIncomingCall(String currentUserId) {
     final controller = StreamController<CallModel?>();
 
-    _client
-      .from('calls')
-      .select()
-      .eq('callee_id', currentUserId)
-      .eq('status', 'ringing')
-      .order('started_at', ascending: false)
-      .limit(1)
-      .maybeSingle()
-      .then((data) {
-      if (data != null && !controller.isClosed) {
-        final call = CallModel.fromJson(data);
-        // Kiểm tra xem cuộc gọi này có bị quá hạn (ví dụ lọt từ quá khứ) không
-        final isExpired = DateTime.now().difference(call.startedAt).inSeconds > 45;
-        if (!isExpired) {
-          controller.add(call);
-        } else {
-          // Nếu cuộc gọi bị kẹt trạng thái từ tài khoản trước, cập nhật ngầm nó về 'missed' để dọn dẹp DB
-          updateStatus(call.id, CallStatus.missed);
-          controller.add(null);
-        }
-      } else {
-        if (!controller.isClosed) controller.add(null);
-      }
-    }).catchError((_) {
-      if (!controller.isClosed) controller.add(null);
-    });
-    
-    // Khởi tạo một channel độc lập cho user
+    // ✅ Subscribe channel TRƯỚC để không bỏ lỡ bất kỳ event nào trong lúc đang query
     final channel = _client.channel('incoming_calls_$currentUserId');
 
     // 1. Lắng nghe khi có cuộc gọi mới tạo (INSERT) cho mình
@@ -109,7 +82,7 @@ class CallRepository {
       },
     );
 
-    // 2. Lắng nghe khi cuộc gọi đó bị cập nhật trạng thái (UPDATE) - ví dụ: người gọi bấm Hủy
+    // 2. Lắng nghe khi cuộc gọi bị cập nhật (UPDATE) — ví dụ: người gọi bấm Hủy
     channel.onPostgresChanges(
       event: PostgresChangeEvent.update,
       schema: 'public',
@@ -121,16 +94,51 @@ class CallRepository {
       ),
       callback: (payload) {
         final data = payload.newRecord;
-        // Nếu cuộc gọi không còn ở trạng thái ringing nữa, bắn null để tắt màn hình đổ chuông
         if (data['status'] != 'ringing') {
           controller.add(null);
         }
       },
     );
 
-    channel.subscribe();
+    // ✅ Truyền callback vào subscribe để biết khi nào channel đã sẵn sàng
+    // Sau đó mới query cuộc gọi đang chờ — tránh race condition
+    channel.subscribe((status, [error]) async {
+      if (status != RealtimeSubscribeStatus.subscribed) return;
 
-    // Hủy channel khi widget không còn lắng nghe stream này nữa để tránh rò rỉ bộ nhớ
+      try {
+        final data = await _client
+            .from('calls')
+            .select()
+            .eq('callee_id', currentUserId)
+            .eq('status', 'ringing')
+            .order('started_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        if (controller.isClosed) return;
+
+        if (data == null) {
+          controller.add(null);
+          return;
+        }
+
+        final call = CallModel.fromJson(data);
+        final isExpired =
+            DateTime.now().difference(call.startedAt).inSeconds > 45;
+
+        if (isExpired) {
+          // Dọn dẹp cuộc gọi bị kẹt trạng thái từ phiên trước
+          await updateStatus(call.id, CallStatus.missed);
+          controller.add(null);
+        } else {
+          controller.add(call);
+        }
+      } catch (_) {
+        if (!controller.isClosed) controller.add(null);
+      }
+    });
+
+    // Hủy channel khi không còn lắng nghe stream để tránh rò rỉ bộ nhớ
     controller.onCancel = () {
       _client.removeChannel(channel);
       controller.close();
@@ -166,4 +174,3 @@ class CallRepository {
     return controller.stream;
   }
 }
-

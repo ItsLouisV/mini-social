@@ -119,6 +119,7 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
   CallModel? _currentCall;
   String? _preFetchedToken;
   Room? _preparedRoom;
+  bool _cameraOff = false;
 
   Future<void> _preWarmConnection(CallModel call) async {
     try {
@@ -157,7 +158,7 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
           ),
         );
         
-        await room.localParticipant?.setCameraEnabled(true);
+        await room.localParticipant?.setCameraEnabled(!_cameraOff);
         await room.localParticipant?.setMicrophoneEnabled(true);
       } else {
         await room.prepareConnection(url, token);
@@ -217,6 +218,7 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
         'isVideo': widget.isVideo,
         'prePreparedRoom': _preparedRoom,
         'preFetchedToken': _preFetchedToken,
+        'initialCameraOff': _cameraOff,
       });
     }
   }
@@ -275,7 +277,7 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
 
     final localParticipant = _preparedRoom?.localParticipant;
     final trackPub = localParticipant?.videoTrackPublications.firstOrNull;
-    final hasVideo = widget.isVideo && trackPub != null && trackPub.track != null && !trackPub.muted;
+    final hasVideo = widget.isVideo && !_cameraOff && trackPub != null && trackPub.track != null && !trackPub.muted;
 
     const avatarRadius = 56.0;
 
@@ -447,26 +449,64 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
                     ],
                   ),
 
-                  // Nút huỷ (mờ dần khi kết nối)
+                  // Nút huỷ & Tắt/Bật cam (mờ dần khi kết nối)
                   AnimatedOpacity(
                     opacity: _connecting ? 0.0 : 1.0,
                     duration: const Duration(milliseconds: 300),
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 48),
-                      child: _CallActionButton(
-                        icon: CupertinoIcons.phone_down_fill,
-                        label: 'Huỷ',
-                        color: AppColors.error,
-                        onTap: _connecting
-                            ? null
-                            : () async {
-                                if (_currentCall != null) {
-                                  await ref.read(callRepositoryProvider).updateStatus(_currentCall!.id, CallStatus.cancelled);
-                                }
-                                widget.onCancel?.call();
-                                _sendLogAndPop(widget.isVideo ? 'Cuộc gọi video đã hủy' : 'Cuộc gọi thoại đã hủy');
-                              },
-                      ),
+                      padding: const EdgeInsets.only(bottom: 48, left: 24, right: 24),
+                      child: widget.isVideo
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                // Nút Tắt/Bật cam
+                                _CallActionButton(
+                                  icon: _cameraOff
+                                      ? CupertinoIcons.video_camera_solid
+                                      : CupertinoIcons.video_camera,
+                                  label: _cameraOff ? 'Bật cam' : 'Tắt cam',
+                                  color: _cameraOff
+                                      ? Colors.white.withValues(alpha: 0.3)
+                                      : Colors.white.withValues(alpha: 0.15),
+                                  onTap: () async {
+                                    final targetState = !_cameraOff;
+                                    await _preparedRoom?.localParticipant?.setCameraEnabled(!targetState);
+                                    setState(() {
+                                      _cameraOff = targetState;
+                                    });
+                                  },
+                                ),
+                                // Nút Huỷ
+                                _CallActionButton(
+                                  icon: CupertinoIcons.phone_down_fill,
+                                  label: 'Huỷ',
+                                  color: AppColors.error,
+                                  onTap: _connecting
+                                      ? null
+                                      : () async {
+                                          if (_currentCall != null) {
+                                            await ref.read(callRepositoryProvider).updateStatus(_currentCall!.id, CallStatus.cancelled);
+                                          }
+                                          widget.onCancel?.call();
+                                          _sendLogAndPop('Cuộc gọi video đã hủy');
+                                        },
+                                ),
+                              ],
+                            )
+                          : _CallActionButton(
+                              icon: CupertinoIcons.phone_down_fill,
+                              label: 'Huỷ',
+                              color: AppColors.error,
+                              onTap: _connecting
+                                  ? null
+                                  : () async {
+                                      if (_currentCall != null) {
+                                        await ref.read(callRepositoryProvider).updateStatus(_currentCall!.id, CallStatus.cancelled);
+                                      }
+                                      widget.onCancel?.call();
+                                      _sendLogAndPop('Cuộc gọi thoại đã hủy');
+                                    },
+                            ),
                     ),
                   ),
                 ],
@@ -821,6 +861,7 @@ class ActiveCallScreen extends ConsumerStatefulWidget {
   final VoidCallback? onEnd;
   final Room? prePreparedRoom;
   final String? preFetchedToken;
+  final bool initialCameraOff;
 
   const ActiveCallScreen({
     super.key,
@@ -831,6 +872,7 @@ class ActiveCallScreen extends ConsumerStatefulWidget {
     this.onEnd,
     this.prePreparedRoom,
     this.preFetchedToken,
+    this.initialCameraOff = false,
   });
 
   @override
@@ -936,7 +978,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
         // 3. Enable tracks
         await room.localParticipant?.setMicrophoneEnabled(true);
         if (widget.isVideo) {
-          await room.localParticipant?.setCameraEnabled(true);
+          await room.localParticipant?.setCameraEnabled(!widget.initialCameraOff);
         }
       } else {
         debugPrint('👉 Room đã kết nối từ trước, bỏ qua bước connect và bật mic/camera!');

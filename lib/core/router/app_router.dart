@@ -188,6 +188,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               onEnd:          extra['onEnd']      as VoidCallback?,
               prePreparedRoom: extra['prePreparedRoom'],
               preFetchedToken: extra['preFetchedToken'] as String?,
+              initialCameraOff: extra['initialCameraOff'] as bool? ?? false,
             ),
           );
         },

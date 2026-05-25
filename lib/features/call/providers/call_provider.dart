@@ -9,22 +9,20 @@ final callRepositoryProvider = Provider<CallRepository>((ref) {
   return CallRepository(Supabase.instance.client);
 });
 
-/// Theo dõi cuộc gọi đến cho current user (Đã sửa lỗi chết luồng)
+/// Theo dõi cuộc gọi đến cho current user
 final incomingCallProvider = StreamProvider<CallModel?>((ref) {
   final repo = ref.watch(callRepositoryProvider);
 
-  // Sử dụng onAuthStateChange để tự động tạo lại Stream khi User ID thay đổi
-  return Supabase.instance.client.auth.onAuthStateChange.asyncExpand((authState) {
-    final currentUserId = authState.session?.user.id;
-    
-    if (currentUserId == null) {
-      // Nếu chưa có session (chưa đăng nhập), trả về stream rỗng an toàn
-      return Stream.value(null);
-    }
-    
-    // Nếu có userId hợp lệ, kích hoạt Realtime Channel từ repository
-    return repo.watchIncomingCall(currentUserId);
-  });
+  // Lấy userId ngay lập tức — không chờ auth event
+  // Đây là nguyên nhân Android không nhận được cuộc gọi:
+  // onAuthStateChange chỉ bắn khi login/logout, không bắn khi app khởi động bình thường
+  final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+  if (currentUserId == null) {
+    return Stream.value(null);
+  }
+
+  return repo.watchIncomingCall(currentUserId);
 });
 
 /// Theo dõi trạng thái của 1 cuộc gọi cụ thể
@@ -32,4 +30,3 @@ final callStateProvider = StreamProvider.family<CallModel, String>((ref, callId)
   final repo = ref.watch(callRepositoryProvider);
   return repo.watchCall(callId);
 });
-
