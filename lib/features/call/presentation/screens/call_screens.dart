@@ -135,15 +135,44 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
           dynacast: true,
         ),
       );
-      await room.prepareConnection(url, token);
+      
+      if (widget.isVideo) {
+        if (!kIsWeb) {
+          await [Permission.camera, Permission.microphone].request();
+        }
+        if (!mounted) return;
+        
+        await room.connect(
+          url,
+          token,
+          connectOptions: ConnectOptions(
+            timeouts: Timeouts(
+              connection: const Duration(seconds: 20),
+              peerConnection: const Duration(seconds: 20),
+              publish: const Duration(seconds: 15),
+              subscribe: const Duration(seconds: 15),
+              debounce: const Duration(milliseconds: 100),
+              iceRestart: const Duration(seconds: 15),
+            ),
+          ),
+        );
+        
+        await room.localParticipant?.setCameraEnabled(true);
+        await room.localParticipant?.setMicrophoneEnabled(true);
+      } else {
+        await room.prepareConnection(url, token);
+      }
+      
       if (!mounted) {
         await room.disconnect();
         return;
       }
-      _preparedRoom = room;
-      debugPrint('⚡⚡ [OutgoingCallScreen] Pre-warm LiveKit connection THÀNH CÔNG!');
+      setState(() {
+        _preparedRoom = room;
+      });
+      debugPrint('⚡⚡ [OutgoingCallScreen] Pre-warm/Connect LiveKit connection THÀNH CÔNG!');
     } catch (e) {
-      debugPrint('⚠️ [OutgoingCallScreen] Pre-warm LiveKit connection thất bại: $e');
+      debugPrint('⚠️ [OutgoingCallScreen] Pre-warm/Connect LiveKit connection thất bại: $e');
     }
   }
 
@@ -244,6 +273,10 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
       });
     }
 
+    final localParticipant = _preparedRoom?.localParticipant;
+    final trackPub = localParticipant?.videoTrackPublications.firstOrNull;
+    final hasVideo = widget.isVideo && trackPub != null && trackPub.track != null && !trackPub.muted;
+
     const avatarRadius = 56.0;
 
     // Đường dẫn ảnh nền tuỳ chỉnh (sau này bạn thêm file thì đổi giá trị null thành 'assets/images/tên_file.jpg')
@@ -253,8 +286,13 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Background (Ảnh tuỳ chỉnh hoặc ảnh avatar làm mờ)
-          if (customBackgroundPath != null)
+          // 1. Background (Ảnh tuỳ chỉnh, ảnh avatar làm mờ, hoặc preview camera của người gọi)
+          if (hasVideo) ...[
+            VideoTrackRenderer(trackPub.track as VideoTrack),
+            Container(
+              color: Colors.black.withValues(alpha: 0.35),
+            ),
+          ] else if (customBackgroundPath != null)
             Image.asset(customBackgroundPath, fit: BoxFit.cover)
           else if (widget.calleeAvatarUrl != null)
             Image.network(widget.calleeAvatarUrl!, fit: BoxFit.cover)
@@ -262,7 +300,7 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
             Container(color: const Color(0xFF1A2940)),
             
           // 2. Lớp phủ
-          if (customBackgroundPath == null)
+          if (!hasVideo && customBackgroundPath == null)
             BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
               child: Container(
@@ -851,9 +889,14 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
 
       debugPrint('2. Đang tạo Room và xin quyền...');
       Room room;
+      bool isPreConnected = false;
       if (widget.prePreparedRoom != null) {
         room = widget.prePreparedRoom!;
         debugPrint('👉 Sử dụng pre-prepared Room instance!');
+        if (room.localParticipant != null) {
+          isPreConnected = true;
+          debugPrint('👉 Room đã được kết nối từ OutgoingCallScreen!');
+        }
       } else {
         room = Room(
           roomOptions: const RoomOptions(
@@ -869,36 +912,42 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
       }
 
       final url = ref.read(callRepositoryProvider).getLiveKitUrl();
-      debugPrint('3. Đang gọi room.connect tới URL: $url');
       
-      await room.connect(
-        url,
-        token,
-        connectOptions: ConnectOptions(
-          timeouts: Timeouts(
-            connection: const Duration(seconds: 20),
-            peerConnection: const Duration(seconds: 20),
-            publish: const Duration(seconds: 15),
-            subscribe: const Duration(seconds: 15),
-            debounce: const Duration(milliseconds: 100),
-            iceRestart: const Duration(seconds: 15),
+      if (!isPreConnected) {
+        debugPrint('3. Đang gọi room.connect tới URL: $url');
+        await room.connect(
+          url,
+          token,
+          connectOptions: ConnectOptions(
+            timeouts: Timeouts(
+              connection: const Duration(seconds: 20),
+              peerConnection: const Duration(seconds: 20),
+              publish: const Duration(seconds: 15),
+              subscribe: const Duration(seconds: 15),
+              debounce: const Duration(milliseconds: 100),
+              iceRestart: const Duration(seconds: 15),
+            ),
           ),
-        ),
-      );
-      
-      debugPrint('👉 Đã kết nối WebRTC thành công!');
+        );
+        
+        debugPrint('👉 Đã kết nối WebRTC thành công!');
 
-      debugPrint('4. Đang bật microphone/camera...');
-      // 3. Enable tracks
-      await room.localParticipant?.setMicrophoneEnabled(true);
-      if (widget.isVideo) {
-        await room.localParticipant?.setCameraEnabled(true);
+        debugPrint('4. Đang bật microphone/camera...');
+        // 3. Enable tracks
+        await room.localParticipant?.setMicrophoneEnabled(true);
+        if (widget.isVideo) {
+          await room.localParticipant?.setCameraEnabled(true);
+        }
+      } else {
+        debugPrint('👉 Room đã kết nối từ trước, bỏ qua bước connect và bật mic/camera!');
       }
 
       if (mounted) {
         setState(() {
           _room = room;
           _localParticipant = room.localParticipant;
+          _cameraOff = !(room.localParticipant?.isCameraEnabled() ?? true);
+          _muted = !(room.localParticipant?.isMicrophoneEnabled() ?? true);
         });
 
         // Listen for participants
