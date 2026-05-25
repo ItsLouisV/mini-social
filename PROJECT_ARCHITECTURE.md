@@ -35,14 +35,14 @@ graph TD
     end
 
     %% Connections
-    Flutter -->|State updates & cache| Riverpod
+    Flutter -->|State updates and cache| Riverpod
     Flutter -->|Authentication| Auth
-    Flutter -->|PostgreSQL Query (Supabase SDK)| Database
+    Flutter -->|PostgreSQL Query using Supabase SDK| Database
     Flutter -->|Subscribe updates| Realtime
     Flutter -->|Upload/Download Media| Storage
     Flutter -->|Trigger token generation| Functions
     Functions -->|Generate Token via API Key| LK_Server
-    WebRTC -->|SFU Media Stream (WebRTC)| LK_Server
+    WebRTC -->|SFU Media Stream WebRTC| LK_Server
     
     %% Assign Styles
     class Flutter,Riverpod,WebRTC client;
@@ -300,52 +300,51 @@ Hệ thống xác định rõ 3 nhóm tác nhân chính tham gia tương tác:
 Dưới đây là sơ đồ Use Cases biểu diễn đầy đủ tất cả các tính năng nghiệp vụ của một Thành viên mạng xã hội MiniSocial:
 
 ```mermaid
-usecaseDiagram
+graph LR
     %% Actors
-    actor "Khách vãng lai" as Anon
-    actor "Thành viên" as User
-    actor "Đối phương trò chuyện" as Peer
+    Anon["👤 Khách vãng lai"]
+    User["👥 Thành viên"]
+    Peer["💬 Đối phương trò chuyện"]
 
-    %% Inheritence
-    User --> Anon : "Bao gồm quyền"
+    %% Inheritance (User has Anon's rights)
+    User -.->|Kế thừa| Anon
 
-    %% Boundary
     subgraph He_Thong_MiniSocial ["Hệ thống Mạng xã hội MiniSocial"]
         %% Auth
-        usecase "Đăng ký tài khoản" as UC_Register
-        usecase "Đăng nhập hệ thống" as UC_Login
-        usecase "Yêu cầu khôi phục mật khẩu" as UC_Forgot
+        UC_Register(("Đăng ký tài khoản"))
+        UC_Login(("Đăng nhập hệ thống"))
+        UC_Forgot(("Yêu cầu khôi phục mật khẩu"))
         
         %% Profile
-        usecase "Xem trang cá nhân & Stats" as UC_ViewProfile
-        usecase "Chỉnh sửa hồ sơ cá nhân" as UC_EditProfile
-        usecase "Tải lên Ảnh đại diện / Ảnh bìa" as UC_UploadAvt
-        usecase "Xem danh sách Followers/Following" as UC_FollowList
+        UC_ViewProfile(("Xem trang cá nhân & Stats"))
+        UC_EditProfile(("Chỉnh sửa hồ sơ cá nhân"))
+        UC_UploadAvt(("Tải lên Ảnh đại diện / Ảnh bìa"))
+        UC_FollowList(("Xem danh sách Followers/Following"))
         
         %% Feed & Posts
-        usecase "Xem bảng tin (Feed)" as UC_ViewFeed
-        usecase "Đăng bài viết mới (Nhiều ảnh/Video)" as UC_CreatePost
-        usecase "Xóa bài viết của mình" as UC_DeletePost
+        UC_ViewFeed(("Xem bảng tin Feed"))
+        UC_CreatePost(("Đăng bài viết mới"))
+        UC_DeletePost(("Xóa bài viết của mình"))
         
         %% Social Interaction
-        usecase "Thích bài viết (Optimistic)" as UC_LikePost
-        usecase "Viết bình luận mới" as UC_AddComment
-        usecase "Thích bình luận (Optimistic)" as UC_LikeComment
-        usecase "Trả lời bình luận (Reply)" as UC_ReplyComment
-        usecase "Theo dõi người khác (Follow)" as UC_Follow
-        usecase "Xem hộp thư thông báo thời gian thực" as UC_Notif
+        UC_LikePost(("Thích bài viết Optimistic"))
+        UC_AddComment(("Viết bình luận mới"))
+        UC_LikeComment(("Thích bình luận"))
+        UC_ReplyComment(("Trả lời bình luận"))
+        UC_Follow(("Theo dõi người khác"))
+        UC_Notif(("Xem hộp thư thông báo"))
         
         %% Realtime Chat
-        usecase "Trò chuyện trực tuyến (Tin nhắn văn bản/ảnh/ghi âm)" as UC_Chat
-        usecase "Ẩn đoạn chat riêng tư (Mã khóa Passcode)" as UC_HideChat
-        usecase "Ghim cuộc trò chuyện lên đầu" as UC_PinChat
-        usecase "Ghim tin nhắn quan trọng" as UC_PinMsg
-        usecase "Trả lời tin nhắn trích dẫn (Reply)" as UC_ReplyMsg
+        UC_Chat(("Trò chuyện trực tuyến"))
+        UC_HideChat(("Ẩn đoạn chat riêng tư"))
+        UC_PinChat(("Ghim cuộc trò chuyện"))
+        UC_PinMsg(("Ghim tin nhắn quan trọng"))
+        UC_ReplyMsg(("Trả lời tin nhắn"))
         
         %% Calling WebRTC
-        usecase "Gọi thoại WebRTC" as UC_VoiceCall
-        usecase "Gọi video WebRTC" as UC_VideoCall
-        usecase "Bật camera người gọi khi đang chờ đổ chuông" as UC_PreCallCam
+        UC_VoiceCall(("Gọi thoại WebRTC"))
+        UC_VideoCall(("Gọi video WebRTC"))
+        UC_PreCallCam(("Bật camera người gọi khi chờ"))
     end
 
     %% Anon Connections
@@ -370,18 +369,18 @@ usecaseDiagram
     User --> UC_VoiceCall
     User --> UC_VideoCall
 
-    %% Extend / Include
-    UC_EditProfile <.. UC_UploadAvt : "<<include>>"
-    UC_AddComment <.. UC_LikeComment : "<<extend>>"
-    UC_AddComment <.. UC_ReplyComment : "<<extend>>"
-    UC_Chat <.. UC_PinMsg : "<<extend>>"
-    UC_Chat <.. UC_ReplyMsg : "<<extend>>"
-    UC_VideoCall <.. UC_PreCallCam : "<<include>>"
+    %% Extend / Include relations (dotted arrows)
+    UC_UploadAvt -.->|include| UC_EditProfile
+    UC_LikeComment -.->|extend| UC_AddComment
+    UC_ReplyComment -.->|extend| UC_AddComment
+    UC_PinMsg -.->|extend| UC_Chat
+    UC_ReplyMsg -.->|extend| UC_Chat
+    UC_PreCallCam -.->|include| UC_VideoCall
 
-    %% Peer Interactions
-    UC_Chat --> Peer : "Đồng bộ"
-    UC_VoiceCall --> Peer : "Rung chuông"
-    UC_VideoCall --> Peer : "Rung chuông"
+    %% Peer Connections
+    UC_Chat --> Peer
+    UC_VoiceCall --> Peer
+    UC_VideoCall --> Peer
 ```
 
 ---
