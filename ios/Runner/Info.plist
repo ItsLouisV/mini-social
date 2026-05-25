@@ -65,6 +65,9 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Ứng dụng cần quyền sử dụng Camera để thực hiện cuộc gọi video trực tuyến.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Ứng dụng cần quyền sử dụng Micro để ghi âm tin nhắn thoại và thực hiện cuộc gọi thoại/video.</string>
 </dict>
 </plist>

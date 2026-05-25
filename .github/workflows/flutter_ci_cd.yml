@@ -1,0 +1,81 @@
+name: Flutter CI/CD Build (Android APK & Web)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # Cho phép kích hoạt thủ công từ tab Actions trên GitHub
+
+jobs:
+  build:
+    name: Build APK and Web Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout mã nguồn từ kho lưu trữ Git
+      - name: 📁 Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Thiết lập Java 17 (Cần thiết cho công cụ xây dựng Android Gradle)
+      - name: ☕ Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle' # Tự động cache Gradle để tối ưu tốc độ build lần sau
+
+      # 3. Cài đặt và cấu hình Flutter SDK phiên bản Stable mới nhất
+      - name: 🚀 Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true # Tự động cache Flutter SDK và dependencies
+
+      # 4. Khởi tạo file .env giả định (Tránh lỗi biên dịch asset biên dịch Flutter)
+      # Do pubspec.yaml định nghĩa hằng số asset '.env' nên build sẽ lỗi nếu thiếu file này
+      - name: 🔑 Initialize Environment File
+        run: |
+          if [ -f .env.example ]; then
+            cp .env.example .env
+          else
+            echo "SUPABASE_URL=https://dummy-url.supabase.co" > .env
+            echo "SUPABASE_ANON_KEY=dummy-key" >> .env
+            echo "LIVEKIT_URL=wss://dummy-url.livekit.cloud" >> .env
+          fi
+
+      # 5. Tải về toàn bộ Flutter Dependencies
+      - name: 📦 Install Dependencies
+        run: flutter pub get
+
+      # 6. Chạy mã nguồn sinh code tự động (build_runner) cho Riverpod
+      - name: 🛠️ Generate Riverpod Code (build_runner)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      # 7. Biên dịch ra ứng dụng Android (.apk) ở chế độ Release
+      - name: 🤖 Build Android APK
+        run: flutter build apk --release
+
+      # 8. Biên dịch ra phiên bản Web ở chế độ Release
+      - name: 🌐 Build Flutter Web
+        run: flutter build web --release
+
+      # 9. Lưu trữ File APK đã build làm sản phẩm Action (Artifact)
+      - name: 📤 Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7 # Lưu trữ trong 7 ngày
+
+      # 10. Lưu trữ thư mục Web đã build làm sản phẩm Action (Artifact)
+      - name: 📤 Upload Web Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-release-build
+          path: build/web/
+          retention-days: 7 # Lưu trữ trong 7 ngày
