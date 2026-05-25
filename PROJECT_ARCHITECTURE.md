@@ -281,8 +281,8 @@ erDiagram
 
 Hệ thống xác định rõ 3 nhóm tác nhân chính tham gia tương tác:
 
-1. **Khách vãng lai (Anonymous / Unauthenticated User)**:
-   - Người dùng mới tải ứng dụng hoặc chưa đăng nhập.
+1. **Người dùng chưa đăng nhập (Unauthenticated User)**:
+   - Người dùng mới tải ứng dụng (chưa có tài khoản) hoặc thành viên đã có tài khoản nhưng hiện đang ở trạng thái đăng xuất.
    - Chỉ có quyền truy cập các tính năng thuộc mô-đun **Auth** (Xem trang đăng nhập, đăng ký, khôi phục mật khẩu). Hoàn toàn bị chặn khỏi dữ liệu xã hội nhờ cơ chế **Auth Guard** trên bộ định tuyến GoRouter.
 
 2. **Thành viên đã xác thực (Authenticated User)**:
@@ -302,7 +302,7 @@ Dưới đây là sơ đồ Use Cases biểu diễn đầy đủ tất cả các
 ```mermaid
 graph LR
     %% Actors
-    Anon["👤 Khách vãng lai"]
+    Anon["👤 Chưa đăng nhập"]
     User["👥 Thành viên"]
     Peer["💬 Đối phương trò chuyện"]
 
@@ -389,8 +389,8 @@ graph LR
 
 | ID | Nhóm tính năng | Tên Use Case | Tác nhân chính | Mô tả luồng hoạt động chính |
 | :--- | :--- | :--- | :--- | :--- |
-| **UC-01** | **Authentication** | Đăng ký tài khoản | Khách vãng lai | Người dùng nhập Email, Mật khẩu, Tên đầy đủ → Supabase khởi tạo tài khoản → Kích hoạt Trigger tự động tạo bản ghi `profiles` → Gửi mail xác nhận kích hoạt. |
-| **UC-02** | **Authentication** | Đăng nhập hệ thống | Khách vãng lai | Người dùng nhập Email + Mật khẩu hợp lệ → Hệ thống cấp token JWT → Lưu phiên làm việc thông qua SecureStorage → Chuyển hướng vào trang chính `/feed`. |
+| **UC-01** | **Authentication** | Đăng ký tài khoản | Người dùng chưa đăng nhập | Người dùng nhập Email, Mật khẩu, Tên đầy đủ → Supabase khởi tạo tài khoản → Kích hoạt Trigger tự động tạo bản ghi `profiles` → Gửi mail xác nhận kích hoạt. |
+| **UC-02** | **Authentication** | Đăng nhập hệ thống | Người dùng chưa đăng nhập | Người dùng nhập Email + Mật khẩu hợp lệ → Hệ thống cấp token JWT → Lưu phiên làm việc thông qua SecureStorage → Chuyển hướng vào trang chính `/feed`. |
 | **UC-03** | **Profile** | Xem & Cập nhật thông tin | Thành viên | Người dùng xem thông tin số lượng follow cá nhân, đổi tên, viết bio. Cho phép chọn ảnh mới tải lên storage bucket `avatars` / `covers` và cập nhật tức thời giao diện. |
 | **UC-04** | **Profile** | Xem danh sách kết nối | Thành viên | Người dùng nhấp chọn số lượng Người theo dõi hoặc Đang theo dõi → Mở màn hình danh sách 2 tab phong cách iOS → Thực hiện theo dõi/bỏ theo dõi tức thời bằng nút hành động nhanh. |
 | **UC-05** | **Feed & Posts** | Tải bảng tin & Đăng bài | Thành viên | Người dùng tải bảng tin gồm bài viết của bản thân và những người đang follow. Để đăng bài mới, chọn tối đa 5 ảnh hoặc video từ thư viện, ghi caption, hệ thống tự nén trước khi đưa lên storage. |
