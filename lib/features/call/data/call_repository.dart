@@ -57,9 +57,36 @@ class CallRepository {
     return res.data['token'] as String;
   }
 
-  /// [ĐÃ SỬA LỖI] Lắng nghe cuộc gọi đến bằng Realtime Channel (Postgres Changes)
+  /// Lắng nghe cuộc gọi đến bằng Realtime Channel (Postgres Changes)
   Stream<CallModel?> watchIncomingCall(String currentUserId) {
     final controller = StreamController<CallModel?>();
+
+    _client
+      .from('calls')
+      .select()
+      .eq('callee_id', currentUserId)
+      .eq('status', 'ringing')
+      .order('started_at', ascending: false)
+      .limit(1)
+      .maybeSingle()
+      .then((data) {
+      if (data != null && !controller.isClosed) {
+        final call = CallModel.fromJson(data);
+        // Kiểm tra xem cuộc gọi này có bị quá hạn (ví dụ lọt từ quá khứ) không
+        final isExpired = DateTime.now().difference(call.startedAt).inSeconds > 45;
+        if (!isExpired) {
+          controller.add(call);
+        } else {
+          // Nếu cuộc gọi bị kẹt trạng thái từ tài khoản trước, cập nhật ngầm nó về 'missed' để dọn dẹp DB
+          updateStatus(call.id, CallStatus.missed);
+          controller.add(null);
+        }
+      } else {
+        if (!controller.isClosed) controller.add(null);
+      }
+    }).catchError((_) {
+      if (!controller.isClosed) controller.add(null);
+    });
     
     // Khởi tạo một channel độc lập cho user
     final channel = _client.channel('incoming_calls_$currentUserId');
@@ -112,7 +139,7 @@ class CallRepository {
     return controller.stream;
   }
 
-  /// [ĐÃ SỬA LỖI] Lắng nghe thay đổi status của 1 cuộc gọi cụ thể bằng Realtime Channel
+  /// Lắng nghe thay đổi status của 1 cuộc gọi cụ thể bằng Realtime Channel
   Stream<CallModel> watchCall(String callId) {
     final controller = StreamController<CallModel>();
     final channel = _client.channel('call_state_$callId');

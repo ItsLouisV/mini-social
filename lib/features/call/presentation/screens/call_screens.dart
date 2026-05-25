@@ -467,6 +467,11 @@ class IncomingCallScreen extends ConsumerStatefulWidget {
   ConsumerState<IncomingCallScreen> createState() => _IncomingCallScreenState();
 }
 
+// THÊM ĐOẠN NÀY ĐỂ CHECK CUỘC GỌI QUÁ HẠN
+bool _isCallExpired(DateTime startedAt) {
+  return DateTime.now().difference(startedAt).inSeconds > 59; // Quá 59s coi như cuộc gọi cũ
+}
+
 class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
     with TickerProviderStateMixin {
   late final AnimationController _shakeCtrl;
@@ -480,6 +485,16 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
   @override
   void initState() {
     super.initState();
+
+    // Nếu cuộc gọi truyền vào đã không còn 'ringing' hoặc đã quá hạn, đóng màn hình luôn
+    if (widget.callModel != null) {
+      if (widget.callModel!.status != CallStatus.ringing || _isCallExpired(widget.callModel!.startedAt)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.pop();
+        });
+        return; // Không chạy tiếp logic bên dưới nữa
+      }
+    }
 
     _shakeCtrl = AnimationController(
       vsync: this,
@@ -507,7 +522,7 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
       return mounted;
     });
 
-    // Phát cộng chuông gọi đến
+    // Phát cộng chuông gọi đến khi mọi điều kiện kiểm tra bên trên đều hợp lệ
     CallAudioService().playRingtone();
 
     if (widget.callModel != null) {
@@ -561,12 +576,18 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
       ref.listen<AsyncValue<CallModel>>(callStateProvider(widget.callModel!.id), (prev, next) {
         if (next.hasValue) {
           final call = next.value!;
-          if (call.status == CallStatus.cancelled || call.status == CallStatus.missed) {
+          if (call.status == CallStatus.cancelled || call.status == CallStatus.missed || call.status != CallStatus.ringing) {
             CallAudioService().stop();
             if (mounted) context.pop();
           }
         }
       });
+
+      // Kiểm tra thêm một lần nữa ở hàm build cho chắc chắn
+      if (widget.callModel!.status != CallStatus.ringing || _isCallExpired(widget.callModel!.startedAt)) {
+         CallAudioService().stop();
+         return const Scaffold(body: SizedBox.shrink()); // Trả về giao diện trống trước khi bị pop
+      }
     }
 
     // Đường dẫn ảnh nền tuỳ chỉnh (sau này bạn thêm file thì đổi giá trị null thành 'assets/images/tên_file.jpg')
