@@ -10,6 +10,8 @@ import 'collections/cached_message.dart';
 import 'collections/cached_profile.dart';
 import 'collections/failed_message.dart';
 
+export 'collections/failed_message.dart';
+
 /// Repository thao tác với ObjectBox local database.
 ///
 /// Cung cấp CRUD cho conversations, messages, profiles và failed messages

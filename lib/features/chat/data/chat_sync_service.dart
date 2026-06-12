@@ -4,7 +4,7 @@ import '../../profile/domain/profile_model.dart';
 import '../domain/conversation_model.dart';
 import '../domain/message_model.dart';
 import 'chat_repository.dart';
-import 'local_chat_repository.dart';
+import 'local_chat_repository_exports.dart';
 import '../providers/chat_provider.dart' show chatRepositoryProvider;
 
 /// Service điều phối đồng bộ giữa Supabase (remote) và ObjectBox (local).

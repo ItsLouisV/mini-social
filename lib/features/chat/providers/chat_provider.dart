@@ -6,8 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/chat_repository.dart';
 import '../data/chat_sync_service.dart';
-import '../data/local_chat_repository.dart';
-import '../data/collections/failed_message.dart';
+import '../data/local_chat_repository_exports.dart';
 import '../domain/conversation_model.dart';
 import '../domain/message_model.dart';
 import '../domain/pinned_message_model.dart';
