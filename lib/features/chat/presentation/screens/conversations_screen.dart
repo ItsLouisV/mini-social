@@ -14,6 +14,7 @@ import '../../providers/chat_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
 import '../widgets/new_message_modal.dart';
 import '../widgets/passcode_dialog.dart';
+import '../../../../core/services/connectivity_service.dart';
 
 class ConversationsScreen extends ConsumerStatefulWidget {
   const ConversationsScreen({super.key});
@@ -38,6 +39,8 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
     final convAsync = ref.watch(conversationsProvider);
     final currentUserId = ref.watch(currentUserIdProvider);
     final theme = Theme.of(context);
+
+    final isOnline = ref.watch(isOnlineProvider);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -137,6 +140,27 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
 
           return Column(
             children: [
+              if (!isOnline)
+                Container(
+                  width: double.infinity,
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.wifi_off, color: Colors.amber, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Đang ngoại tuyến. Dùng bản lưu ngoại tuyến.',
+                        style: TextStyle(
+                          color: theme.brightness == Brightness.dark ? Colors.amber[200] : Colors.amber[800],
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               // Search bar
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),

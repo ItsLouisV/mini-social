@@ -359,10 +359,42 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
+      final currentUserId = ref.read(currentUserIdProvider) ?? '';
+      try {
+        if (image != null) {
+          await ref
+              .read(realtimeMessagesProvider(widget.conversationId).notifier)
+              .addFailedMessage(
+                conversationId: widget.conversationId,
+                senderId: currentUserId,
+                content: text.isNotEmpty ? text : 'Đã gửi một ảnh',
+                mediaUrl: image.path,
+                messageType: 'image',
+                replyToMessageId: replyId,
+                replyContent: _replyingToMessage?.content,
+                replySenderId: _replyingToMessage?.senderId,
+              );
+        } else if (text.isNotEmpty) {
+          await ref
+              .read(realtimeMessagesProvider(widget.conversationId).notifier)
+              .addFailedMessage(
+                conversationId: widget.conversationId,
+                senderId: currentUserId,
+                content: text,
+                messageType: 'text',
+                replyToMessageId: replyId,
+                replyContent: _replyingToMessage?.content,
+                replySenderId: _replyingToMessage?.senderId,
+              );
+        }
+      } catch (err) {
+        debugPrint('Failed to save offline message: $err');
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gửi thất bại: ${e.toString()}'),
+            content: const Text('Gửi thất bại. Tin nhắn đã lưu ngoại tuyến.'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -557,9 +589,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             Expanded(
               child: messagesAsync.when(
                 data: (messagesState) {
-                  _updateCacheIfNeeded(messagesState.messages);
+                  final failedModels = messagesState.failedMessages.map((f) {
+                    return MessageModel(
+                      id: f.localId,
+                      conversationId: f.conversationId,
+                      senderId: f.senderId,
+                      content: f.content,
+                      mediaUrl: f.mediaUrl,
+                      messageType: f.messageType,
+                      createdAt: DateTime.parse(f.createdAt).toLocal(),
+                      replyToMessageId: f.replyToMessageId,
+                      replyToMessage: (f.replyToMessageId != null && f.replySenderId != null)
+                          ? MessageModel(
+                              id: f.replyToMessageId!,
+                              conversationId: f.conversationId,
+                              senderId: f.replySenderId!,
+                              content: f.replyContent,
+                              messageType: 'text',
+                              createdAt: DateTime.now(),
+                            )
+                          : null,
+                      isFailed: true,
+                    );
+                  }).toList();
+
+                  final allMessages = [...failedModels, ...messagesState.messages];
+                  allMessages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+                  _updateCacheIfNeeded(allMessages);
                   return _buildMessageList(
-                      messagesState, currentUserId, otherUserName, pinnedIds);
+                    messagesState,
+                    allMessages,
+                    currentUserId,
+                    otherUserName,
+                    pinnedIds,
+                  );
                 },
                 loading: () =>
                     const Center(child: CupertinoActivityIndicator()),
@@ -577,6 +641,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Widget _buildMessageList(
     ChatMessagesState messagesState,
+    List<MessageModel> messages,
     String currentUserId,
     String otherUserName,
     Set<String> pinnedIds,
@@ -590,7 +655,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
-    final messages = messagesState.messages;
     final isMine =
         messages.isNotEmpty && messages.first.senderId == currentUserId;
     final lastIsSeen = messages.isNotEmpty && messages.first.isSeen;
@@ -1281,7 +1345,7 @@ class _TimeDivider extends StatelessWidget {
 
 // ── Message Bubble ────────────────────────────────────────────────────────────
 
-class _MessageBubble extends StatefulWidget {
+class _MessageBubble extends ConsumerStatefulWidget {
   final MessageModel message;
   final bool isMine;
   final bool showInlineTime;
@@ -1312,10 +1376,10 @@ class _MessageBubble extends StatefulWidget {
   });
 
   @override
-  State<_MessageBubble> createState() => _MessageBubbleState();
+  ConsumerState<_MessageBubble> createState() => _MessageBubbleState();
 }
 
-class _MessageBubbleState extends State<_MessageBubble> {
+class _MessageBubbleState extends ConsumerState<_MessageBubble> {
   bool _tapped = false;
 
   String get _timeStr {
@@ -1396,6 +1460,55 @@ class _MessageBubbleState extends State<_MessageBubble> {
     );
   }
 
+  void _showFailedMessageMenu(BuildContext context) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('Tin nhắn chưa được gửi'),
+        message: const Text('Có lỗi xảy ra khi gửi tin nhắn này. Bạn có muốn gửi lại không?'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref
+                  .read(realtimeMessagesProvider(widget.message.conversationId)
+                      .notifier)
+                  .retryFailedMessage(widget.message.id);
+            },
+            child: const Text('Gửi lại'),
+          ),
+          if (widget.message.isText && widget.message.content != null)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Clipboard.setData(ClipboardData(text: widget.message.content!));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Đã sao chép tin nhắn vào bộ nhớ tạm'),
+                  duration: Duration(seconds: 1),
+                ));
+              },
+              child: const Text('Sao chép'),
+            ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref
+                  .read(realtimeMessagesProvider(widget.message.conversationId)
+                      .notifier)
+                  .removeFailedMessage(widget.message.id);
+            },
+            child: const Text('Xoá'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Huỷ'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1429,19 +1542,48 @@ class _MessageBubbleState extends State<_MessageBubble> {
             isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onTap: () => setState(() => _tapped = !_tapped),
-            onDoubleTap: widget.onSwipeToReply,
-            onSecondaryTapDown: (d) =>
-                _showContextMenu(context, d.globalPosition),
-            onLongPressStart: (d) =>
-                _showContextMenu(context, d.globalPosition),
+            onTap: () {
+              if (message.isFailed) {
+                _showFailedMessageMenu(context);
+              } else {
+                setState(() => _tapped = !_tapped);
+              }
+            },
+            onDoubleTap: message.isFailed ? null : widget.onSwipeToReply,
+            onSecondaryTapDown: (d) {
+              if (message.isFailed) {
+                _showFailedMessageMenu(context);
+              } else {
+                _showContextMenu(context, d.globalPosition);
+              }
+            },
+            onLongPressStart: (d) {
+              if (message.isFailed) {
+                _showFailedMessageMenu(context);
+              } else {
+                _showContextMenu(context, d.globalPosition);
+              }
+            },
             child: Row(
               mainAxisAlignment:
                   isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                if (isMine && message.isFailed)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8, bottom: 8),
+                    child: GestureDetector(
+                      onTap: () => _showFailedMessageMenu(context),
+                      child: const Icon(
+                        CupertinoIcons.exclamationmark_circle_fill,
+                        color: CupertinoColors.systemRed,
+                        size: 22,
+                      ),
+                    ),
+                  ),
                 Flexible(
                   child: SwipeToReply(
+                    enabled: !message.isFailed,
                     onReply: () => widget.onSwipeToReply?.call(),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),

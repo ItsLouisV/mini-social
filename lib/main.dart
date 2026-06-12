@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import 'app.dart';
+import 'core/services/objectbox_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,9 +23,23 @@ Future<void> main() async {
   // Initialize timeago
   timeago.setLocaleMessages('vi', timeago.ViMessages());
 
+  // Initialize ObjectBox on mobile/desktop
+  ObjectBoxService? objectBox;
+  if (!kIsWeb) {
+    try {
+      objectBox = await ObjectBoxService.init();
+    } catch (e) {
+      debugPrint('Failed to initialize ObjectBox: $e');
+    }
+  }
+
   runApp(
-    const ProviderScope(
-      child: MiniSocialApp(),
+    ProviderScope(
+      overrides: [
+        if (objectBox != null)
+          objectBoxProvider.overrideWithValue(objectBox),
+      ],
+      child: const MiniSocialApp(),
     ),
   );
 }

@@ -54,6 +54,15 @@ class ChatRepository {
         .asyncMap((_) => getConversations());
   }
 
+  /// Stream thô — chỉ emit khi có thay đổi, không fetch models.
+  /// Dùng bởi offline-first provider để trigger sync.
+  Stream<void> watchConversationsStream() {
+    return _client
+        .from(SupabaseConstants.conversationsTable)
+        .stream(primaryKey: ['id'])
+        .map((_) {});
+  }
+
   Future<ConversationModel> getOrCreateConversation(
       String otherUserId) async {
     final userId = currentUserId!;

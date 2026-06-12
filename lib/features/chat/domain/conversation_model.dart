@@ -72,4 +72,51 @@ class ConversationModel {
   bool isHidden(String currentUserId) {
     return participant1 == currentUserId ? p1IsHidden : p2IsHidden;
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'participant_1': participant1,
+      'participant_2': participant2,
+      'last_message': lastMessage,
+      'last_message_at': lastMessageAt?.toUtc().toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'p1_unread_count': p1UnreadCount,
+      'p2_unread_count': p2UnreadCount,
+      'p1_is_pinned': p1IsPinned,
+      'p2_is_pinned': p2IsPinned,
+      'p1_is_hidden': p1IsHidden,
+      'p2_is_hidden': p2IsHidden,
+    };
+  }
+
+  ConversationModel copyWith({
+    String? lastMessage,
+    DateTime? lastMessageAt,
+    String? lastMessageSenderId,
+    int? p1UnreadCount,
+    int? p2UnreadCount,
+    bool? p1IsPinned,
+    bool? p2IsPinned,
+    bool? p1IsHidden,
+    bool? p2IsHidden,
+    ProfileModel? otherUser,
+  }) {
+    return ConversationModel(
+      id: id,
+      participant1: participant1,
+      participant2: participant2,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      createdAt: createdAt,
+      lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
+      p1UnreadCount: p1UnreadCount ?? this.p1UnreadCount,
+      p2UnreadCount: p2UnreadCount ?? this.p2UnreadCount,
+      p1IsPinned: p1IsPinned ?? this.p1IsPinned,
+      p2IsPinned: p2IsPinned ?? this.p2IsPinned,
+      p1IsHidden: p1IsHidden ?? this.p1IsHidden,
+      p2IsHidden: p2IsHidden ?? this.p2IsHidden,
+      otherUser: otherUser ?? this.otherUser,
+    );
+  }
 }

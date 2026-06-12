@@ -9,6 +9,7 @@ class MessageModel {
   final DateTime createdAt;
   final String? replyToMessageId;
   final String? callId;
+  final bool isFailed;
 
   // Thuộc tính để lưu tạm UI state cho tin nhắn reply
   final MessageModel? replyToMessage;
@@ -25,6 +26,7 @@ class MessageModel {
     this.replyToMessageId,
     this.replyToMessage,
     this.callId,
+    this.isFailed = false,
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {

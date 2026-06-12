@@ -1,0 +1,311 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:4851997573193905597",
+      "lastPropertyId": "15:5102176737288601867",
+      "name": "CachedConversation",
+      "properties": [
+        {
+          "id": "1:3669701475855231047",
+          "name": "obxId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4017578857605168392",
+          "name": "id",
+          "type": 9,
+          "flags": 34848,
+          "indexId": "1:6495383002296480796"
+        },
+        {
+          "id": "3:4834733327882252851",
+          "name": "participant1",
+          "type": 9
+        },
+        {
+          "id": "4:5701255342268181453",
+          "name": "participant2",
+          "type": 9
+        },
+        {
+          "id": "5:7810566601837534930",
+          "name": "lastMessage",
+          "type": 9
+        },
+        {
+          "id": "6:4296713032189035442",
+          "name": "lastMessageAt",
+          "type": 9
+        },
+        {
+          "id": "7:2866343786920375314",
+          "name": "lastMessageSenderId",
+          "type": 9
+        },
+        {
+          "id": "8:372122981990526341",
+          "name": "p1UnreadCount",
+          "type": 6
+        },
+        {
+          "id": "9:160852951170182369",
+          "name": "p2UnreadCount",
+          "type": 6
+        },
+        {
+          "id": "10:7029959336161744500",
+          "name": "p1IsPinned",
+          "type": 1
+        },
+        {
+          "id": "11:6927858441468763293",
+          "name": "p2IsPinned",
+          "type": 1
+        },
+        {
+          "id": "12:4467205447676080237",
+          "name": "p1IsHidden",
+          "type": 1
+        },
+        {
+          "id": "13:5066584943858499344",
+          "name": "p2IsHidden",
+          "type": 1
+        },
+        {
+          "id": "14:3923516043781743625",
+          "name": "createdAt",
+          "type": 9
+        },
+        {
+          "id": "15:5102176737288601867",
+          "name": "syncedAt",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:282038241542904864",
+      "lastPropertyId": "15:4765953919967120532",
+      "name": "CachedMessage",
+      "properties": [
+        {
+          "id": "1:6813045598038905797",
+          "name": "obxId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6317229170165966520",
+          "name": "id",
+          "type": 9,
+          "flags": 34848,
+          "indexId": "2:9206269488399774217"
+        },
+        {
+          "id": "3:1107407830626290404",
+          "name": "conversationId",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "3:2906754777075579957"
+        },
+        {
+          "id": "4:4698167802815312157",
+          "name": "senderId",
+          "type": 9
+        },
+        {
+          "id": "5:2447177151411105811",
+          "name": "content",
+          "type": 9
+        },
+        {
+          "id": "6:5482535668441099760",
+          "name": "mediaUrl",
+          "type": 9
+        },
+        {
+          "id": "7:2730663715513408509",
+          "name": "messageType",
+          "type": 9
+        },
+        {
+          "id": "8:1046580246195602035",
+          "name": "isSeen",
+          "type": 1
+        },
+        {
+          "id": "9:7137472342229755726",
+          "name": "replyToMessageId",
+          "type": 9
+        },
+        {
+          "id": "10:5861492724513333542",
+          "name": "callId",
+          "type": 9
+        },
+        {
+          "id": "11:1939757523512495420",
+          "name": "createdAt",
+          "type": 9
+        },
+        {
+          "id": "12:5913786029462932662",
+          "name": "syncedAt",
+          "type": 9
+        },
+        {
+          "id": "13:5728235052021884871",
+          "name": "replyContent",
+          "type": 9
+        },
+        {
+          "id": "14:5987428442201698018",
+          "name": "replySenderId",
+          "type": 9
+        },
+        {
+          "id": "15:4765953919967120532",
+          "name": "replyMessageType",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:8110163023968195589",
+      "lastPropertyId": "8:5659051066362104544",
+      "name": "CachedProfile",
+      "properties": [
+        {
+          "id": "1:5191751081817482222",
+          "name": "obxId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6527039223559366200",
+          "name": "id",
+          "type": 9,
+          "flags": 34848,
+          "indexId": "4:5268681985073639027"
+        },
+        {
+          "id": "3:2947113064333731585",
+          "name": "username",
+          "type": 9
+        },
+        {
+          "id": "4:3386681732164686963",
+          "name": "fullName",
+          "type": 9
+        },
+        {
+          "id": "5:6464953493547624091",
+          "name": "avatarUrl",
+          "type": 9
+        },
+        {
+          "id": "6:1658833405502254868",
+          "name": "coverUrl",
+          "type": 9
+        },
+        {
+          "id": "7:2154629517283724291",
+          "name": "createdAt",
+          "type": 9
+        },
+        {
+          "id": "8:5659051066362104544",
+          "name": "syncedAt",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:5440757973749173711",
+      "lastPropertyId": "11:7662968625500453152",
+      "name": "FailedMessage",
+      "properties": [
+        {
+          "id": "1:1996280803002302477",
+          "name": "obxId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5150548208129361110",
+          "name": "localId",
+          "type": 9,
+          "flags": 34848,
+          "indexId": "5:6300843504326688344"
+        },
+        {
+          "id": "3:2643110951707863221",
+          "name": "conversationId",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "6:3675575870221635885"
+        },
+        {
+          "id": "4:2387426220608467089",
+          "name": "senderId",
+          "type": 9
+        },
+        {
+          "id": "5:6887154596921878520",
+          "name": "content",
+          "type": 9
+        },
+        {
+          "id": "6:7597006086005911025",
+          "name": "messageType",
+          "type": 9
+        },
+        {
+          "id": "7:2146121660703816268",
+          "name": "replyToMessageId",
+          "type": 9
+        },
+        {
+          "id": "8:2358009651766649374",
+          "name": "createdAt",
+          "type": 9
+        },
+        {
+          "id": "9:6953153228300209467",
+          "name": "replyContent",
+          "type": 9
+        },
+        {
+          "id": "10:2863149560943775435",
+          "name": "replySenderId",
+          "type": 9
+        },
+        {
+          "id": "11:7662968625500453152",
+          "name": "mediaUrl",
+          "type": 9
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "4:5440757973749173711",
+  "lastIndexId": "6:3675575870221635885",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}

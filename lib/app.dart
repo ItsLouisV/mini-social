@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -10,6 +11,8 @@ import 'core/theme/theme_provider.dart';
 import 'features/call/domain/call_model.dart';
 import 'features/call/providers/call_provider.dart';
 import 'features/profile/providers/profile_provider.dart';
+import 'features/chat/data/local_chat_repository.dart';
+import 'features/auth/providers/auth_provider.dart';
 
 class MyCustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -57,6 +60,22 @@ class _MiniSocialAppState extends ConsumerState<MiniSocialApp> {
         });
       } catch (_) {
         _isShowingIncomingCall = false;
+      }
+    });
+
+    ref.listenManual<AsyncValue<AuthState>>(authStateProvider, (prev, next) async {
+      final prevUser = prev?.valueOrNull?.session?.user;
+      final nextUser = next.valueOrNull?.session?.user;
+
+      if (nextUser == null && prevUser != null) {
+        final localRepo = ref.read(localChatRepositoryProvider);
+        if (localRepo != null) {
+          try {
+            await localRepo.clearAll();
+          } catch (e) {
+            debugPrint('Failed to clear local DB on signout: $e');
+          }
+        }
       }
     });
   }
