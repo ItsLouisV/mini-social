@@ -27,9 +27,10 @@ class HiddenConversationsScreen extends ConsumerWidget {
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: Icon(CupertinoIcons.chevron_back, color: theme.colorScheme.primary),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
+          child: Icon(CupertinoIcons.chevron_back, color: theme.colorScheme.primary),
         ),
         title: Text(
           'Đoạn chat bị ẩn',
@@ -102,7 +103,7 @@ class HiddenConversationsScreen extends ConsumerWidget {
   }
 }
 
-class _HiddenConversationTile extends ConsumerWidget {
+class _HiddenConversationTile extends ConsumerStatefulWidget {
   final ConversationModel conv;
   final String? currentUserId;
   final VoidCallback onTap;
@@ -114,16 +115,30 @@ class _HiddenConversationTile extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_HiddenConversationTile> createState() =>
+      _HiddenConversationTileState();
+}
+
+class _HiddenConversationTileState
+    extends ConsumerState<_HiddenConversationTile> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
-    final hasUnread = (currentUserId != null) && (conv.getUnreadCount(currentUserId!) > 0);
+
+    final hasUnread = (widget.currentUserId != null) &&
+        (widget.conv.getUnreadCount(widget.currentUserId!) > 0);
     final titleColor = theme.textTheme.titleMedium?.color;
     final hintColor = theme.hintColor;
 
+    final tileColor = _isPressed
+        ? (isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA))
+        : Colors.transparent;
+
     return Slidable(
-      key: ValueKey(conv.id),
+      key: ValueKey(widget.conv.id),
       // Vuốt từ Trái -> Phải: Bỏ ẩn với StretchMotion & ExtentRatio
       startActionPane: ActionPane(
         motion: const StretchMotion(),
@@ -132,7 +147,7 @@ class _HiddenConversationTile extends ConsumerWidget {
           CustomSlidableAction(
             onPressed: (context) {
               HapticFeedback.lightImpact();
-              ref.read(chatRepositoryProvider).toggleHide(conv);
+              ref.read(chatRepositoryProvider).toggleHide(widget.conv);
             },
             backgroundColor: Colors.transparent,
             child: Container(
@@ -149,28 +164,26 @@ class _HiddenConversationTile extends ConsumerWidget {
                   )
                 ],
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
-                    return const SizedBox.shrink();
-                  }
-                  return const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(CupertinoIcons.eye_fill, color: Colors.white, size: 20),
-                      SizedBox(height: 4),
-                      Text(
-                        'Bỏ ẩn',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  );
+              child: LayoutBuilder(builder: (context, constraints) {
+                if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
+                  return const SizedBox.shrink();
                 }
-              ),
+                return const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(CupertinoIcons.eye_fill, color: Colors.white, size: 20),
+                    SizedBox(height: 4),
+                    Text(
+                      'Bỏ ẩn',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                );
+              }),
             ),
           ),
         ],
@@ -187,7 +200,8 @@ class _HiddenConversationTile extends ConsumerWidget {
                 context: context,
                 builder: (ctx) => CupertinoAlertDialog(
                   title: const Text('Xoá cuộc trò chuyện?'),
-                  content: const Text('Thao tác này sẽ xoá toàn bộ tin nhắn ở cả 2 phía. Bạn có chắc chắn không?'),
+                  content: const Text(
+                      'Thao tác này sẽ xoá toàn bộ tin nhắn ở cả 2 phía. Bạn có chắc chắn không?'),
                   actions: [
                     CupertinoDialogAction(
                       child: const Text('Huỷ'),
@@ -198,7 +212,9 @@ class _HiddenConversationTile extends ConsumerWidget {
                       onPressed: () {
                         HapticFeedback.mediumImpact();
                         Navigator.pop(ctx);
-                        ref.read(chatRepositoryProvider).deleteConversation(conv.id);
+                        ref
+                            .read(chatRepositoryProvider)
+                            .deleteConversation(widget.conv.id);
                       },
                       child: const Text('Xoá'),
                     ),
@@ -221,137 +237,134 @@ class _HiddenConversationTile extends ConsumerWidget {
                   )
                 ],
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
-                    return const SizedBox.shrink();
-                  }
-                  return const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(CupertinoIcons.trash_fill, color: Colors.white, size: 20),
-                      SizedBox(height: 4),
-                      Text(
-                        'Xoá',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  );
+              child: LayoutBuilder(builder: (context, constraints) {
+                if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
+                  return const SizedBox.shrink();
                 }
-              ),
+                return const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(CupertinoIcons.trash_fill,
+                        color: Colors.white, size: 20),
+                    SizedBox(height: 4),
+                    Text(
+                      'Xoá',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                );
+              }),
             ),
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), // Slim vertical padding for iOS feel
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Unread dot column to prevent avatar shifting layout jumps
-                SizedBox(
-                  width: 14,
-                  child: hasUnread
-                      ? Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF007AFF),
-                              shape: BoxShape.circle,
-                            ),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          widget.onTap();
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration:
+              _isPressed ? Duration.zero : const Duration(milliseconds: 150),
+          color: tileColor,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Unread dot column to prevent avatar shifting layout jumps
+              SizedBox(
+                width: 14,
+                child: hasUnread
+                    ? Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF007AFF),
+                            shape: BoxShape.circle,
                           ),
-                        )
-                      : null,
-                ),
-
-                // Avatar
-                AppAvatar(
-                  imageUrl: conv.otherUser?.avatarUrl,
-                  name: conv.otherUser?.displayName,
-                  radius: 25, // Sleek 50px avatar
-                ),
-                const SizedBox(width: 12),
-
-                // Text content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        conv.otherUser?.displayName ?? 'Người dùng',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: hasUnread
-                              ? FontWeight.w600
-                              : FontWeight.w500,
-                          color: titleColor,
-                          letterSpacing: -0.2,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        (conv.lastMessage != null)
-                            ? (conv.lastMessageSenderId == currentUserId
-                                ? 'Bạn: ${conv.lastMessage}'
-                                : conv.lastMessage!)
-                            : 'Chưa có tin nhắn',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: hasUnread
-                              ? (isDark ? Colors.white : Colors.black)
-                              : hintColor,
-                          fontWeight: hasUnread
-                              ? FontWeight.w500
-                              : FontWeight.w400,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
+                      )
+                    : null,
+              ),
 
-                // Time & chevron
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+              // Avatar
+              AppAvatar(
+                imageUrl: widget.conv.otherUser?.avatarUrl,
+                name: widget.conv.otherUser?.displayName,
+                radius: 25, // Sleek 50px avatar
+              ),
+              const SizedBox(width: 12),
+
+              // Text content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      conv.lastMessageAt?.chatTimestamp ?? '',
+                      widget.conv.otherUser?.displayName ?? 'Người dùng',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
+                        color: titleColor,
+                        letterSpacing: -0.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      (widget.conv.lastMessage != null)
+                          ? (widget.conv.lastMessageSenderId == widget.currentUserId
+                              ? 'Bạn: ${widget.conv.lastMessage}'
+                              : widget.conv.lastMessage!)
+                          : 'Chưa có tin nhắn',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: hasUnread
-                            ? const Color(0xFF007AFF)
+                            ? (isDark ? Colors.white : Colors.black)
                             : hintColor,
-                        fontSize: 12,
-                        fontWeight: hasUnread
-                            ? FontWeight.w500
-                            : FontWeight.w400,
+                        fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                        fontSize: 14,
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Icon(
-                      CupertinoIcons.chevron_forward,
-                      size: 14,
-                      color: hintColor.withValues(alpha: 0.4),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+
+              // Time & chevron
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.conv.lastMessageAt?.chatTimestamp ?? '',
+                    style: TextStyle(
+                      color: hasUnread ? const Color(0xFF007AFF) : hintColor,
+                      fontSize: 12,
+                      fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Icon(
+                    CupertinoIcons.chevron_forward,
+                    size: 14,
+                    color: hintColor.withValues(alpha: 0.4),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

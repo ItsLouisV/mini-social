@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -277,10 +278,11 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
           
           // Close button
           Positioned(
-            top: MediaQuery.of(context).padding.top + 16,
-            right: 16,
-            child: TextButton(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 8,
+            child: CupertinoButton(
               onPressed: () => Navigator.of(context).pop(),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
                 'Huỷ',
                 style: TextStyle(
@@ -375,17 +377,16 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                           style: TextStyle(color: theme.colorScheme.error, fontSize: 14),
                         ),
                       if (_failedAttempts >= 3 && _currentMode == PasscodeMode.verify)
-                        GestureDetector(
-                          onTap: _showForgotPasswordDialog,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Text(
-                              'Quên mã PIN?',
-                              style: TextStyle(
-                                color: primaryColor,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                        CupertinoButton(
+                          onPressed: _showForgotPasswordDialog,
+                          padding: const EdgeInsets.only(top: 12),
+                          minimumSize: Size.zero,
+                          child: Text(
+                            'Quên mã PIN?',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -403,27 +404,27 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildNumKey('1', '', isDark),
-                          _buildNumKey('2', 'A B C', isDark),
-                          _buildNumKey('3', 'D E F', isDark),
+                          _PasscodeNumKey(number: '1', letters: '', isDark: isDark, onTap: () => _onKeyPress('1')),
+                          _PasscodeNumKey(number: '2', letters: 'A B C', isDark: isDark, onTap: () => _onKeyPress('2')),
+                          _PasscodeNumKey(number: '3', letters: 'D E F', isDark: isDark, onTap: () => _onKeyPress('3')),
                         ],
                       ),
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildNumKey('4', 'G H I', isDark),
-                          _buildNumKey('5', 'J K L', isDark),
-                          _buildNumKey('6', 'M N O', isDark),
+                          _PasscodeNumKey(number: '4', letters: 'G H I', isDark: isDark, onTap: () => _onKeyPress('4')),
+                          _PasscodeNumKey(number: '5', letters: 'J K L', isDark: isDark, onTap: () => _onKeyPress('5')),
+                          _PasscodeNumKey(number: '6', letters: 'M N O', isDark: isDark, onTap: () => _onKeyPress('6')),
                         ],
                       ),
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildNumKey('7', 'P Q R S', isDark),
-                          _buildNumKey('8', 'T U V', isDark),
-                          _buildNumKey('9', 'W X Y Z', isDark),
+                          _PasscodeNumKey(number: '7', letters: 'P Q R S', isDark: isDark, onTap: () => _onKeyPress('7')),
+                          _PasscodeNumKey(number: '8', letters: 'T U V', isDark: isDark, onTap: () => _onKeyPress('8')),
+                          _PasscodeNumKey(number: '9', letters: 'W X Y Z', isDark: isDark, onTap: () => _onKeyPress('9')),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -432,8 +433,8 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                         children: [
                           // Fake empty key to balance the row
                           const SizedBox(width: 76, height: 76),
-                          _buildNumKey('0', '', isDark),
-                          _buildDeleteKey(isDark),
+                          _PasscodeNumKey(number: '0', letters: '', isDark: isDark, onTap: () => _onKeyPress('0')),
+                          _PasscodeDeleteKey(isDark: isDark, onTap: _onDelete),
                         ],
                       ),
                     ],
@@ -447,36 +448,86 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
       ),
     );
   }
+}
 
-  Widget _buildNumKey(String number, String letters, bool isDark) {
+class _PasscodeNumKey extends StatefulWidget {
+  final String number;
+  final String letters;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _PasscodeNumKey({
+    required this.number,
+    required this.letters,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  State<_PasscodeNumKey> createState() => _PasscodeNumKeyState();
+}
+
+class _PasscodeNumKeyState extends State<_PasscodeNumKey> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalBgColor = widget.isDark
+        ? Colors.white.withValues(alpha: 0.15)
+        : Colors.black.withValues(alpha: 0.08);
+
+    final pressedBgColor = widget.isDark
+        ? Colors.white.withValues(alpha: 0.45)
+        : Colors.black.withValues(alpha: 0.24);
+
+    final textColor = widget.isDark ? Colors.white : Colors.black87;
+    final subTextColor = widget.isDark ? Colors.white70 : Colors.black54;
+
     return GestureDetector(
-      onTap: () => _onKeyPress(number),
-      child: Container(
+      onTapDown: (_) {
+        setState(() {
+          _isPressed = true;
+        });
+        HapticFeedback.lightImpact();
+      },
+      onTapUp: (_) {
+        setState(() {
+          _isPressed = false;
+        });
+        widget.onTap();
+      },
+      onTapCancel: () {
+        setState(() {
+          _isPressed = false;
+        });
+      },
+      child: AnimatedContainer(
+        duration: _isPressed ? Duration.zero : const Duration(milliseconds: 250),
         width: 76,
         height: 76,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.08),
+          color: _isPressed ? pressedBgColor : normalBgColor,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              number,
+              widget.number,
               style: TextStyle(
                 fontSize: 34,
                 fontWeight: FontWeight.w400,
-                color: isDark ? Colors.white : Colors.black87,
+                color: textColor,
                 height: 1.1,
               ),
             ),
-            if (letters.isNotEmpty)
+            if (widget.letters.isNotEmpty)
               Text(
-                letters,
+                widget.letters,
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white70 : Colors.black54,
+                  color: subTextColor,
                   letterSpacing: 1.5,
                 ),
               ),
@@ -485,21 +536,61 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
       ),
     );
   }
+}
 
-  Widget _buildDeleteKey(bool isDark) {
+class _PasscodeDeleteKey extends StatefulWidget {
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _PasscodeDeleteKey({
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  State<_PasscodeDeleteKey> createState() => _PasscodeDeleteKeyState();
+}
+
+class _PasscodeDeleteKeyState extends State<_PasscodeDeleteKey> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = widget.isDark ? Colors.white : Colors.black87;
+
     return GestureDetector(
-      onTap: _onDelete,
+      onTapDown: (_) {
+        setState(() {
+          _isPressed = true;
+        });
+        HapticFeedback.lightImpact();
+      },
+      onTapUp: (_) {
+        setState(() {
+          _isPressed = false;
+        });
+        widget.onTap();
+      },
+      onTapCancel: () {
+        setState(() {
+          _isPressed = false;
+        });
+      },
       child: Container(
         width: 76,
         height: 76,
         color: Colors.transparent, // to make the whole 76x76 clickable
         child: Center(
-          child: Text(
-            'Xoá',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.white : Colors.black87,
+          child: AnimatedOpacity(
+            duration: _isPressed ? Duration.zero : const Duration(milliseconds: 200),
+            opacity: _isPressed ? 0.35 : 1.0,
+            child: Text(
+              'Xoá',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: textColor,
+              ),
             ),
           ),
         ),
