@@ -15,46 +15,56 @@ final profileProvider =
   
   final channel = supabase.channel('public:profile_$userId');
   
-  channel.onPostgresChanges(
-    event: PostgresChangeEvent.all,
-    schema: 'public',
-    table: 'follows',
-    filter: PostgresChangeFilter(
-      type: PostgresChangeFilterType.eq,
-      column: 'following_id',
-      value: userId,
-    ),
-    callback: (payload) {
-      ref.invalidateSelf();
-    },
-  ).onPostgresChanges(
-    event: PostgresChangeEvent.all,
-    schema: 'public',
-    table: 'follows',
-    filter: PostgresChangeFilter(
-      type: PostgresChangeFilterType.eq,
-      column: 'follower_id',
-      value: userId,
-    ),
-    callback: (payload) {
-      ref.invalidateSelf();
-    },
-  ).onPostgresChanges(
-    event: PostgresChangeEvent.update,
-    schema: 'public',
-    table: 'profiles',
-    filter: PostgresChangeFilter(
-      type: PostgresChangeFilterType.eq,
-      column: 'id',
-      value: userId,
-    ),
-    callback: (payload) {
-      ref.invalidateSelf();
-    },
-  ).subscribe();
+  try {
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'follows',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'following_id',
+        value: userId,
+      ),
+      callback: (payload) {
+        ref.invalidateSelf();
+      },
+    ).onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'follows',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'follower_id',
+        value: userId,
+      ),
+      callback: (payload) {
+        ref.invalidateSelf();
+      },
+    ).onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'profiles',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'id',
+        value: userId,
+      ),
+      callback: (payload) {
+        ref.invalidateSelf();
+      },
+    ).subscribe((status, [error]) {
+      if (status == RealtimeSubscribeStatus.channelError) {
+        print('Supabase Realtime profile channel error: $error');
+      }
+    });
+  } catch (e) {
+    print('Error subscribing to realtime profile: $e');
+  }
 
   ref.onDispose(() {
-    channel.unsubscribe();
+    try {
+      channel.unsubscribe();
+    } catch (_) {}
   });
 
   return ref.watch(profileRepositoryProvider).getProfile(userId);

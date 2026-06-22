@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -270,8 +271,8 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
               filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
               child: Container(
                 color: isDark 
-                    ? Colors.black.withValues(alpha: 0.6) 
-                    : Colors.white.withValues(alpha: 0.8),
+                    ? Colors.black.withValues(alpha: 0.25) 
+                    : Colors.white.withValues(alpha: 0.45),
               ),
             ),
           ),
@@ -467,48 +468,131 @@ class _PasscodeNumKey extends StatefulWidget {
   State<_PasscodeNumKey> createState() => _PasscodeNumKeyState();
 }
 
-class _PasscodeNumKeyState extends State<_PasscodeNumKey> {
-  bool _isPressed = false;
+class _PasscodeNumKeyState extends State<_PasscodeNumKey> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _squashAnimation;
+  late Animation<Color?> _colorAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.90, // Y-axis shrinks to 90%
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _squashAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.94, // X-axis shrinks to 94% (creates liquid squash effect)
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final normalBgColor = widget.isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.04);
+
+    final pressedBgColor = widget.isDark
+        ? Colors.white.withValues(alpha: 0.24)
+        : Colors.black.withValues(alpha: 0.12);
+
+    _colorAnimation = ColorTween(
+      begin: normalBgColor,
+      end: pressedBgColor,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails details) {
+    _controller.forward();
+    HapticFeedback.lightImpact();
+  }
+
+  void _handleTapUp(TapUpDetails details) {
+    _playRebound();
+    widget.onTap();
+  }
+
+  void _handleTapCancel() {
+    _playRebound();
+  }
+
+  void _playRebound() {
+    // Spring physics rebound for fluid elastic iOS feel
+    final spring = SpringDescription(
+      mass: 1.0,
+      stiffness: 450,
+      damping: 18,
+    );
+    final simulation = SpringSimulation(
+      spring,
+      _controller.value,
+      0.0, // target is normal size
+      _controller.velocity,
+    );
+    _controller.animateWith(simulation);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final normalBgColor = widget.isDark
-        ? Colors.white.withValues(alpha: 0.15)
-        : Colors.black.withValues(alpha: 0.08);
-
-    final pressedBgColor = widget.isDark
-        ? Colors.white.withValues(alpha: 0.45)
-        : Colors.black.withValues(alpha: 0.24);
-
     final textColor = widget.isDark ? Colors.white : Colors.black87;
     final subTextColor = widget.isDark ? Colors.white70 : Colors.black54;
 
     return GestureDetector(
-      onTapDown: (_) {
-        setState(() {
-          _isPressed = true;
-        });
-        HapticFeedback.lightImpact();
-      },
-      onTapUp: (_) {
-        setState(() {
-          _isPressed = false;
-        });
-        widget.onTap();
-      },
-      onTapCancel: () {
-        setState(() {
-          _isPressed = false;
-        });
-      },
-      child: AnimatedContainer(
-        duration: _isPressed ? Duration.zero : const Duration(milliseconds: 250),
-        width: 76,
-        height: 76,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _isPressed ? pressedBgColor : normalBgColor,
-        ),
+      onTapDown: _handleTapDown,
+      onTapUp: _handleTapUp,
+      onTapCancel: _handleTapCancel,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.diagonal3Values(_squashAnimation.value, _scaleAnimation.value, 1.0),
+            child: ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                child: Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _colorAnimation.value,
+                    border: Border.all(
+                      color: widget.isDark
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : Colors.black.withValues(alpha: 0.06),
+                      width: 0.75,
+                    ),
+                  ),
+                  child: child,
+                ),
+              ),
+            ),
+          );
+        },
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -551,39 +635,96 @@ class _PasscodeDeleteKey extends StatefulWidget {
   State<_PasscodeDeleteKey> createState() => _PasscodeDeleteKeyState();
 }
 
-class _PasscodeDeleteKeyState extends State<_PasscodeDeleteKey> {
-  bool _isPressed = false;
+class _PasscodeDeleteKeyState extends State<_PasscodeDeleteKey> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _opacityAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.88,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _opacityAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.4,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails details) {
+    _controller.forward();
+    HapticFeedback.lightImpact();
+  }
+
+  void _handleTapUp(TapUpDetails details) {
+    _playRebound();
+    widget.onTap();
+  }
+
+  void _handleTapCancel() {
+    _playRebound();
+  }
+
+  void _playRebound() {
+    final spring = SpringDescription(
+      mass: 1.0,
+      stiffness: 450,
+      damping: 18,
+    );
+    final simulation = SpringSimulation(
+      spring,
+      _controller.value,
+      0.0,
+      _controller.velocity,
+    );
+    _controller.animateWith(simulation);
+  }
 
   @override
   Widget build(BuildContext context) {
     final textColor = widget.isDark ? Colors.white : Colors.black87;
 
     return GestureDetector(
-      onTapDown: (_) {
-        setState(() {
-          _isPressed = true;
-        });
-        HapticFeedback.lightImpact();
-      },
-      onTapUp: (_) {
-        setState(() {
-          _isPressed = false;
-        });
-        widget.onTap();
-      },
-      onTapCancel: () {
-        setState(() {
-          _isPressed = false;
-        });
-      },
-      child: Container(
-        width: 76,
-        height: 76,
-        color: Colors.transparent, // to make the whole 76x76 clickable
-        child: Center(
-          child: AnimatedOpacity(
-            duration: _isPressed ? Duration.zero : const Duration(milliseconds: 200),
-            opacity: _isPressed ? 0.35 : 1.0,
+      onTapDown: _handleTapDown,
+      onTapUp: _handleTapUp,
+      onTapCancel: _handleTapCancel,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: Opacity(
+              opacity: _opacityAnimation.value,
+              child: child,
+            ),
+          );
+        },
+        child: Container(
+          width: 76,
+          height: 76,
+          color: Colors.transparent, // to make the whole 76x76 clickable
+          child: Center(
             child: Text(
               'Xoá',
               style: TextStyle(

@@ -218,61 +218,69 @@ class ChatMessagesNotifier
     LocalChatRepository? local,
     ChatSyncService? sync,
   ) {
-    _channel = ref
-        .watch(supabaseServiceProvider)
-        .client
-        .channel('messages:$conversationId');
+    try {
+      _channel = ref
+          .read(supabaseServiceProvider)
+          .client
+          .channel('messages:$conversationId');
 
-    _channel!
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'conversation_id',
-            value: conversationId,
-          ),
-          callback: (payload) async {
-            final newId = payload.newRecord['id'] as String?;
-            if (newId == null) return;
+      _channel!
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'messages',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'conversation_id',
+              value: conversationId,
+            ),
+            callback: (payload) async {
+              final newId = payload.newRecord['id'] as String?;
+              if (newId == null) return;
 
-            final current = state.valueOrNull;
-            if (current == null) return;
+              final current = state.valueOrNull;
+              if (current == null) return;
 
-            // Dedup: bỏ qua nếu đã có
-            if (current.messages.any((m) => m.id == newId)) return;
+              // Dedup: bỏ qua nếu đã có
+              if (current.messages.any((m) => m.id == newId)) return;
 
-            try {
-              final fullMsgData = await ref
-                  .read(supabaseServiceProvider)
-                  .client
-                  .from('messages')
-                  .select('*, reply_to_message:reply_to_message_id(*)')
-                  .eq('id', newId)
-                  .single();
-              final newMsg = MessageModel.fromJson(fullMsgData);
+              try {
+                final fullMsgData = await ref
+                    .read(supabaseServiceProvider)
+                    .client
+                    .from('messages')
+                    .select('*, reply_to_message:reply_to_message_id(*)')
+                    .eq('id', newId)
+                    .single();
+                final newMsg = MessageModel.fromJson(fullMsgData);
 
-              // Lưu vào local cache
-              if (sync != null) {
-                await sync.cacheRealtimeMessage(newMsg);
+                // Lưu vào local cache
+                if (sync != null) {
+                  await sync.cacheRealtimeMessage(newMsg);
+                }
+
+                state = AsyncData(current.copyWith(
+                  messages: [newMsg, ...current.messages],
+                ));
+              } catch (_) {
+                final newMsg = MessageModel.fromJson(payload.newRecord);
+                if (sync != null) {
+                  await sync.cacheRealtimeMessage(newMsg);
+                }
+                state = AsyncData(current.copyWith(
+                  messages: [newMsg, ...current.messages],
+                ));
               }
-
-              state = AsyncData(current.copyWith(
-                messages: [newMsg, ...current.messages],
-              ));
-            } catch (_) {
-              final newMsg = MessageModel.fromJson(payload.newRecord);
-              if (sync != null) {
-                await sync.cacheRealtimeMessage(newMsg);
-              }
-              state = AsyncData(current.copyWith(
-                messages: [newMsg, ...current.messages],
-              ));
+            },
+          )
+          .subscribe((status, [error]) {
+            if (status == RealtimeSubscribeStatus.channelError) {
+              print('Supabase Realtime messages channel error: $error');
             }
-          },
-        )
-        .subscribe();
+          });
+    } catch (e) {
+      print('Error subscribing to realtime messages: $e');
+    }
   }
 
   // ── Phân trang load thêm tin cũ ──────────────────────────────────────────────
@@ -514,29 +522,37 @@ class PinnedMessagesNotifier
     final repo = ref.watch(chatRepositoryProvider);
     final pinned = await repo.getPinnedMessages(arg);
 
-    _channel = ref
-        .watch(supabaseServiceProvider)
-        .client
-        .channel('pinned_messages:$arg');
+    try {
+      _channel = ref
+          .read(supabaseServiceProvider)
+          .client
+          .channel('pinned_messages:$arg');
 
-    _channel!
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'pinned_messages',
-          callback: (payload) async {
-            final convId = (payload.newRecord['conversation_id'] ??
-                payload.oldRecord['conversation_id']) as String?;
+      _channel!
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'pinned_messages',
+            callback: (payload) async {
+              final convId = (payload.newRecord['conversation_id'] ??
+                  payload.oldRecord['conversation_id']) as String?;
 
-            if (convId == null || convId == arg) {
-              try {
-                final updated = await repo.getPinnedMessages(arg);
-                state = AsyncValue.data(updated);
-              } catch (_) {}
+              if (convId == null || convId == arg) {
+                try {
+                  final updated = await repo.getPinnedMessages(arg);
+                  state = AsyncValue.data(updated);
+                } catch (_) {}
+              }
+            },
+          )
+          .subscribe((status, [error]) {
+            if (status == RealtimeSubscribeStatus.channelError) {
+              print('Supabase Realtime pinned messages channel error: $error');
             }
-          },
-        )
-        .subscribe();
+          });
+    } catch (e) {
+      print('Error subscribing to realtime pinned messages: $e');
+    }
 
     ref.onDispose(() => _channel?.unsubscribe());
 

@@ -102,45 +102,54 @@ class CallRepository {
 
     // ✅ Truyền callback vào subscribe để biết khi nào channel đã sẵn sàng
     // Sau đó mới query cuộc gọi đang chờ — tránh race condition
-    channel.subscribe((status, [error]) async {
-      if (status != RealtimeSubscribeStatus.subscribed) return;
-
-      try {
-        final data = await _client
-            .from('calls')
-            .select()
-            .eq('callee_id', currentUserId)
-            .eq('status', 'ringing')
-            .order('started_at', ascending: false)
-            .limit(1)
-            .maybeSingle();
-
-        if (controller.isClosed) return;
-
-        if (data == null) {
-          controller.add(null);
-          return;
+    try {
+      channel.subscribe((status, [error]) async {
+        if (status == RealtimeSubscribeStatus.channelError) {
+          print('Supabase Realtime incoming calls channel error: $error');
         }
+        if (status != RealtimeSubscribeStatus.subscribed) return;
 
-        final call = CallModel.fromJson(data);
-        final isExpired =
-            DateTime.now().difference(call.startedAt).inSeconds > 45;
+        try {
+          final data = await _client
+              .from('calls')
+              .select()
+              .eq('callee_id', currentUserId)
+              .eq('status', 'ringing')
+              .order('started_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
 
-        if (isExpired) {
-          // Dọn dẹp cuộc gọi bị kẹt trạng thái từ phiên trước
-          await updateStatus(call.id, CallStatus.missed);
-          controller.add(null);
-        } else {
-          controller.add(call);
+          if (controller.isClosed) return;
+
+          if (data == null) {
+            controller.add(null);
+            return;
+          }
+
+          final call = CallModel.fromJson(data);
+          final isExpired =
+              DateTime.now().difference(call.startedAt).inSeconds > 45;
+
+          if (isExpired) {
+            // Dọn dẹp cuộc gọi bị kẹt trạng thái từ phiên trước
+            await updateStatus(call.id, CallStatus.missed);
+            controller.add(null);
+          } else {
+            controller.add(call);
+          }
+        } catch (_) {
+          if (!controller.isClosed) controller.add(null);
         }
-      } catch (_) {
-        if (!controller.isClosed) controller.add(null);
-      }
-    });
+      });
+    } catch (e) {
+      print('Error subscribing to incoming calls channel: $e');
+    }
 
     // Hủy channel khi không còn lắng nghe stream để tránh rò rỉ bộ nhớ
     controller.onCancel = () {
-      _client.removeChannel(channel);
+      try {
+        _client.removeChannel(channel);
+      } catch (_) {}
       controller.close();
     };
 
@@ -152,22 +161,32 @@ class CallRepository {
     final controller = StreamController<CallModel>();
     final channel = _client.channel('call_state_$callId');
 
-    channel.onPostgresChanges(
-      event: PostgresChangeEvent.update,
-      schema: 'public',
-      table: 'calls',
-      filter: PostgresChangeFilter(
-        type: PostgresChangeFilterType.eq,
-        column: 'id',
-        value: callId,
-      ),
-      callback: (payload) {
-        controller.add(CallModel.fromJson(payload.newRecord));
-      },
-    ).subscribe();
+    try {
+      channel.onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'calls',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'id',
+          value: callId,
+        ),
+        callback: (payload) {
+          controller.add(CallModel.fromJson(payload.newRecord));
+        },
+      ).subscribe((status, [error]) {
+        if (status == RealtimeSubscribeStatus.channelError) {
+          print('Supabase Realtime watch call channel error: $error');
+        }
+      });
+    } catch (e) {
+      print('Error subscribing to watch call channel: $e');
+    }
 
     controller.onCancel = () {
-      _client.removeChannel(channel);
+      try {
+        _client.removeChannel(channel);
+      } catch (_) {}
       controller.close();
     };
 

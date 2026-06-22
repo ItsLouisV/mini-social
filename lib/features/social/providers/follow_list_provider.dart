@@ -9,22 +9,32 @@ final followersProvider = FutureProvider.family<List<ProfileModel>, String>((ref
   final repo = ref.watch(socialRepositoryProvider);
 
   final channel = supabase.channel('public:follows:followers_$userId');
-  channel.onPostgresChanges(
-    event: PostgresChangeEvent.all,
-    schema: 'public',
-    table: 'follows',
-    filter: PostgresChangeFilter(
-      type: PostgresChangeFilterType.eq,
-      column: 'following_id',
-      value: userId,
-    ),
-    callback: (payload) {
-      ref.invalidateSelf();
-    },
-  ).subscribe();
+  try {
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'follows',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'following_id',
+        value: userId,
+      ),
+      callback: (payload) {
+        ref.invalidateSelf();
+      },
+    ).subscribe((status, [error]) {
+      if (status == RealtimeSubscribeStatus.channelError) {
+        print('Supabase Realtime followers channel error: $error');
+      }
+    });
+  } catch (e) {
+    print('Error subscribing to realtime followers: $e');
+  }
 
   ref.onDispose(() {
-    supabase.removeChannel(channel);
+    try {
+      supabase.removeChannel(channel);
+    } catch (_) {}
   });
 
   final data = await repo.getFollowers(userId);
@@ -36,22 +46,32 @@ final followingProvider = FutureProvider.family<List<ProfileModel>, String>((ref
   final repo = ref.watch(socialRepositoryProvider);
 
   final channel = supabase.channel('public:follows:following_$userId');
-  channel.onPostgresChanges(
-    event: PostgresChangeEvent.all,
-    schema: 'public',
-    table: 'follows',
-    filter: PostgresChangeFilter(
-      type: PostgresChangeFilterType.eq,
-      column: 'follower_id',
-      value: userId,
-    ),
-    callback: (payload) {
-      ref.invalidateSelf();
-    },
-  ).subscribe();
+  try {
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'follows',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'follower_id',
+        value: userId,
+      ),
+      callback: (payload) {
+        ref.invalidateSelf();
+      },
+    ).subscribe((status, [error]) {
+      if (status == RealtimeSubscribeStatus.channelError) {
+        print('Supabase Realtime following channel error: $error');
+      }
+    });
+  } catch (e) {
+    print('Error subscribing to realtime following: $e');
+  }
 
   ref.onDispose(() {
-    supabase.removeChannel(channel);
+    try {
+      supabase.removeChannel(channel);
+    } catch (_) {}
   });
 
   final data = await repo.getFollowing(userId);

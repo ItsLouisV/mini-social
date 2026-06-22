@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -120,8 +121,88 @@ class _HiddenConversationTile extends ConsumerStatefulWidget {
 }
 
 class _HiddenConversationTileState
-    extends ConsumerState<_HiddenConversationTile> {
-  bool _isPressed = false;
+    extends ConsumerState<_HiddenConversationTile> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _squashAnimation;
+  late Animation<Color?> _colorAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.97, // Subtle press-down scale
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _squashAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.985, // Subtle width squeeze (creates a liquid press feeling)
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final pressedColor = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA);
+
+    _colorAnimation = ColorTween(
+      begin: Colors.transparent,
+      end: pressedColor,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails details) {
+    _controller.forward();
+    HapticFeedback.lightImpact();
+  }
+
+  void _handleTapUp(TapUpDetails details) {
+    _playRebound();
+    widget.onTap();
+  }
+
+  void _handleTapCancel() {
+    _playRebound();
+  }
+
+  void _playRebound() {
+    final spring = SpringDescription(
+      mass: 1.0,
+      stiffness: 450,
+      damping: 18,
+    );
+    final simulation = SpringSimulation(
+      spring,
+      _controller.value,
+      0.0,
+      _controller.velocity,
+    );
+    _controller.animateWith(simulation);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -132,10 +213,6 @@ class _HiddenConversationTileState
         (widget.conv.getUnreadCount(widget.currentUserId!) > 0);
     final titleColor = theme.textTheme.titleMedium?.color;
     final hintColor = theme.hintColor;
-
-    final tileColor = _isPressed
-        ? (isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA))
-        : Colors.transparent;
 
     return Slidable(
       key: ValueKey(widget.conv.id),
@@ -263,18 +340,23 @@ class _HiddenConversationTileState
         ],
       ),
       child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) {
-          setState(() => _isPressed = false);
-          widget.onTap();
-        },
-        onTapCancel: () => setState(() => _isPressed = false),
+        onTapDown: _handleTapDown,
+        onTapUp: _handleTapUp,
+        onTapCancel: _handleTapCancel,
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration:
-              _isPressed ? Duration.zero : const Duration(milliseconds: 150),
-          color: tileColor,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.diagonal3Values(_squashAnimation.value, _scaleAnimation.value, 1.0),
+              child: Container(
+                color: _colorAnimation.value,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: child,
+              ),
+            );
+          },
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [

@@ -20,9 +20,8 @@ class SettingsScreen extends ConsumerWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     // iOS grouped background màu
-    final groupedBg =
-        isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7);
-    final cardBg = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+    final groupedBg = theme.scaffoldBackgroundColor;
+    final cardBg = theme.colorScheme.surface;
     final labelColor =
         isDark ? const Color(0xFF8E8E93) : const Color(0xFF6C6C70);
 
