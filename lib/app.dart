@@ -11,7 +11,7 @@ import 'core/theme/theme_provider.dart';
 import 'features/call/domain/call_model.dart';
 import 'features/call/providers/call_provider.dart';
 import 'features/profile/providers/profile_provider.dart';
-import 'features/chat/data/local_chat_repository.dart';
+import 'features/chat/data/local_chat_repository_exports.dart';
 import 'features/auth/providers/auth_provider.dart';
 
 class MyCustomScrollBehavior extends MaterialScrollBehavior {
