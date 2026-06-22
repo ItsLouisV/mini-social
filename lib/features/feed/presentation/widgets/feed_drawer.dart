@@ -123,14 +123,7 @@ class FeedDrawer extends ConsumerWidget {
             },
           ),
           const Divider(),
-          ListTile(
-            leading: const Icon(CupertinoIcons.settings),
-            title: const Text('Cài đặt'),
-            onTap: () {
-              context.pop();
-              context.push('/settings');
-            },
-          ),
+          
           const Spacer(),
           Padding(
             padding: const EdgeInsets.all(16.0),

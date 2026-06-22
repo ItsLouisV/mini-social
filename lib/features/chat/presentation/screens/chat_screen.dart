@@ -796,7 +796,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final senderName =
         latestMsg.senderId == currentUserId ? 'Bạn' : otherUserName;
     final barBgColor =
-        isDark ? const Color(0xFF1C1C1E) : const Color(0xFFE8F4FD);
+        isDark ? theme.colorScheme.surface : const Color(0xFFE8F4FD);
     final textStyle = TextStyle(
       fontSize: 13,
       fontWeight: FontWeight.w500,
@@ -1083,7 +1083,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color:
-            isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+            isDark ? theme.colorScheme.surface : theme.scaffoldBackgroundColor,
         border: Border(
           bottom: BorderSide(
             color: theme.dividerColor.withValues(alpha: 0.15),
@@ -1219,8 +1219,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ),
                       filled: true,
                       fillColor: isDark
-                          ? const Color(0xFF2C2C2E)
-                          : const Color(0xFFF2F2F7),
+                          ? theme.colorScheme.surface
+                          : theme.scaffoldBackgroundColor,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       isDense: true,

@@ -368,9 +368,7 @@ class _IosTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final barBg = isDark
-        ? const Color(0xFF1C1C1E).withValues(alpha: 0.92)
-        : Colors.white.withValues(alpha: 0.92);
+    final barBg = theme.colorScheme.surface.withValues(alpha: 0.92);
 
     return Container(
       decoration: BoxDecoration(

@@ -118,7 +118,8 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
       body: convAsync.when(
         data: (conversations) {
           final filteredConvs = conversations.where((c) {
-            if (currentUserId != null && c.isHidden(currentUserId)) return false;
+            final isHidden = currentUserId != null && c.isHidden(currentUserId);
+            if (isHidden && _searchQuery.isEmpty) return false;
             final name = c.otherUser?.displayName.toLowerCase() ?? '';
             final username = c.otherUser?.username.toLowerCase() ?? '';
             return name.contains(_searchQuery.toLowerCase()) ||
@@ -206,11 +207,20 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                           ),
                           itemBuilder: (context, index) {
                             final conv = filteredConvs[index];
+                            final isHidden = currentUserId != null && conv.isHidden(currentUserId);
                             return _ConversationTile(
                               conv: conv,
                               currentUserId: currentUserId,
-                              onTap: () =>
-                                  context.push('/chat/${conv.id}'),
+                              onTap: () async {
+                                if (isHidden) {
+                                  final success = await PasscodeDialog.show(context, mode: PasscodeMode.verify);
+                                  if (success == true && context.mounted) {
+                                    context.push('/chat/${conv.id}');
+                                  }
+                                } else {
+                                  context.push('/chat/${conv.id}');
+                                }
+                              },
                             );
                           },
                         ),
@@ -247,6 +257,7 @@ class _ConversationTile extends ConsumerWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     final hasUnread = (currentUserId != null) && (conv.getUnreadCount(currentUserId!) > 0);
+    final isHidden = (currentUserId != null) && conv.isHidden(currentUserId!);
     final titleColor = theme.textTheme.titleMedium?.color;
     final hintColor = theme.hintColor;
 
@@ -447,7 +458,7 @@ class _ConversationTile extends ConsumerWidget {
       ),
       child: Material(
         color: conv.isPinned(currentUserId ?? '') 
-            ? (isDark ? Colors.white.withValues(alpha: 0.03) : const Color(0xFFF2F2F7)) 
+            ? (isDark ? Colors.white.withValues(alpha: 0.03) : theme.scaffoldBackgroundColor) 
             : Colors.transparent,
         child: InkWell(
           onTap: onTap,
@@ -510,6 +521,15 @@ class _ConversationTile extends ConsumerWidget {
                               padding: const EdgeInsets.only(left: 4),
                               child: Icon(
                                 CupertinoIcons.pin_fill,
+                                size: 12,
+                                color: hintColor,
+                              ),
+                            ),
+                          if (isHidden)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(
+                                CupertinoIcons.eye_slash_fill,
                                 size: 12,
                                 color: hintColor,
                               ),
