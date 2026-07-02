@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 
 class MessagePopupMenuContent extends StatelessWidget {
   final bool isMine;
@@ -114,7 +114,10 @@ class MessagePopupMenuContent extends StatelessWidget {
               children: ['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) {
                 return _EmojiItem(
                   emoji: emoji,
-                  onTap: () => onReact(emoji),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onReact(emoji);
+                  },
                 );
               }).toList(),
             ),
@@ -259,7 +262,10 @@ class _EmojiItemState extends State<_EmojiItem> with SingleTickerProviderStateMi
             padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
             child: Text(
               widget.emoji,
-              style: GoogleFonts.notoColorEmoji(fontSize: 24),
+              style: const TextStyle(
+                fontSize: 24,
+                fontFamilyFallback: ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji'],
+              ),
             ),
           ),
         ),

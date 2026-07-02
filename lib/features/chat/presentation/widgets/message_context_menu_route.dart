@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 class MessageContextMenuRoute extends PageRouteBuilder {
@@ -108,12 +109,16 @@ class _MessageContextMenuOverlay extends StatelessWidget {
             onTap: () => Navigator.pop(context),
             child: FadeTransition(
               opacity: opacityAnimation,
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
-                child: Container(
-                  color: Colors.transparent,
-                ),
-              ),
+              child: kIsWeb
+                  ? Container(
+                      color: Colors.black.withValues(alpha: 0.6),
+                    )
+                  : BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
+                      child: Container(
+                        color: Colors.transparent,
+                      ),
+                    ),
             ),
           ),
           // Animated Bubble & Menu using AnimatedBuilder to animate position towards screen center

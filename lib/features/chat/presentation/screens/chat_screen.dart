@@ -176,9 +176,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Cập nhật cache grouping khi messages thay đổi ─────────────────────────
 
+  bool _areReactionsEqual(Map<String, List<String>> r1, Map<String, List<String>> r2) {
+    if (r1.length != r2.length) return false;
+    for (final key in r1.keys) {
+      if (!r2.containsKey(key)) return false;
+      final l1 = r1[key]!;
+      final l2 = r2[key]!;
+      if (l1.length != l2.length) return false;
+      for (int i = 0; i < l1.length; i++) {
+        if (l1[i] != l2[i]) return false;
+      }
+    }
+    return true;
+  }
+
   void _updateCacheIfNeeded(List<MessageModel> messages) {
     // Rebuild cache nếu số lượng thay đổi, id đầu/cuối thay đổi,
-    // HOẶC bất kỳ message nào có messageType khác (ví dụ: thu hồi)
+    // HOẶC bất kỳ message nào có messageType, content, hoặc reactions khác
     bool needsUpdate = false;
 
     if (messages.length != _cachedMessages.length) {
@@ -188,10 +202,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           messages.last.id != _cachedMessages.last.id) {
         needsUpdate = true;
       } else {
-        // Kiểm tra xem có message nào bị thay đổi trạng thái không
+        // Kiểm tra xem có message nào bị thay đổi trạng thái hoặc reactions không
         for (int i = 0; i < messages.length; i++) {
-          if (messages[i].messageType != _cachedMessages[i].messageType ||
-              messages[i].content != _cachedMessages[i].content) {
+          final m1 = messages[i];
+          final m2 = _cachedMessages[i];
+          if (m1.messageType != m2.messageType ||
+              m1.content != m2.content ||
+              !_areReactionsEqual(m1.reactions, m2.reactions)) {
             needsUpdate = true;
             break;
           }
@@ -1403,6 +1420,7 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
   final GlobalKey _bubbleKey = GlobalKey();
 
   void _showCustomContextMenu(BuildContext context) {
+    HapticFeedback.mediumImpact();
     final renderBox = _bubbleKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
 
@@ -1732,6 +1750,7 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
   }
 
   void _showFailedMessageMenu(BuildContext context) {
+    HapticFeedback.mediumImpact();
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => CupertinoActionSheet(
@@ -2019,10 +2038,36 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
       ),
     );
 
-    bubbleContent = Flexible(child: bubbleContent);
+    final hasReactions = message.hasReactions;
+    bubbleContent = Flexible(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          bubbleContent,
+          if (hasReactions)
+            Positioned(
+              bottom: -15,
+              right: isMine ? 28 : null,
+              left: isMine ? null : 33,
+              child: _ReactionBar(
+                reactions: message.reactions,
+                currentUserId: widget.currentUserId,
+                isMine: isMine,
+                onToggle: (emoji) {
+                  ref
+                      .read(realtimeMessagesProvider(
+                              message.conversationId)
+                          .notifier)
+                      .toggleReaction(message.id, emoji);
+                },
+              ),
+            ),
+        ],
+      ),
+    );
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      padding: EdgeInsets.only(bottom: hasReactions ? 16 : 2),
       child: Column(
         crossAxisAlignment:
             isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -2063,28 +2108,6 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
               ],
             ),
           ),
-
-          // Reaction Bar — hiển thị emoji phía dưới bubble
-          if (message.hasReactions)
-            Padding(
-              padding: EdgeInsets.only(
-                top: 2,
-                left: isMine ? 0 : 10,
-                right: isMine ? 10 : 0,
-              ),
-              child: _ReactionBar(
-                reactions: message.reactions,
-                currentUserId: widget.currentUserId,
-                isMine: isMine,
-                onToggle: (emoji) {
-                  ref
-                      .read(realtimeMessagesProvider(
-                              message.conversationId)
-                          .notifier)
-                      .toggleReaction(message.id, emoji);
-                },
-              ),
-            ),
 
           AnimatedSize(
             duration: const Duration(milliseconds: 150),
@@ -2149,62 +2172,111 @@ class _ReactionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      alignment: isMine ? WrapAlignment.end : WrapAlignment.start,
-      children: reactions.entries.map((entry) {
-        final emoji = entry.key;
-        final users = entry.value;
-        final count = users.length;
-        final iReacted = users.contains(currentUserId);
+    final activeReactions = reactions.entries
+        .where((entry) => entry.value.isNotEmpty)
+        .toList();
 
-        return GestureDetector(
-          onTap: () => onToggle(emoji),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    if (activeReactions.isEmpty) return const SizedBox.shrink();
+
+    // Sắp xếp các emoji theo số lượng thả giảm dần
+    activeReactions.sort((a, b) => b.value.length.compareTo(a.value.length));
+
+    // Lấy tối đa 2 emoji có lượt react nhiều nhất
+    final topReactions = activeReactions.take(2).toList();
+    final totalCount = activeReactions.fold<int>(0, (sum, entry) => sum + entry.value.length);
+    final iReacted = activeReactions.any((entry) => entry.value.contains(currentUserId));
+
+    final pillBgColor = iReacted
+        ? (isDark ? const Color(0xFF1B3D6D) : const Color(0xFFD0ECFC))
+        : (isDark ? const Color(0xFF2E2E3E) : const Color(0xFFEBEBEB));
+
+    final pillBorderColor = iReacted
+        ? (isDark ? Colors.blue.withValues(alpha: 0.5) : Colors.blue.withValues(alpha: 0.3))
+        : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.08));
+
+    final List<Widget> emojiWidgets = [];
+    for (int i = 0; i < topReactions.length; i++) {
+      emojiWidgets.add(
+        Positioned(
+          left: i * 11.0,
+          child: Container(
+            width: 18,
+            height: 18,
             decoration: BoxDecoration(
-              color: iReacted
-                  ? (isDark
-                      ? Colors.blue.withValues(alpha: 0.25)
-                      : Colors.blue.withValues(alpha: 0.12))
-                  : (isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.06)),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: iReacted
-                    ? Colors.blue.withValues(alpha: 0.5)
-                    : Colors.transparent,
-                width: 1,
+              shape: BoxShape.circle,
+              color: pillBgColor,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              topReactions[i].key,
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.0,
+                fontFamilyFallback: ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji'],
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  emoji,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                if (count > 1) ...[
-                  const SizedBox(width: 3),
-                  Text(
-                    '$count',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: iReacted
-                          ? Colors.blue
-                          : (isDark ? Colors.white70 : Colors.black54),
-                    ),
-                  ),
-                ],
-              ],
-            ),
           ),
+        ),
+      );
+    }
+
+    final emojiStackWidth = topReactions.length == 1 ? 18.0 : 29.0;
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        // Nếu user đã react thì toggle cái họ đã react, nếu chưa thì toggle cái hot nhất
+        final myReaction = activeReactions.firstWhere(
+          (entry) => entry.value.contains(currentUserId),
+          orElse: () => activeReactions.first,
         );
-      }).toList(),
+        onToggle(myReaction.key);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: pillBgColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: pillBorderColor,
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: emojiStackWidth,
+              height: 18,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: emojiWidgets,
+              ),
+            ),
+            if (totalCount > 1) ...[
+              const SizedBox(width: 4),
+              Text(
+                '$totalCount',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: iReacted
+                      ? Colors.blue
+                      : (isDark ? Colors.white70 : Colors.black54),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2400,7 +2472,7 @@ class _SwipeToReplyState extends State<SwipeToReply>
 
       if (_dragOffset.abs() >= _triggerThreshold && !_isTriggered) {
         _isTriggered = true;
-        HapticFeedback.mediumImpact();
+        HapticFeedback.lightImpact();
       } else if (_dragOffset.abs() < _triggerThreshold && _isTriggered) {
         _isTriggered = false;
       }
@@ -2409,7 +2481,10 @@ class _SwipeToReplyState extends State<SwipeToReply>
 
   void _onHorizontalDragEnd(DragEndDetails _) {
     if (!widget.enabled) return;
-    if (_dragOffset.abs() >= _triggerThreshold) widget.onReply();
+    if (_dragOffset.abs() >= _triggerThreshold) {
+      HapticFeedback.mediumImpact();
+      widget.onReply();
+    }
     _isTriggered = false;
     final start = _dragOffset;
     _animation = Tween<double>(begin: start, end: 0.0).animate(
