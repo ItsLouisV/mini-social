@@ -15,6 +15,8 @@ class MessagePopupMenuContent extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onInfo;
   final Function(String emoji) onReact;
+  final bool hasMyReaction;
+  final VoidCallback? onClearAllReactions;
 
   const MessagePopupMenuContent({
     super.key,
@@ -30,6 +32,8 @@ class MessagePopupMenuContent extends StatelessWidget {
     required this.onDelete,
     required this.onInfo,
     required this.onReact,
+    this.hasMyReaction = false,
+    this.onClearAllReactions,
   });
 
   @override
@@ -111,15 +115,39 @@ class MessagePopupMenuContent extends StatelessWidget {
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: ['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) {
-                return _EmojiItem(
-                  emoji: emoji,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    onReact(emoji);
-                  },
-                );
-              }).toList(),
+              children: [
+                ...['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) {
+                  return _EmojiItem(
+                    emoji: emoji,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      onReact(emoji);
+                    },
+                  );
+                }),
+                if (hasMyReaction)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: GestureDetector(
+                      onTap: () {
+                        HapticFeedback.mediumImpact();
+                        onClearAllReactions?.call();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.red.withValues(alpha: 0.15) : Colors.red.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.heart_slash,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 18),

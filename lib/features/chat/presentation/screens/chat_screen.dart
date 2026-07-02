@@ -14,6 +14,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../profile/providers/profile_provider.dart';
 import '../../domain/message_model.dart';
 import '../../domain/pinned_message_model.dart';
 import '../../providers/chat_provider.dart';
@@ -1634,6 +1635,13 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
           isMine: isMine,
           isPinned: widget.isPinned,
           isText: message.isText,
+          hasMyReaction: message.reactions.values.any((users) => users.contains(widget.currentUserId)),
+          onClearAllReactions: () {
+            Navigator.pop(context);
+            ref
+                .read(realtimeMessagesProvider(message.conversationId).notifier)
+                .clearMyReactions(message.id);
+          },
           onReply: () {
             Navigator.pop(context);
             widget.onSwipeToReply?.call();
@@ -1747,6 +1755,20 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
         ? widget.message.createdAt.toLocal()
         : widget.message.createdAt;
     return local.localTimeHHmm;
+  }
+
+  void _showReactionsBottomSheet(BuildContext context, MessageModel message) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return _ReactionsBottomSheet(
+          message: message,
+          currentUserId: widget.currentUserId,
+        );
+      },
+    );
   }
 
   void _showFailedMessageMenu(BuildContext context) {
@@ -2053,13 +2075,7 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                 reactions: message.reactions,
                 currentUserId: widget.currentUserId,
                 isMine: isMine,
-                onToggle: (emoji) {
-                  ref
-                      .read(realtimeMessagesProvider(
-                              message.conversationId)
-                          .notifier)
-                      .toggleReaction(message.id, emoji);
-                },
+                onTap: () => _showReactionsBottomSheet(context, message),
               ),
             ),
         ],
@@ -2159,13 +2175,13 @@ class _ReactionBar extends StatelessWidget {
   final Map<String, List<String>> reactions;
   final String currentUserId;
   final bool isMine;
-  final void Function(String emoji) onToggle;
+  final VoidCallback onTap;
 
   const _ReactionBar({
     required this.reactions,
     required this.currentUserId,
     required this.isMine,
-    required this.onToggle,
+    required this.onTap,
   });
 
   @override
@@ -2225,12 +2241,7 @@ class _ReactionBar extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
-        // Nếu user đã react thì toggle cái họ đã react, nếu chưa thì toggle cái hot nhất
-        final myReaction = activeReactions.firstWhere(
-          (entry) => entry.value.contains(currentUserId),
-          orElse: () => activeReactions.first,
-        );
-        onToggle(myReaction.key);
+        onTap();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -2575,3 +2586,226 @@ MessageModel get _emptyMessage => MessageModel(
   senderId: '',
   createdAt: DateTime.utc(1970),
 );
+
+// ── Reactions Bottom Sheet ───────────────────────────────────────────────────
+
+class _ReactionsBottomSheet extends ConsumerStatefulWidget {
+  final MessageModel message;
+  final String currentUserId;
+
+  const _ReactionsBottomSheet({
+    required this.message,
+    required this.currentUserId,
+  });
+
+  @override
+  ConsumerState<_ReactionsBottomSheet> createState() => _ReactionsBottomSheetState();
+}
+
+class _ReactionsBottomSheetState extends ConsumerState<_ReactionsBottomSheet> {
+  String _selectedTab = 'all';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final activeReactions = widget.message.reactions.entries
+        .where((entry) => entry.value.isNotEmpty)
+        .toList();
+
+    activeReactions.sort((a, b) => b.value.length.compareTo(a.value.length));
+    final totalCount = activeReactions.fold<int>(0, (sum, entry) => sum + entry.value.length);
+
+    final List<({String id, String label, int count})> tabs = [
+      (id: 'all', label: 'Tất cả', count: totalCount),
+      ...activeReactions.map((entry) => (id: entry.key, label: entry.key, count: entry.value.length)),
+    ];
+
+    final List<({String userId, String emoji})> items = [];
+    if (_selectedTab == 'all') {
+      for (final entry in activeReactions) {
+        for (final userId in entry.value) {
+          items.add((userId: userId, emoji: entry.key));
+        }
+      }
+    } else {
+      final entry = activeReactions.firstWhere((e) => e.key == _selectedTab, orElse: () => activeReactions.first);
+      for (final userId in entry.value) {
+        items.add((userId: userId, emoji: entry.key));
+      }
+    }
+
+    final List<Widget> listChildren = [
+      const SizedBox(height: 10),
+      Center(
+        child: Container(
+          width: 36,
+          height: 4,
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white30 : Colors.black26,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      ),
+      const SizedBox(height: 14),
+      Center(
+        child: Text(
+          'Biểu cảm',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: tabs.map((tab) {
+            final isSelected = _selectedTab == tab.id;
+            return GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _selectedTab = tab.id);
+              },
+              child: Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected ? theme.colorScheme.primary : (isDark ? Colors.white10 : Colors.black12),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      tab.label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected ? theme.colorScheme.primary : (isDark ? Colors.white70 : Colors.black87),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${tab.count}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected ? theme.colorScheme.primary : (isDark ? Colors.white38 : Colors.black38),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+      const Divider(height: 24),
+      ...items.map((item) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _ReactionUserRow(
+              userId: item.userId,
+              emoji: item.emoji,
+              currentUserId: widget.currentUserId,
+            ),
+          )),
+    ];
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.45,
+      minChildSize: 0.25,
+      maxChildSize: 0.90,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: ListView.builder(
+            controller: scrollController,
+            itemCount: listChildren.length,
+            padding: EdgeInsets.zero,
+            itemBuilder: (context, index) {
+              return listChildren[index];
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ReactionUserRow extends ConsumerWidget {
+  final String userId;
+  final String emoji;
+  final String currentUserId;
+
+  const _ReactionUserRow({
+    required this.userId,
+    required this.emoji,
+    required this.currentUserId,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final profileAsync = ref.watch(profileProvider(userId));
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          profileAsync.when(
+            data: (p) => AppAvatar(
+              imageUrl: p.avatarUrl,
+              name: p.displayName,
+              radius: 18,
+            ),
+            loading: () => const CircleAvatar(
+              radius: 18,
+              child: CupertinoActivityIndicator(radius: 8),
+            ),
+            error: (_, __) => const CircleAvatar(
+              radius: 18,
+              child: Icon(CupertinoIcons.person),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: profileAsync.when(
+              data: (p) {
+                final isMe = userId == currentUserId;
+                return Text(
+                  isMe ? 'Bạn' : p.displayName,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              },
+              loading: () => const Text('Đang tải...'),
+              error: (_, __) => const Text('Người dùng'),
+            ),
+          ),
+          Text(
+            emoji,
+            style: const TextStyle(
+              fontSize: 18,
+              fontFamilyFallback: ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji'],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

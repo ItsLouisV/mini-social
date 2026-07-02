@@ -409,4 +409,14 @@ class ChatRepository {
     }
     return result;
   }
+
+  /// Xóa toàn bộ emoji cảm xúc của mình trên tin nhắn này
+  Future<void> clearMyReactions(String messageId) async {
+    final userId = currentUserId!;
+    await _client
+        .from('message_reactions')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('user_id', userId);
+  }
 }

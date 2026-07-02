@@ -211,6 +211,35 @@ class ChatMessagesNotifier
     });
   }
 
+  Future<void> clearMyReactions(String messageId) async {
+    final repo = ref.read(chatRepositoryProvider);
+    final userId = repo.currentUserId;
+    if (userId == null) return;
+
+    // ① Optimistic update ngay lập tức: loại bỏ userId của mình khỏi tất cả các emoji
+    final current = state.valueOrNull;
+    if (current != null) {
+      final updated = current.messages.map((m) {
+        if (m.id != messageId) return m;
+        final newReactions = Map<String, List<String>>.from(
+          m.reactions.map((k, v) => MapEntry(k, List<String>.from(v))),
+        );
+        newReactions.forEach((emoji, users) {
+          users.remove(userId);
+        });
+        newReactions.removeWhere((emoji, users) => users.isEmpty);
+        return m.copyWith(reactions: newReactions);
+      }).toList();
+      state = AsyncData(current.copyWith(messages: updated));
+    }
+
+    // ② Sync với database ngầm
+    repo.clearMyReactions(messageId).catchError((_) {
+      // Rollback nếu lỗi
+      if (current != null) state = AsyncData(current);
+    });
+  }
+
   @override
   Future<ChatMessagesState> build(String arg) async {
     final repo = ref.watch(chatRepositoryProvider);
