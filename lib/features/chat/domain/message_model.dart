@@ -4,7 +4,7 @@ class MessageModel {
   final String senderId;
   final String? content;
   final String? mediaUrl;
-  final String messageType; // 'text' | 'image' | 'voice'
+  final String messageType; // 'text' | 'image' | 'voice' | 'recalled'
   final bool isSeen;
   final DateTime createdAt;
   final String? replyToMessageId;
@@ -13,6 +13,10 @@ class MessageModel {
 
   // Thuộc tính để lưu tạm UI state cho tin nhắn reply
   final MessageModel? replyToMessage;
+
+  /// Reactions: key = emoji, value = list of userIds who reacted
+  /// Ví dụ: {'👍': ['user1', 'user2'], '❤️': ['user3']}
+  final Map<String, List<String>> reactions;
 
   const MessageModel({
     required this.id,
@@ -27,9 +31,23 @@ class MessageModel {
     this.replyToMessage,
     this.callId,
     this.isFailed = false,
+    this.reactions = const {},
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
+    // Parse reactions từ joined data (list of {emoji, user_id})
+    final Map<String, List<String>> parsedReactions = {};
+    final rawReactions = json['reactions'];
+    if (rawReactions is List) {
+      for (final r in rawReactions) {
+        final emoji = r['emoji'] as String?;
+        final userId = r['user_id'] as String?;
+        if (emoji != null && userId != null) {
+          parsedReactions.putIfAbsent(emoji, () => []).add(userId);
+        }
+      }
+    }
+
     return MessageModel(
       id: json['id'] as String,
       conversationId: json['conversation_id'] as String,
@@ -48,6 +66,7 @@ class MessageModel {
               : MessageModel.fromJson(json['reply_to_message'] as Map<String, dynamic>))
           : null,
       callId: json['call_id'] as String?,
+      reactions: parsedReactions,
     );
   }
 
@@ -69,4 +88,38 @@ class MessageModel {
   bool get isText => messageType == 'text';
   bool get isImage => messageType == 'image';
   bool get isCall => messageType == 'call_log';
+  bool get isRecalled => messageType == 'recalled';
+  bool get hasReactions => reactions.isNotEmpty;
+
+  MessageModel copyWith({
+    String? id,
+    String? conversationId,
+    String? senderId,
+    String? content,
+    String? mediaUrl,
+    String? messageType,
+    bool? isSeen,
+    DateTime? createdAt,
+    String? replyToMessageId,
+    MessageModel? replyToMessage,
+    String? callId,
+    bool? isFailed,
+    Map<String, List<String>>? reactions,
+  }) {
+    return MessageModel(
+      id: id ?? this.id,
+      conversationId: conversationId ?? this.conversationId,
+      senderId: senderId ?? this.senderId,
+      content: content ?? this.content,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      messageType: messageType ?? this.messageType,
+      isSeen: isSeen ?? this.isSeen,
+      createdAt: createdAt ?? this.createdAt,
+      replyToMessageId: replyToMessageId ?? this.replyToMessageId,
+      replyToMessage: replyToMessage ?? this.replyToMessage,
+      callId: callId ?? this.callId,
+      isFailed: isFailed ?? this.isFailed,
+      reactions: reactions ?? this.reactions,
+    );
+  }
 }

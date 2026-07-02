@@ -57,6 +57,8 @@ dependencies:
   objectbox: ^4.0.3
   objectbox_flutter_libs: ^4.0.3
   connectivity_plus: ^7.0.0
+  custom_pop_up_menu: ^1.2.4
+  google_fonts: ^8.1.0
 
 dev_dependencies:
   flutter_test:

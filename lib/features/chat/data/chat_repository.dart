@@ -162,7 +162,7 @@ class ChatRepository {
   Future<List<MessageModel>> getMessages(String conversationId) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
-        .select('*, reply_to_message:reply_to_message_id(*)')
+        .select('*, reply_to_message:reply_to_message_id(*), reactions:message_reactions(emoji, user_id)')
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true);
 
@@ -179,7 +179,7 @@ class ChatRepository {
   }) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
-        .select('*, reply_to_message:reply_to_message_id(*)')
+        .select('*, reply_to_message:reply_to_message_id(*), reactions:message_reactions(emoji, user_id)')
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: false)
         .range(offset, offset + limit - 1);
@@ -347,5 +347,66 @@ class ChatRepository {
       .map((e) => PinnedMessageModel.fromJson(e))
       .toList();
   }
-}
 
+  Future<void> recallMessage(String messageId) async {
+    await _client
+        .from(SupabaseConstants.messagesTable)
+        .update({
+          'content': 'Tin nhắn đã thu hồi',
+          'message_type': 'recalled',
+          'media_url': null,
+        })
+        .eq('id', messageId);
+  }
+
+  // ── Reactions ────────────────────────────────────────────────────────────────────
+
+  /// Toggle emoji reaction cho tin nhắn:
+  /// - Nếu user đã react emoji đó rồi → xóa (toggle off)
+  /// - Nếu chưa → thêm mới
+  Future<void> toggleReaction(String messageId, String emoji) async {
+    final userId = currentUserId!;
+
+    // Kiểm tra đã react chưa
+    final existing = await _client
+        .from('message_reactions')
+        .select('id')
+        .eq('message_id', messageId)
+        .eq('user_id', userId)
+        .eq('emoji', emoji)
+        .maybeSingle();
+
+    if (existing != null) {
+      // Đã react → xóa
+      await _client
+          .from('message_reactions')
+          .delete()
+          .eq('message_id', messageId)
+          .eq('user_id', userId)
+          .eq('emoji', emoji);
+    } else {
+      // Chưa react → thêm
+      await _client.from('message_reactions').insert({
+        'message_id': messageId,
+        'user_id': userId,
+        'emoji': emoji,
+      });
+    }
+  }
+
+  /// Lấy tất cả reactions cho một message.
+  Future<Map<String, List<String>>> getReactions(String messageId) async {
+    final data = await _client
+        .from('message_reactions')
+        .select('emoji, user_id')
+        .eq('message_id', messageId);
+
+    final Map<String, List<String>> result = {};
+    for (final r in (data as List)) {
+      final emoji = r['emoji'] as String;
+      final userId = r['user_id'] as String;
+      result.putIfAbsent(emoji, () => []).add(userId);
+    }
+    return result;
+  }
+}

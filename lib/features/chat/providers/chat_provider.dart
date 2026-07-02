@@ -12,6 +12,7 @@ import '../domain/message_model.dart';
 import '../domain/pinned_message_model.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/connectivity_service.dart';
+import 'hidden_chat_provider.dart' show secureStorageProvider;
 
 // ── Repository Provider ───────────────────────────────────────────────────────
 
@@ -120,9 +121,95 @@ class ChatMessagesState {
 class ChatMessagesNotifier
     extends AutoDisposeFamilyAsyncNotifier<ChatMessagesState, String> {
   RealtimeChannel? _channel;
+  RealtimeChannel? _reactionChannel;
   bool _isLoadingMore = false;
   static const int _pageSize = 30;
   static const _uuid = Uuid();
+
+  Future<Set<String>> _getDeletedMessageIds() async {
+    try {
+      final storage = ref.read(secureStorageProvider);
+      final raw = await storage.read(key: 'deleted_message_ids');
+      if (raw == null) return {};
+      return raw.split(',').toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> deleteMessageLocally(String messageId) async {
+    try {
+      final storage = ref.read(secureStorageProvider);
+      final raw = await storage.read(key: 'deleted_message_ids');
+      final currentIds = raw == null ? <String>{} : raw.split(',').toSet();
+      currentIds.add(messageId);
+      await storage.write(key: 'deleted_message_ids', value: currentIds.join(','));
+
+      final current = state.valueOrNull;
+      if (current != null) {
+        final filtered = current.messages.where((m) => m.id != messageId).toList();
+        state = AsyncData(current.copyWith(messages: filtered));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> recallMessage(String messageId) async {
+    // ① Optimistic update: cập nhật UI ngay lập tức
+    final current = state.valueOrNull;
+    if (current != null) {
+      final updated = current.messages.map((m) {
+        if (m.id == messageId) {
+          return m.copyWith(
+            messageType: 'recalled',
+            content: 'Tin nhắn đã được thu hồi',
+          );
+        }
+        return m;
+      }).toList();
+      state = AsyncData(current.copyWith(messages: updated));
+    }
+
+    // ② Sync ngầm với database (fire-and-forget)
+    final repo = ref.read(chatRepositoryProvider);
+    repo.recallMessage(messageId).catchError((_) {
+      // Nếu lỗi, rollback về state cũ
+      if (current != null) {
+        state = AsyncData(current);
+      }
+    });
+  }
+
+  Future<void> toggleReaction(String messageId, String emoji) async {
+    final repo = ref.read(chatRepositoryProvider);
+    final userId = repo.currentUserId;
+    if (userId == null) return;
+
+    // ① Optimistic update ngay lập tức
+    final current = state.valueOrNull;
+    if (current != null) {
+      final updated = current.messages.map((m) {
+        if (m.id != messageId) return m;
+        final newReactions = Map<String, List<String>>.from(
+          m.reactions.map((k, v) => MapEntry(k, List<String>.from(v))),
+        );
+        final users = newReactions.putIfAbsent(emoji, () => []);
+        if (users.contains(userId)) {
+          users.remove(userId);
+          if (users.isEmpty) newReactions.remove(emoji);
+        } else {
+          users.add(userId);
+        }
+        return m.copyWith(reactions: newReactions);
+      }).toList();
+      state = AsyncData(current.copyWith(messages: updated));
+    }
+
+    // ② Sync với database ngầm
+    repo.toggleReaction(messageId, emoji).catchError((_) {
+      // Rollback nếu lỗi
+      if (current != null) state = AsyncData(current);
+    });
+  }
 
   @override
   Future<ChatMessagesState> build(String arg) async {
@@ -138,7 +225,8 @@ class ChatMessagesNotifier
     if (local != null && !kIsWeb) {
       final cached = await local.getMessages(arg, limit: _pageSize);
       if (cached.isNotEmpty) {
-        messages = cached;
+        final deletedIds = await _getDeletedMessageIds();
+        messages = cached.where((m) => !deletedIds.contains(m.id)).toList();
         hasMore = cached.length >= _pageSize;
 
         // Emit cache ngay, sync ngầm phía dưới
@@ -159,12 +247,14 @@ class ChatMessagesNotifier
     }
 
     // ② Không có cache hoặc Web → load từ Supabase
-    messages = await repo.getMessagesPaginated(arg, limit: _pageSize, offset: 0);
-    hasMore = messages.length >= _pageSize;
+    final fetched = await repo.getMessagesPaginated(arg, limit: _pageSize, offset: 0);
+    final deletedIds = await _getDeletedMessageIds();
+    messages = fetched.where((m) => !deletedIds.contains(m.id)).toList();
+    hasMore = fetched.length >= _pageSize;
 
     // Lưu vào cache nếu có
-    if (local != null && messages.isNotEmpty) {
-      await local.saveMessages(messages);
+    if (local != null && fetched.isNotEmpty) {
+      await local.saveMessages(fetched);
     }
 
     _subscribeRealtime(arg, repo, local, sync);
@@ -172,7 +262,10 @@ class ChatMessagesNotifier
     // Load failed messages
     final failed = local?.getFailedMessages(arg) ?? [];
 
-    ref.onDispose(() => _channel?.unsubscribe());
+    ref.onDispose(() {
+      _channel?.unsubscribe();
+      _reactionChannel?.unsubscribe();
+    });
 
     return ChatMessagesState(
       messages: messages,
@@ -195,10 +288,10 @@ class ChatMessagesNotifier
         final current = state.valueOrNull;
         if (current == null || synced.isEmpty) return;
 
+        final deletedIds = await _getDeletedMessageIds();
         // Merge: thay thế bằng synced messages nếu có nhiều hơn
-        // (synced luôn là trang mới nhất từ server)
         final existingIds = current.messages.map((m) => m.id).toSet();
-        final newOnes = synced.where((m) => !existingIds.contains(m.id)).toList();
+        final newOnes = synced.where((m) => !existingIds.contains(m.id) && !deletedIds.contains(m.id)).toList();
 
         if (newOnes.isNotEmpty) {
           final merged = [...newOnes, ...current.messages];
@@ -211,7 +304,18 @@ class ChatMessagesNotifier
     });
   }
 
-  /// Subscribe Supabase Realtime cho tin nhắn mới
+  Future<MessageModel> _fetchFullMessage(String id) async {
+    final data = await ref
+        .read(supabaseServiceProvider)
+        .client
+        .from('messages')
+        .select('*, reply_to_message:reply_to_message_id(*)')
+        .eq('id', id)
+        .single();
+    return MessageModel.fromJson(data);
+  }
+
+  /// Subscribe Supabase Realtime cho tin nhắn mới/cập nhật/xóa
   void _subscribeRealtime(
     String conversationId,
     ChatRepository repo,
@@ -226,7 +330,7 @@ class ChatMessagesNotifier
 
       _channel!
           .onPostgresChanges(
-            event: PostgresChangeEvent.insert,
+            event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'messages',
             filter: PostgresChangeFilter(
@@ -235,41 +339,63 @@ class ChatMessagesNotifier
               value: conversationId,
             ),
             callback: (payload) async {
-              final newId = payload.newRecord['id'] as String?;
-              if (newId == null) return;
-
               final current = state.valueOrNull;
               if (current == null) return;
 
-              // Dedup: bỏ qua nếu đã có
-              if (current.messages.any((m) => m.id == newId)) return;
+              final deletedIds = await _getDeletedMessageIds();
 
-              try {
-                final fullMsgData = await ref
-                    .read(supabaseServiceProvider)
-                    .client
-                    .from('messages')
-                    .select('*, reply_to_message:reply_to_message_id(*)')
-                    .eq('id', newId)
-                    .single();
-                final newMsg = MessageModel.fromJson(fullMsgData);
+              if (payload.eventType == PostgresChangeEvent.insert) {
+                final newId = payload.newRecord['id'] as String?;
+                if (newId == null) return;
+                if (current.messages.any((m) => m.id == newId)) return;
+                if (deletedIds.contains(newId)) return;
 
-                // Lưu vào local cache
-                if (sync != null) {
-                  await sync.cacheRealtimeMessage(newMsg);
+                try {
+                  final newMsg = await _fetchFullMessage(newId);
+                  if (sync != null) {
+                    await sync.cacheRealtimeMessage(newMsg);
+                  }
+                  state = AsyncData(current.copyWith(
+                    messages: [newMsg, ...current.messages],
+                  ));
+                } catch (_) {
+                  final newMsg = MessageModel.fromJson(payload.newRecord);
+                  if (sync != null) {
+                    await sync.cacheRealtimeMessage(newMsg);
+                  }
+                  state = AsyncData(current.copyWith(
+                    messages: [newMsg, ...current.messages],
+                  ));
                 }
+              } else if (payload.eventType == PostgresChangeEvent.update) {
+                final updatedId = payload.newRecord['id'] as String?;
+                if (updatedId == null) return;
 
-                state = AsyncData(current.copyWith(
-                  messages: [newMsg, ...current.messages],
-                ));
-              } catch (_) {
-                final newMsg = MessageModel.fromJson(payload.newRecord);
-                if (sync != null) {
-                  await sync.cacheRealtimeMessage(newMsg);
+                try {
+                  final updatedMsg = await _fetchFullMessage(updatedId);
+                  if (sync != null) {
+                    await sync.cacheRealtimeMessage(updatedMsg);
+                  }
+                  final updatedList = current.messages.map((m) {
+                    return m.id == updatedId ? updatedMsg : m;
+                  }).toList();
+                  state = AsyncData(current.copyWith(messages: updatedList));
+                } catch (_) {
+                  final updatedMsg = MessageModel.fromJson(payload.newRecord);
+                  if (sync != null) {
+                    await sync.cacheRealtimeMessage(updatedMsg);
+                  }
+                  final updatedList = current.messages.map((m) {
+                    return m.id == updatedId ? updatedMsg : m;
+                  }).toList();
+                  state = AsyncData(current.copyWith(messages: updatedList));
                 }
-                state = AsyncData(current.copyWith(
-                  messages: [newMsg, ...current.messages],
-                ));
+              } else if (payload.eventType == PostgresChangeEvent.delete) {
+                final deletedId = payload.oldRecord['id'] as String?;
+                if (deletedId == null) return;
+
+                final updatedList = current.messages.where((m) => m.id != deletedId).toList();
+                state = AsyncData(current.copyWith(messages: updatedList));
               }
             },
           )
@@ -278,6 +404,43 @@ class ChatMessagesNotifier
               print('Supabase Realtime messages channel error: $error');
             }
           });
+
+    // Subscribe reaction changes cho conversation này
+    _reactionChannel = ref
+        .read(supabaseServiceProvider)
+        .client
+        .channel('reactions:$conversationId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'message_reactions',
+          callback: (payload) async {
+            // Lấy message_id từ record
+            final messageId = (payload.newRecord['message_id'] ??
+                payload.oldRecord['message_id']) as String?;
+            if (messageId == null) return;
+
+            final current = state.valueOrNull;
+            if (current == null) return;
+
+            // Chỉ xử lý nếu message này đang trong state
+            final msgIndex =
+                current.messages.indexWhere((m) => m.id == messageId);
+            if (msgIndex < 0) return;
+
+            // Fetch lại reactions mới nhất từ DB
+            try {
+              final freshReactions =
+                  await repo.getReactions(messageId);
+              final updatedList = List<MessageModel>.from(current.messages);
+              updatedList[msgIndex] = updatedList[msgIndex]
+                  .copyWith(reactions: freshReactions);
+              state = AsyncData(current.copyWith(messages: updatedList));
+            } catch (_) {}
+          },
+        )
+        .subscribe();
+
     } catch (e) {
       print('Error subscribing to realtime messages: $e');
     }
@@ -298,18 +461,15 @@ class ChatMessagesNotifier
       List<MessageModel> older;
 
       if (isOnline) {
-        // Online: fetch từ Supabase
         older = await repo.getMessagesPaginated(
           arg,
           limit: _pageSize,
           offset: current.messages.length,
         );
-        // Lưu vào cache
         if (local != null && older.isNotEmpty) {
           await local.saveMessages(older);
         }
       } else if (local != null) {
-        // Offline: load từ local cache
         older = await local.getMessages(
           arg,
           limit: _pageSize,
@@ -324,16 +484,15 @@ class ChatMessagesNotifier
         return;
       }
 
-      // Merge, dedup theo id
+      final deletedIds = await _getDeletedMessageIds();
       final existingIds = current.messages.map((m) => m.id).toSet();
-      final newOnes = older.where((m) => !existingIds.contains(m.id)).toList();
+      final newOnes = older.where((m) => !existingIds.contains(m.id) && !deletedIds.contains(m.id)).toList();
 
       state = AsyncData(current.copyWith(
         messages: [...current.messages, ...newOnes],
         hasMore: older.length >= _pageSize,
       ));
     } catch (_) {
-      // bỏ qua lỗi mạng
     } finally {
       _isLoadingMore = false;
     }
@@ -350,7 +509,6 @@ class ChatMessagesNotifier
     final current = state.valueOrNull;
     if (current == null) return;
 
-    // Đã có trong state → chỉ cần scroll
     if (current.messages.any((m) => m.id == messageId)) {
       state = AsyncData(current.copyWith(pendingScrollToId: messageId));
       return;
@@ -364,9 +522,10 @@ class ChatMessagesNotifier
 
       if (window.isEmpty) return;
 
+      final deletedIds = await _getDeletedMessageIds();
       final existingIds = current.messages.map((m) => m.id).toSet();
       final newOnes =
-          window.where((m) => !existingIds.contains(m.id)).toList();
+          window.where((m) => !existingIds.contains(m.id) && !deletedIds.contains(m.id)).toList();
 
       if (newOnes.isEmpty) {
         state = AsyncData(current.copyWith(pendingScrollToId: messageId));
@@ -376,7 +535,6 @@ class ChatMessagesNotifier
       final merged = [...current.messages, ...newOnes];
       merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      // Lưu vào cache
       final local = ref.read(localChatRepositoryProvider);
       if (local != null) {
         await local.saveMessages(newOnes);
@@ -392,7 +550,6 @@ class ChatMessagesNotifier
     }
   }
 
-  /// Xoá pendingScrollToId sau khi UI đã xử lý xong
   void clearPendingScroll() {
     final current = state.valueOrNull;
     if (current == null) return;

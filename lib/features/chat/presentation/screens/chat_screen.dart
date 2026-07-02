@@ -17,6 +17,8 @@ import '../../../auth/providers/auth_provider.dart';
 import '../../domain/message_model.dart';
 import '../../domain/pinned_message_model.dart';
 import '../../providers/chat_provider.dart';
+import '../../presentation/widgets/message_popup_menu_content.dart';
+import '../../presentation/widgets/message_context_menu_route.dart';
 
 // ── Helper data class ─────────────────────────────────────────────────────────
 
@@ -175,13 +177,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   // ── Cập nhật cache grouping khi messages thay đổi ─────────────────────────
 
   void _updateCacheIfNeeded(List<MessageModel> messages) {
-    // So sánh nhanh bằng length + id đầu + id cuối để tránh rebuild thừa
-    if (messages.length == _cachedMessages.length &&
-        (messages.isEmpty ||
-            (messages.first.id == _cachedMessages.first.id &&
-                messages.last.id == _cachedMessages.last.id))) {
-      return;
+    // Rebuild cache nếu số lượng thay đổi, id đầu/cuối thay đổi,
+    // HOẶC bất kỳ message nào có messageType khác (ví dụ: thu hồi)
+    bool needsUpdate = false;
+
+    if (messages.length != _cachedMessages.length) {
+      needsUpdate = true;
+    } else if (messages.isNotEmpty) {
+      if (messages.first.id != _cachedMessages.first.id ||
+          messages.last.id != _cachedMessages.last.id) {
+        needsUpdate = true;
+      } else {
+        // Kiểm tra xem có message nào bị thay đổi trạng thái không
+        for (int i = 0; i < messages.length; i++) {
+          if (messages[i].messageType != _cachedMessages[i].messageType ||
+              messages[i].content != _cachedMessages[i].content) {
+            needsUpdate = true;
+            break;
+          }
+        }
+      }
     }
+
+    if (!needsUpdate) return;
+
     _cachedMessages = messages;
     final result = _buildItemList(messages);
     _cachedItems = result.items;
@@ -1381,83 +1400,335 @@ class _MessageBubble extends ConsumerStatefulWidget {
 
 class _MessageBubbleState extends ConsumerState<_MessageBubble> {
   bool _tapped = false;
+  final GlobalKey _bubbleKey = GlobalKey();
+
+  void _showCustomContextMenu(BuildContext context) {
+    final renderBox = _bubbleKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final size = renderBox.size;
+    final position = renderBox.localToGlobal(Offset.zero);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final isMine = widget.isMine;
+    final message = widget.message;
+
+    final myBubbleColor =
+        isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender;
+    final theirBubbleColor = isDark
+        ? AppColors.darkChatBubbleReceiver
+        : AppColors.chatBubbleReceiver;
+    final myTextColor =
+        isDark ? AppColors.darkChatTextSender : AppColors.chatTextSender;
+    final theirTextColor = isDark
+        ? AppColors.darkChatTextReceiver
+        : AppColors.chatTextReceiver;
+
+    final hasCaption = message.isImage &&
+        message.content != null &&
+        message.content != 'Đã gửi một ảnh' &&
+        message.content!.trim().isNotEmpty;
+
+    final overlayBubbleWidget = AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.72,
+      ),
+      decoration: BoxDecoration(
+        color: message.isImage && !hasCaption
+            ? Colors.transparent
+            : (isMine ? myBubbleColor : theirBubbleColor),
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(18),
+          topRight: const Radius.circular(18),
+          bottomLeft: Radius.circular(isMine ? 18 : 4),
+          bottomRight: Radius.circular(isMine ? 4 : 18),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(18),
+          topRight: const Radius.circular(18),
+          bottomLeft: Radius.circular(isMine ? 18 : 4),
+          bottomRight: Radius.circular(isMine ? 4 : 18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (message.replyToMessage != null)
+              Container(
+                decoration: BoxDecoration(
+                  color: message.isImage
+                      ? (isMine ? myBubbleColor : theirBubbleColor)
+                      : (isMine
+                          ? (isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : Colors.black.withValues(alpha: 0.15))
+                          : (isDark
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.black.withValues(alpha: 0.05))),
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(18),
+                    topRight: const Radius.circular(18),
+                    bottomLeft: message.isImage
+                        ? const Radius.circular(12)
+                        : Radius.zero,
+                    bottomRight: message.isImage
+                        ? const Radius.circular(12)
+                        : Radius.zero,
+                  ),
+                ),
+                margin: EdgeInsets.only(bottom: message.isImage ? 4 : 0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 8),
+                child: IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 3,
+                        decoration: BoxDecoration(
+                          color: isMine
+                              ? Colors.white70
+                              : theme.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              message.replyToMessage!.senderId ==
+                                      widget.currentUserId
+                                  ? 'Bạn'
+                                  : widget.otherUserName,
+                              style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isMine
+                                        ? Colors.white
+                                        : theme.colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              message.replyToMessage!.isText
+                                  ? (message.replyToMessage!.content ?? '')
+                                  : (message.replyToMessage!.isImage
+                                      ? 'Hình ảnh'
+                                      : 'Cuộc gọi'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isMine
+                                    ? Colors.white70
+                                    : (isDark
+                                        ? Colors.white70
+                                        : Colors.black54),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (message.replyToMessage!.isImage &&
+                          message.replyToMessage!.mediaUrl != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: CachedNetworkImage(
+                              imageUrl: message.replyToMessage!.mediaUrl!,
+                              width: 32,
+                              height: 32,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(
+                                color: Colors.grey.withValues(alpha: 0.2),
+                                width: 32,
+                                height: 32,
+                              ),
+                              errorWidget: (_, __, ___) => const Icon(
+                                  CupertinoIcons.photo,
+                                  size: 16),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            if (message.isImage && message.mediaUrl != null)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ImageBubble(
+                    url: message.mediaUrl!,
+                    isMine: isMine,
+                    hasCaption: hasCaption,
+                  ),
+                  if (hasCaption)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      child: Text(
+                        message.content!,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: isMine ? myTextColor : theirTextColor,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                ],
+              )
+            else if (message.isCall)
+              _CallLogBubble(message: message, isMine: isMine)
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                child: Text(
+                  message.content ?? '',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isMine ? myTextColor : theirTextColor,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    Navigator.push(
+      context,
+      MessageContextMenuRoute(
+        messagePosition: position,
+        messageSize: size,
+        messageWidget: overlayBubbleWidget,
+        isMine: isMine,
+        menuContentWidget: MessagePopupMenuContent(
+          isMine: isMine,
+          isPinned: widget.isPinned,
+          isText: message.isText,
+          onReply: () {
+            Navigator.pop(context);
+            widget.onSwipeToReply?.call();
+          },
+          onPin: () {
+            Navigator.pop(context);
+            widget.onPin?.call();
+          },
+          onUnpin: () {
+            Navigator.pop(context);
+            widget.onUnpin?.call();
+          },
+          onCopy: () {
+            Navigator.pop(context);
+            Clipboard.setData(ClipboardData(text: message.content ?? ''));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Đã sao chép tin nhắn vào bộ nhớ tạm'),
+              duration: Duration(seconds: 1),
+            ));
+          },
+          onForward: () {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Chức năng chuyển tiếp tin nhắn đang được phát triển'),
+              duration: Duration(seconds: 1),
+            ));
+          },
+          onRecall: isMine
+              ? () {
+                  Navigator.pop(context);
+                  showCupertinoDialog(
+                    context: context,
+                    builder: (ctx) => CupertinoAlertDialog(
+                      title: const Text('Thu hồi tin nhắn'),
+                      content: const Text('Tin nhắn này sẽ bị thu hồi ở cả 2 phía. Bạn có chắc chắn muốn thu hồi không?'),
+                      actions: [
+                        CupertinoDialogAction(
+                          child: const Text('Huỷ'),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                        CupertinoDialogAction(
+                          isDestructiveAction: true,
+                          child: const Text('Thu hồi'),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            // UI cập nhật ngay lập tức (optimistic), DB sync ngầm
+                            ref
+                                .read(realtimeMessagesProvider(message.conversationId).notifier)
+                                .recallMessage(message.id);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                              content: Text('Đã thu hồi tin nhắn'),
+                              duration: Duration(seconds: 1),
+                            ));
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              : null,
+          onDelete: () {
+            Navigator.pop(context);
+            showCupertinoDialog(
+              context: context,
+              builder: (ctx) => CupertinoAlertDialog(
+                title: const Text('Xóa tin nhắn'),
+                content: const Text('Tin nhắn này chỉ bị xóa ở phía bạn, đối phương vẫn sẽ nhìn thấy. Bạn có chắc chắn muốn xóa?'),
+                actions: [
+                  CupertinoDialogAction(
+                    child: const Text('Huỷ'),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                  CupertinoDialogAction(
+                    isDestructiveAction: true,
+                    child: const Text('Xóa'),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await ref
+                          .read(realtimeMessagesProvider(message.conversationId).notifier)
+                          .deleteMessageLocally(message.id);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Đã xóa tin nhắn phía bạn'),
+                        duration: Duration(seconds: 1),
+                      ));
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+          onInfo: () {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Gửi lúc: ${message.createdAt.toLocal().toString()}'),
+              duration: const Duration(seconds: 2),
+            ));
+          },
+          onReact: (emoji) {
+            Navigator.pop(context);
+            ref
+                .read(realtimeMessagesProvider(message.conversationId).notifier)
+                .toggleReaction(message.id, emoji);
+          },
+        ),
+      ),
+    );
+  }
 
   String get _timeStr {
     final local = widget.message.createdAt.isUtc
         ? widget.message.createdAt.toLocal()
         : widget.message.createdAt;
     return local.localTimeHHmm;
-  }
-
-  void _showContextMenu(BuildContext context, Offset globalPosition) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final messenger = ScaffoldMessenger.of(context);
-
-    final menuItems = <PopupMenuEntry<String>>[
-      _buildMenuItem('reply', CupertinoIcons.reply, 'Trả lời', isDark, theme),
-      _buildMenuItem(
-          widget.isPinned ? 'unpin' : 'pin',
-          widget.isPinned ? CupertinoIcons.pin_slash : CupertinoIcons.pin,
-          widget.isPinned ? 'Bỏ ghim tin nhắn' : 'Ghim tin nhắn',
-          isDark,
-          theme),
-      if (widget.message.isText && widget.message.content != null)
-        _buildMenuItem('copy', CupertinoIcons.doc_on_doc, 'Sao chép', isDark,
-            theme),
-    ];
-
-    showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        globalPosition.dx + 1,
-        globalPosition.dy + 1,
-      ),
-      items: menuItems,
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
-    ).then((value) {
-      if (!mounted || value == null) return;
-      switch (value) {
-        case 'reply':
-          widget.onSwipeToReply?.call();
-        case 'pin':
-          widget.onPin?.call();
-        case 'unpin':
-          widget.onUnpin?.call();
-        case 'copy':
-          final text = widget.message.content;
-          if (text != null) {
-            Clipboard.setData(ClipboardData(text: text));
-            messenger.showSnackBar(const SnackBar(
-              content: Text('Đã sao chép tin nhắn vào bộ nhớ tạm'),
-              duration: Duration(seconds: 1),
-            ));
-          }
-      }
-    });
-  }
-
-  PopupMenuItem<String> _buildMenuItem(
-      String value, IconData icon, String label, bool isDark, ThemeData theme) {
-    return PopupMenuItem<String>(
-      value: value,
-      child: Row(
-        children: [
-          Icon(icon,
-              size: 18,
-              color: isDark ? Colors.white70 : Colors.black87),
-          const SizedBox(width: 10),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? Colors.white : Colors.black87)),
-        ],
-      ),
-    );
   }
 
   void _showFailedMessageMenu(BuildContext context) {
@@ -1535,6 +1806,221 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
         message.content != 'Đã gửi một ảnh' &&
         message.content!.trim().isNotEmpty;
 
+    Widget bubbleContent = SwipeToReply(
+      key: _bubbleKey,
+      enabled: !message.isFailed && !message.isRecalled,
+      onReply: () => widget.onSwipeToReply?.call(),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.72,
+        ),
+        decoration: BoxDecoration(
+          color: message.isRecalled
+              ? (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.1))
+              : (isHighlighted
+                  ? theme.colorScheme.primary.withValues(alpha: 0.25)
+                  : (message.isImage && !hasCaption
+                      ? Colors.transparent
+                      : (isMine ? myBubbleColor : theirBubbleColor))),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isMine ? 18 : 4),
+            bottomRight: Radius.circular(isMine ? 4 : 18),
+          ),
+          border: Border.all(
+            color: isHighlighted
+                ? theme.colorScheme.primary
+                : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isMine ? 18 : 4),
+            bottomRight: Radius.circular(isMine ? 4 : 18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Quote box (reply preview bên trong bubble)
+              if (message.replyToMessage != null && !message.isRecalled)
+                GestureDetector(
+                  onTap: () {
+                    if (message.replyToMessageId != null) {
+                      widget.onTapReply?.call(message.replyToMessageId!);
+                    }
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: message.isImage
+                          ? (isMine ? myBubbleColor : theirBubbleColor)
+                          : (isMine
+                              ? (isDark
+                                  ? Colors.white.withValues(alpha: 0.12)
+                                  : Colors.black.withValues(alpha: 0.15))
+                              : (isDark
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : Colors.black.withValues(alpha: 0.05))),
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(18),
+                        topRight: const Radius.circular(18),
+                        bottomLeft: message.isImage
+                            ? const Radius.circular(12)
+                            : Radius.zero,
+                        bottomRight: message.isImage
+                            ? const Radius.circular(12)
+                            : Radius.zero,
+                      ),
+                    ),
+                    margin: EdgeInsets.only(bottom: message.isImage ? 4 : 0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 3,
+                            decoration: BoxDecoration(
+                              color: isMine
+                                  ? Colors.white70
+                                  : theme.colorScheme.primary,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  message.replyToMessage!.senderId ==
+                                          widget.currentUserId
+                                      ? 'Bạn'
+                                      : widget.otherUserName,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isMine
+                                        ? Colors.white
+                                        : theme.colorScheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  message.replyToMessage!.isText
+                                      ? (message.replyToMessage!.content ?? '')
+                                      : (message.replyToMessage!.isImage
+                                          ? 'Hình ảnh'
+                                          : 'Cuộc gọi'),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isMine
+                                        ? Colors.white70
+                                        : (isDark
+                                            ? Colors.white70
+                                            : Colors.black54),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (message.replyToMessage!.isImage &&
+                              message.replyToMessage!.mediaUrl != null)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: CachedNetworkImage(
+                                  imageUrl: message.replyToMessage!.mediaUrl!,
+                                  width: 32,
+                                  height: 32,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => Container(
+                                    color: Colors.grey.withValues(alpha: 0.2),
+                                    width: 32,
+                                    height: 32,
+                                  ),
+                                  errorWidget: (_, __, ___) => const Icon(
+                                      CupertinoIcons.photo,
+                                      size: 16),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Nội dung tin nhắn
+              if (message.isRecalled)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  child: Text(
+                    'Tin nhắn đã được thu hồi',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontStyle: FontStyle.italic,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ),
+                )
+              else if (message.isImage && message.mediaUrl != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ImageBubble(
+                      url: message.mediaUrl!,
+                      isMine: isMine,
+                      hasCaption: hasCaption,
+                    ),
+                    if (hasCaption)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        child: Text(
+                          message.content!,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: isMine ? myTextColor : theirTextColor,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                  ],
+                )
+              else if (message.isCall)
+                _CallLogBubble(message: message, isMine: isMine)
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  child: Text(
+                    message.content ?? '',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: isMine ? myTextColor : theirTextColor,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    bubbleContent = Flexible(child: bubbleContent);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Column(
@@ -1549,21 +2035,13 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                 setState(() => _tapped = !_tapped);
               }
             },
-            onDoubleTap: message.isFailed ? null : widget.onSwipeToReply,
-            onSecondaryTapDown: (d) {
-              if (message.isFailed) {
-                _showFailedMessageMenu(context);
-              } else {
-                _showContextMenu(context, d.globalPosition);
-              }
-            },
-            onLongPressStart: (d) {
-              if (message.isFailed) {
-                _showFailedMessageMenu(context);
-              } else {
-                _showContextMenu(context, d.globalPosition);
-              }
-            },
+            onDoubleTap: message.isFailed || message.isRecalled ? null : widget.onSwipeToReply,
+            onSecondaryTapDown: message.isFailed || message.isRecalled
+                ? (message.isFailed ? (d) => _showFailedMessageMenu(context) : null)
+                : (d) => _showCustomContextMenu(context),
+            onLongPressStart: message.isFailed || message.isRecalled
+                ? (message.isFailed ? (d) => _showFailedMessageMenu(context) : null)
+                : (d) => _showCustomContextMenu(context),
             child: Row(
               mainAxisAlignment:
                   isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
@@ -1581,241 +2059,33 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                       ),
                     ),
                   ),
-                Flexible(
-                  child: SwipeToReply(
-                    enabled: !message.isFailed,
-                    onReply: () => widget.onSwipeToReply?.call(),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.72,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isHighlighted
-                            ? theme.colorScheme.primary
-                                .withValues(alpha: 0.25)
-                            : (message.isImage && !hasCaption
-                                ? Colors.transparent
-                                : (isMine
-                                    ? myBubbleColor
-                                    : theirBubbleColor)),
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(18),
-                          topRight: const Radius.circular(18),
-                          bottomLeft: Radius.circular(isMine ? 18 : 4),
-                          bottomRight: Radius.circular(isMine ? 4 : 18),
-                        ),
-                        border: Border.all(
-                          color: isHighlighted
-                              ? theme.colorScheme.primary
-                              : Colors.transparent,
-                          width: 1.5,
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(18),
-                          topRight: const Radius.circular(18),
-                          bottomLeft: Radius.circular(isMine ? 18 : 4),
-                          bottomRight: Radius.circular(isMine ? 4 : 18),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Quote box (reply preview bên trong bubble)
-                            if (message.replyToMessage != null)
-                              GestureDetector(
-                                onTap: () {
-                                  if (message.replyToMessageId != null) {
-                                    widget.onTapReply
-                                        ?.call(message.replyToMessageId!);
-                                  }
-                                },
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: message.isImage
-                                        ? (isMine
-                                            ? myBubbleColor
-                                            : theirBubbleColor)
-                                        : (isMine
-                                            ? (isDark
-                                                ? Colors.white
-                                                    .withValues(alpha: 0.12)
-                                                : Colors.black
-                                                    .withValues(alpha: 0.15))
-                                            : (isDark
-                                                ? Colors.white
-                                                    .withValues(alpha: 0.08)
-                                                : Colors.black
-                                                    .withValues(alpha: 0.05))),
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: const Radius.circular(18),
-                                      topRight: const Radius.circular(18),
-                                      bottomLeft: message.isImage
-                                          ? const Radius.circular(12)
-                                          : Radius.zero,
-                                      bottomRight: message.isImage
-                                          ? const Radius.circular(12)
-                                          : Radius.zero,
-                                    ),
-                                  ),
-                                  margin: EdgeInsets.only(
-                                      bottom: message.isImage ? 4 : 0),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
-                                  child: IntrinsicHeight(
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 3,
-                                          decoration: BoxDecoration(
-                                            color: isMine
-                                                ? Colors.white70
-                                                : theme.colorScheme.primary,
-                                            borderRadius:
-                                                BorderRadius.circular(2),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                message.replyToMessage!
-                                                            .senderId ==
-                                                        widget.currentUserId
-                                                    ? 'Bạn'
-                                                    : widget.otherUserName,
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: isMine
-                                                      ? Colors.white
-                                                      : theme.colorScheme
-                                                          .primary,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                message.replyToMessage!.isText
-                                                    ? (message.replyToMessage!
-                                                            .content ??
-                                                        '')
-                                                    : (message.replyToMessage!
-                                                            .isImage
-                                                        ? 'Hình ảnh'
-                                                        : 'Cuộc gọi'),
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: isMine
-                                                      ? Colors.white70
-                                                      : (isDark
-                                                          ? Colors.white70
-                                                          : Colors.black54),
-                                                ),
-                                                maxLines: 1,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        if (message.replyToMessage!.isImage &&
-                                            message.replyToMessage!.mediaUrl !=
-                                                null)
-                                          Padding(
-                                            padding:
-                                                const EdgeInsets.only(left: 8),
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                              child: CachedNetworkImage(
-                                                imageUrl: message
-                                                    .replyToMessage!.mediaUrl!,
-                                                width: 32,
-                                                height: 32,
-                                                fit: BoxFit.cover,
-                                                placeholder: (_, __) =>
-                                                    Container(
-                                                  color: Colors.grey
-                                                      .withValues(alpha: 0.2),
-                                                  width: 32,
-                                                  height: 32,
-                                                ),
-                                                errorWidget: (_, __, ___) =>
-                                                    const Icon(
-                                                        CupertinoIcons.photo,
-                                                        size: 16),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                            // Nội dung tin nhắn
-                            if (message.isImage && message.mediaUrl != null)
-                              Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _ImageBubble(
-                                    url: message.mediaUrl!,
-                                    isMine: isMine,
-                                    hasCaption: hasCaption,
-                                  ),
-                                  if (hasCaption)
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 14, vertical: 10),
-                                      child: Text(
-                                        message.content!,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: isMine
-                                              ? myTextColor
-                                              : theirTextColor,
-                                          height: 1.35,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              )
-                            else if (message.isCall)
-                              _CallLogBubble(
-                                  message: message, isMine: isMine)
-                            else
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 10),
-                                child: Text(
-                                  message.content ?? '',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: isMine
-                                        ? myTextColor
-                                        : theirTextColor,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                bubbleContent,
               ],
             ),
           ),
 
-          // Time + seen indicator
+          // Reaction Bar — hiển thị emoji phía dưới bubble
+          if (message.hasReactions)
+            Padding(
+              padding: EdgeInsets.only(
+                top: 2,
+                left: isMine ? 0 : 10,
+                right: isMine ? 10 : 0,
+              ),
+              child: _ReactionBar(
+                reactions: message.reactions,
+                currentUserId: widget.currentUserId,
+                isMine: isMine,
+                onToggle: (emoji) {
+                  ref
+                      .read(realtimeMessagesProvider(
+                              message.conversationId)
+                          .notifier)
+                      .toggleReaction(message.id, emoji);
+                },
+              ),
+            ),
+
           AnimatedSize(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeInOut,
@@ -1856,6 +2126,85 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Reaction Bar ─────────────────────────────────────────────────────────────────
+
+class _ReactionBar extends StatelessWidget {
+  final Map<String, List<String>> reactions;
+  final String currentUserId;
+  final bool isMine;
+  final void Function(String emoji) onToggle;
+
+  const _ReactionBar({
+    required this.reactions,
+    required this.currentUserId,
+    required this.isMine,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      alignment: isMine ? WrapAlignment.end : WrapAlignment.start,
+      children: reactions.entries.map((entry) {
+        final emoji = entry.key;
+        final users = entry.value;
+        final count = users.length;
+        final iReacted = users.contains(currentUserId);
+
+        return GestureDetector(
+          onTap: () => onToggle(emoji),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: iReacted
+                  ? (isDark
+                      ? Colors.blue.withValues(alpha: 0.25)
+                      : Colors.blue.withValues(alpha: 0.12))
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06)),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: iReacted
+                    ? Colors.blue.withValues(alpha: 0.5)
+                    : Colors.transparent,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  emoji,
+                  style: const TextStyle(fontSize: 14),
+                ),
+                if (count > 1) ...[
+                  const SizedBox(width: 3),
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: iReacted
+                          ? Colors.blue
+                          : (isDark ? Colors.white70 : Colors.black54),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
