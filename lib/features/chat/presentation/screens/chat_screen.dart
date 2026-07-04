@@ -18,6 +18,7 @@ import '../../../profile/providers/profile_provider.dart';
 import '../../domain/message_model.dart';
 import '../../domain/pinned_message_model.dart';
 import '../../providers/chat_provider.dart';
+import '../widgets/full_screen_image_viewer.dart';
 import '../../presentation/widgets/message_popup_menu_content.dart';
 import '../../presentation/widgets/message_context_menu_route.dart';
 
@@ -173,6 +174,65 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _focusNode.dispose();
     _itemPositionsListener.itemPositions.removeListener(_onPositionChange);
     super.dispose();
+  }
+
+  // ── Wallpaper Helpers ──────────────────────────────────────────────────────
+
+  // System wallpaper gradient map (must match wallpaper_history_screen.dart)
+  static const _kSystemGradients = <String, List<Color>>{
+    'sys:aurora':   [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+    'sys:sunset':   [Color(0xFFFF6B6B), Color(0xFFFFE66D)],
+    'sys:ocean':    [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
+    'sys:lavender': [Color(0xFF667EEA), Color(0xFF764BA2)],
+    'sys:mint':     [Color(0xFF11998E), Color(0xFF38EF7D)],
+    'sys:rose':     [Color(0xFFFC5C7D), Color(0xFF6A3093)],
+    'sys:peach':    [Color(0xFFFFB347), Color(0xFFFF6B35)],
+    'sys:midnight': [Color(0xFF0F0C29), Color(0xFF302B63), Color(0xFF24243E)],
+    'sys:sakura':   [Color(0xFFFFE0EC), Color(0xFFFFC5D9), Color(0xFFFFABC8)],
+    'sys:forest':   [Color(0xFF1B4332), Color(0xFF2D6A4F), Color(0xFF52B788)],
+    'sys:galaxy':   [Color(0xFF200122), Color(0xFF6F0000)],
+    'sys:sky':      [Color(0xFF56CCF2), Color(0xFF2F80ED)],
+  };
+
+  bool _isSystemWallpaper(String path) => path.startsWith('sys:');
+
+  DecorationImage? _getWallpaperDecorationImage(String path) {
+    if (path.isEmpty || _isSystemWallpaper(path)) return null;
+
+    ImageProvider imageProvider;
+    if (path.startsWith('http') || path.startsWith('blob')) {
+      imageProvider = CachedNetworkImageProvider(path);
+    } else if (kIsWeb) {
+      return null;
+    } else {
+      imageProvider = FileImage(io.File(path));
+    }
+
+    return DecorationImage(
+      image: imageProvider,
+      fit: BoxFit.cover,
+      opacity: 0.85,
+    );
+  }
+
+  BoxDecoration _getWallpaperDecoration(String path, ThemeData theme) {
+    if (_isSystemWallpaper(path)) {
+      final colors = _kSystemGradients[path];
+      if (colors != null) {
+        return BoxDecoration(
+          gradient: LinearGradient(
+            colors: colors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        );
+      }
+    }
+    final image = _getWallpaperDecorationImage(path);
+    return BoxDecoration(
+      color: theme.scaffoldBackgroundColor,
+      image: image,
+    );
   }
 
   // ── Cập nhật cache grouping khi messages thay đổi ─────────────────────────
@@ -470,6 +530,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final pinnedIds = pinnedMessages.map((pm) => pm.messageId).toSet();
     final currentUserId = ref.watch(currentUserIdProvider) ?? '';
     final theme = Theme.of(context);
+    final wallpaperState = ref.watch(chatWallpaperProvider);
+    final wallpaperPath = wallpaperState[widget.conversationId] ?? '';
+
+    final selfDestructState = ref.watch(chatSelfDestructProvider);
+    final selfDestructSecs = selfDestructState[widget.conversationId] ?? 0;
 
     // Lắng nghe tin mới → auto scroll nếu đang ở đáy
     // Dùng ref.listen ổn định (không đặt inline trong build tree)
@@ -516,11 +581,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }).valueOrNull;
     final otherUserName = otherUser?.displayName ?? 'Chat';
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+    final hasWallpaper = wallpaperPath.isNotEmpty;
+
+    Widget scaffold = Scaffold(
+      backgroundColor: hasWallpaper ? Colors.transparent : theme.scaffoldBackgroundColor,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
+        backgroundColor: hasWallpaper
+            ? theme.scaffoldBackgroundColor.withValues(alpha: 0.7)
+            : theme.scaffoldBackgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
@@ -604,7 +673,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           IconButton(
             icon: Icon(CupertinoIcons.ellipsis,
                 color: theme.colorScheme.primary, size: 20),
-            onPressed: () {},
+            onPressed: () => context.push('/chat/${widget.conversationId}/settings'),
             tooltip: 'Thêm',
           ),
         ],
@@ -613,7 +682,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           child: Divider(
             height: 0.5,
             thickness: 0.5,
-            color: theme.dividerColor.withValues(alpha: 0.3),
+            color: theme.dividerColor.withValues(alpha: 0.25),
           ),
         ),
       ),
@@ -622,7 +691,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           children: [
             if (pinnedMessages.isNotEmpty)
               _buildPinnedMessagesBar(
-                  theme, pinnedMessages, currentUserId, otherUserName),
+                  theme, pinnedMessages, currentUserId, otherUserName, hasWallpaper),
             Expanded(
               child: messagesAsync.when(
                 data: (messagesState) {
@@ -653,10 +722,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   final allMessages = [...failedModels, ...messagesState.messages];
                   allMessages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-                  _updateCacheIfNeeded(allMessages);
+                  var displayedMessages = allMessages;
+                  if (selfDestructSecs > 0) {
+                    final now = DateTime.now();
+                    displayedMessages = allMessages.where((m) {
+                      final age = now.difference(m.createdAt).inSeconds;
+                      return age < selfDestructSecs;
+                    }).toList();
+                  }
+
+                  _updateCacheIfNeeded(displayedMessages);
                   return _buildMessageList(
                     messagesState,
-                    allMessages,
+                    displayedMessages,
                     currentUserId,
                     otherUserName,
                     pinnedIds,
@@ -667,11 +745,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 error: (e, _) => Center(child: Text(e.toString())),
               ),
             ),
-            _buildInput(theme),
+            _buildInput(theme, hasWallpaper),
           ],
         ),
       ),
     );
+
+    if (hasWallpaper) {
+      scaffold = Container(
+        decoration: _getWallpaperDecoration(wallpaperPath, theme),
+        child: scaffold,
+      );
+    }
+
+    return scaffold;
   }
 
   // ── Message List ──────────────────────────────────────────────────────────────
@@ -815,6 +902,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     List<PinnedMessageModel> pinnedList,
     String currentUserId,
     String otherUserName,
+    bool hasWallpaper,
   ) {
     final isDark = theme.brightness == Brightness.dark;
     final latestPin = pinnedList.first;
@@ -832,8 +920,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     final senderName =
         latestMsg.senderId == currentUserId ? 'Bạn' : otherUserName;
-    final barBgColor =
-        isDark ? theme.colorScheme.surface : const Color(0xFFE8F4FD);
+    final barBgColor = hasWallpaper
+        ? theme.scaffoldBackgroundColor.withValues(alpha: 0.75)
+        : (isDark ? theme.colorScheme.surface : const Color(0xFFE8F4FD));
     final textStyle = TextStyle(
       fontSize: 13,
       fontWeight: FontWeight.w500,
@@ -920,7 +1009,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         if (_pinnedListExpanded && pinnedList.length > 1)
           Container(
             constraints: const BoxConstraints(maxHeight: 200),
-            color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            color: hasWallpaper
+                ? theme.scaffoldBackgroundColor.withValues(alpha: 0.85)
+                : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: pinnedList.length,
@@ -999,7 +1090,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Image Preview ─────────────────────────────────────────────────────────────
 
-  Widget _buildImagePreview(ThemeData theme) {
+  Widget _buildImagePreview(ThemeData theme, bool hasWallpaper) {
     final isDark = theme.brightness == Brightness.dark;
     final image = _pendingImage!;
 
@@ -1027,7 +1118,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
       decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
+        color: hasWallpaper
+            ? theme.scaffoldBackgroundColor.withValues(alpha: 0.7)
+            : theme.scaffoldBackgroundColor,
         border: Border(
           top: BorderSide(
             color: theme.dividerColor.withValues(alpha: 0.2),
@@ -1092,7 +1185,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Reply Preview ─────────────────────────────────────────────────────────────
 
-  Widget _buildReplyPreview(ThemeData theme) {
+  Widget _buildReplyPreview(ThemeData theme, bool hasWallpaper) {
     final isDark = theme.brightness == Brightness.dark;
     final currentUserId = ref.watch(currentUserIdProvider) ?? '';
     final convAsync = ref.watch(conversationsProvider);
@@ -1119,8 +1212,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color:
-            isDark ? theme.colorScheme.surface : theme.scaffoldBackgroundColor,
+        color: hasWallpaper
+            ? theme.scaffoldBackgroundColor.withValues(alpha: 0.7)
+            : (isDark ? theme.colorScheme.surface : theme.scaffoldBackgroundColor),
         border: Border(
           bottom: BorderSide(
             color: theme.dividerColor.withValues(alpha: 0.15),
@@ -1197,15 +1291,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Input Bar ─────────────────────────────────────────────────────────────────
 
-  Widget _buildInput(ThemeData theme) {
+  Widget _buildInput(ThemeData theme, bool hasWallpaper) {
     final isDark = theme.brightness == Brightness.dark;
     final hasPendingImage = _pendingImage != null;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_replyingToMessage != null) _buildReplyPreview(theme),
-        if (hasPendingImage) _buildImagePreview(theme),
+        if (_replyingToMessage != null) _buildReplyPreview(theme, hasWallpaper),
+        if (hasPendingImage) _buildImagePreview(theme, hasWallpaper),
         Container(
           padding: EdgeInsets.only(
             left: 8,
@@ -1214,7 +1308,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             bottom: MediaQuery.of(context).padding.bottom + 8,
           ),
           decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
+            color: hasWallpaper
+                ? theme.scaffoldBackgroundColor.withValues(alpha: 0.7)
+                : theme.scaffoldBackgroundColor,
             border: Border(
               top: BorderSide(
                 color: theme.dividerColor.withValues(alpha: 0.3),
@@ -1433,13 +1529,37 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
     final isMine = widget.isMine;
     final message = widget.message;
 
-    final myBubbleColor =
-        isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender;
+    final themeState = ref.read(chatThemeColorProvider);
+    final themeName = themeState[message.conversationId] ?? 'blue';
+    Color customColor;
+    switch (themeName) {
+      case 'purple':
+        customColor = Colors.purple;
+        break;
+      case 'orange':
+        customColor = Colors.orange;
+        break;
+      case 'teal':
+        customColor = Colors.teal;
+        break;
+      case 'pink':
+        customColor = Colors.pink;
+        break;
+      case 'blue':
+      default:
+        customColor = isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender;
+        break;
+    }
+
+    final myBubbleColor = (themeName == 'blue')
+        ? (isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender)
+        : customColor;
     final theirBubbleColor = isDark
         ? AppColors.darkChatBubbleReceiver
         : AppColors.chatBubbleReceiver;
-    final myTextColor =
-        isDark ? AppColors.darkChatTextSender : AppColors.chatTextSender;
+    final myTextColor = (themeName == 'blue')
+        ? (isDark ? AppColors.darkChatTextSender : AppColors.chatTextSender)
+        : Colors.white;
     final theirTextColor = isDark
         ? AppColors.darkChatTextReceiver
         : AppColors.chatTextReceiver;
@@ -1829,13 +1949,37 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
     final message = widget.message;
     final isHighlighted = widget.isHighlighted;
 
-    final myBubbleColor =
-        isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender;
+    final themeState = ref.watch(chatThemeColorProvider);
+    final themeName = themeState[message.conversationId] ?? 'blue';
+    Color customColor;
+    switch (themeName) {
+      case 'purple':
+        customColor = Colors.purple;
+        break;
+      case 'orange':
+        customColor = Colors.orange;
+        break;
+      case 'teal':
+        customColor = Colors.teal;
+        break;
+      case 'pink':
+        customColor = Colors.pink;
+        break;
+      case 'blue':
+      default:
+        customColor = isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender;
+        break;
+    }
+
+    final myBubbleColor = (themeName == 'blue')
+        ? (isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender)
+        : customColor;
     final theirBubbleColor = isDark
         ? AppColors.darkChatBubbleReceiver
         : AppColors.chatBubbleReceiver;
-    final myTextColor =
-        isDark ? AppColors.darkChatTextSender : AppColors.chatTextSender;
+    final myTextColor = (themeName == 'blue')
+        ? (isDark ? AppColors.darkChatTextSender : AppColors.chatTextSender)
+        : Colors.white;
     final theirTextColor = isDark
         ? AppColors.darkChatTextReceiver
         : AppColors.chatTextReceiver;
@@ -2310,40 +2454,46 @@ class _ImageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.only(
-        topLeft: const Radius.circular(18),
-        topRight: const Radius.circular(18),
-        bottomLeft:
-            Radius.circular(hasCaption ? 0 : (isMine ? 18 : 4)),
-        bottomRight:
-            Radius.circular(hasCaption ? 0 : (isMine ? 4 : 18)),
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.65,
-          maxHeight: 300,
+    return GestureDetector(
+      onTap: () => FullScreenImageViewer.open(context, url),
+      child: Hero(
+        tag: url,
+        child: ClipRRect(
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft:
+                Radius.circular(hasCaption ? 0 : (isMine ? 18 : 4)),
+            bottomRight:
+                Radius.circular(hasCaption ? 0 : (isMine ? 4 : 18)),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.65,
+              maxHeight: 300,
+            ),
+            child: _isLocalPath && !kIsWeb
+                ? Image.file(io.File(url), fit: BoxFit.cover)
+                : CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                      width: 200,
+                      height: 160,
+                      color: Colors.grey.withValues(alpha: 0.2),
+                      child:
+                          const Center(child: CupertinoActivityIndicator()),
+                    ),
+                    errorWidget: (_, __, ___) => Container(
+                      width: 200,
+                      height: 160,
+                      color: Colors.grey.withValues(alpha: 0.2),
+                      child: const Icon(CupertinoIcons.photo,
+                          color: Colors.grey),
+                    ),
+                  ),
+          ),
         ),
-        child: _isLocalPath && !kIsWeb
-            ? Image.file(io.File(url), fit: BoxFit.cover)
-            : CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(
-                  width: 200,
-                  height: 160,
-                  color: Colors.grey.withValues(alpha: 0.2),
-                  child:
-                      const Center(child: CupertinoActivityIndicator()),
-                ),
-                errorWidget: (_, __, ___) => Container(
-                  width: 200,
-                  height: 160,
-                  color: Colors.grey.withValues(alpha: 0.2),
-                  child: const Icon(CupertinoIcons.photo,
-                      color: Colors.grey),
-                ),
-              ),
       ),
     );
   }
@@ -2372,7 +2522,13 @@ class _CallLogBubble extends StatelessWidget {
         content.toLowerCase().contains('từ chối') ||
         content.toLowerCase().contains('đã hủy');
     final isVideo = content.toLowerCase().contains('video');
-    final color = isMissed ? AppColors.error : textColor;
+
+    // FA233B for received; lighter coral for sent so it reads clearly on any
+    // coloured theme background while still conveying missed/cancelled status.
+    final missedColor = isMine
+        ? const Color(0xFFFFB2B2)   // coral đỏ nhạt – dễ đọc trên mọi nền màu
+        : const Color(0xFFFF2D55);  // đỏ Apple đặc trưng
+    final color = isMissed ? missedColor : textColor;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -2400,7 +2556,7 @@ class _CallLogBubble extends StatelessWidget {
             content,
             style: TextStyle(
               fontSize: 15,
-              color: isMissed ? color : textColor,
+              color: color,
               fontWeight: FontWeight.w500,
             ),
           ),

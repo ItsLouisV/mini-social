@@ -15,6 +15,9 @@ import '../../features/chat/providers/chat_provider.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/chat/presentation/screens/hidden_conversations_screen.dart';
+import '../../features/chat/presentation/screens/conversation_settings_screen.dart';
+import '../../features/chat/presentation/screens/shared_media_screen.dart';
+import '../../features/chat/presentation/screens/wallpaper_history_screen.dart';
 import '../../features/feed/presentation/widgets/feed_drawer.dart';
 import '../../features/feed/presentation/screens/create_post_screen.dart';
 import '../../features/feed/presentation/screens/feed_screen.dart';
@@ -132,6 +135,33 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, state) => CupertinoPage(
           child: ChatScreen(
+            conversationId: state.pathParameters['conversationId']!,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/chat/:conversationId/settings',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) => CupertinoPage(
+          child: ConversationSettingsScreen(
+            conversationId: state.pathParameters['conversationId']!,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/chat/:conversationId/media',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) => CupertinoPage(
+          child: SharedMediaScreen(
+            conversationId: state.pathParameters['conversationId']!,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/chat/:conversationId/wallpaper-history',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) => CupertinoPage(
+          child: WallpaperHistoryScreen(
             conversationId: state.pathParameters['conversationId']!,
           ),
         ),

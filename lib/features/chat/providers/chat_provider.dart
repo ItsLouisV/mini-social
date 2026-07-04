@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -750,3 +752,265 @@ final pinnedMessagesProvider = AsyncNotifierProvider.autoDispose
     .family<PinnedMessagesNotifier, List<PinnedMessageModel>, String>(
   PinnedMessagesNotifier.new,
 );
+
+// ── Chat Wallpaper Notifier & Provider ────────────────────────────────────────
+
+class ChatWallpaperNotifier extends StateNotifier<Map<String, String>> {
+  final Ref ref;
+  ChatWallpaperNotifier(this.ref) : super({}) {
+    _loadWallpapers();
+  }
+
+  Future<void> _loadWallpapers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      final wallpaperMap = <String, String>{};
+      for (final key in keys) {
+        if (key.startsWith('chat_wallpaper_')) {
+          final convId = key.substring('chat_wallpaper_'.length);
+          final path = prefs.getString(key);
+          if (path != null) {
+            wallpaperMap[convId] = path;
+          }
+        }
+      }
+      state = wallpaperMap;
+    } catch (_) {}
+  }
+
+  Future<void> setWallpaper(String conversationId, String path) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_wallpaper_$conversationId';
+      if (path.isEmpty) {
+        await prefs.remove(key);
+        final newState = Map<String, String>.from(state)..remove(conversationId);
+        state = newState;
+      } else {
+        await prefs.setString(key, path);
+        final newState = Map<String, String>.from(state)..[conversationId] = path;
+        state = newState;
+
+        // Save to wallpaper history list
+        final historyKey = 'chat_wallpaper_history_$conversationId';
+        final historyJson = prefs.getString(historyKey);
+        var historyList = <String>[];
+        if (historyJson != null) {
+          try {
+            historyList = List<String>.from(jsonDecode(historyJson));
+          } catch (_) {}
+        }
+        if (!historyList.contains(path)) {
+          historyList.add(path);
+          await prefs.setString(historyKey, jsonEncode(historyList));
+
+          // Dynamically add to history provider state so the grid refreshes reactively
+          ref.read(chatWallpaperHistoryProvider.notifier).addWallpaperToHistoryState(conversationId, path);
+        }
+      }
+    } catch (_) {}
+  }
+}
+
+final chatWallpaperProvider =
+    StateNotifierProvider<ChatWallpaperNotifier, Map<String, String>>((ref) {
+  return ChatWallpaperNotifier(ref);
+});
+
+class ChatMuteNotifier extends StateNotifier<Map<String, bool>> {
+  ChatMuteNotifier() : super({}) {
+    _loadMutes();
+  }
+
+  Future<void> _loadMutes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      final muteMap = <String, bool>{};
+      for (final key in keys) {
+        if (key.startsWith('chat_mute_')) {
+          final convId = key.substring('chat_mute_'.length);
+          final muted = prefs.getBool(key);
+          if (muted != null) {
+            muteMap[convId] = muted;
+          }
+        }
+      }
+      state = muteMap;
+    } catch (_) {}
+  }
+
+  Future<void> toggleMute(String conversationId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_mute_$conversationId';
+      final current = state[conversationId] ?? false;
+      final next = !current;
+      await prefs.setBool(key, next);
+      state = Map<String, bool>.from(state)..[conversationId] = next;
+    } catch (_) {}
+  }
+}
+
+final chatMuteProvider =
+    StateNotifierProvider<ChatMuteNotifier, Map<String, bool>>((ref) {
+  return ChatMuteNotifier();
+});
+
+// ── Chat Wallpaper History Notifier & Provider ─────────────────────────────────
+
+class ChatWallpaperHistoryNotifier extends StateNotifier<Map<String, List<String>>> {
+  ChatWallpaperHistoryNotifier() : super({}) {
+    _loadHistories();
+  }
+
+  Future<void> _loadHistories() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      final map = <String, List<String>>{};
+      for (final key in keys) {
+        if (key.startsWith('chat_wallpaper_history_')) {
+          final convId = key.substring('chat_wallpaper_history_'.length);
+          final json = prefs.getString(key);
+          if (json != null) {
+            try {
+              map[convId] = List<String>.from(jsonDecode(json));
+            } catch (_) {}
+          }
+        }
+      }
+      state = map;
+    } catch (_) {}
+  }
+
+  void addWallpaperToHistoryState(String conversationId, String path) {
+    final currentList = List<String>.from(state[conversationId] ?? []);
+    if (!currentList.contains(path)) {
+      currentList.add(path);
+      state = Map<String, List<String>>.from(state)..[conversationId] = currentList;
+    }
+  }
+
+  Future<void> removeWallpaperFromHistory(String conversationId, String path) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_wallpaper_history_$conversationId';
+      final currentList = List<String>.from(state[conversationId] ?? []);
+      currentList.remove(path);
+      await prefs.setString(key, jsonEncode(currentList));
+      final newState = Map<String, List<String>>.from(state)..[conversationId] = currentList;
+      state = newState;
+    } catch (_) {}
+  }
+
+  Future<void> clearHistory(String conversationId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_wallpaper_history_$conversationId';
+      await prefs.remove(key);
+      final newState = Map<String, List<String>>.from(state)..remove(conversationId);
+      state = newState;
+    } catch (_) {}
+  }
+}
+
+final chatWallpaperHistoryProvider =
+    StateNotifierProvider<ChatWallpaperHistoryNotifier, Map<String, List<String>>>((ref) {
+  return ChatWallpaperHistoryNotifier();
+});
+
+// ── Chat Theme Color Notifier & Provider ───────────────────────────────────────
+
+class ChatThemeColorNotifier extends StateNotifier<Map<String, String>> {
+  ChatThemeColorNotifier() : super({}) {
+    _loadThemes();
+  }
+
+  Future<void> _loadThemes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      final themeMap = <String, String>{};
+      for (final key in keys) {
+        if (key.startsWith('chat_theme_')) {
+          final convId = key.substring('chat_theme_'.length);
+          final colorName = prefs.getString(key);
+          if (colorName != null) {
+            themeMap[convId] = colorName;
+          }
+        }
+      }
+      state = themeMap;
+    } catch (_) {}
+  }
+
+  Future<void> setTheme(String conversationId, String colorName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_theme_$conversationId';
+      if (colorName.isEmpty) {
+        await prefs.remove(key);
+        final newState = Map<String, String>.from(state)..remove(conversationId);
+        state = newState;
+      } else {
+        await prefs.setString(key, colorName);
+        final newState = Map<String, String>.from(state)..[conversationId] = colorName;
+        state = newState;
+      }
+    } catch (_) {}
+  }
+}
+
+final chatThemeColorProvider =
+    StateNotifierProvider<ChatThemeColorNotifier, Map<String, String>>((ref) {
+  return ChatThemeColorNotifier();
+});
+
+// ── Chat Self Destruct Notifier & Provider ─────────────────────────────────────
+
+class ChatSelfDestructNotifier extends StateNotifier<Map<String, int>> {
+  ChatSelfDestructNotifier() : super({}) {
+    _loadSelfDestructs();
+  }
+
+  Future<void> _loadSelfDestructs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      final map = <String, int>{};
+      for (final key in keys) {
+        if (key.startsWith('chat_self_destruct_')) {
+          final convId = key.substring('chat_self_destruct_'.length);
+          final seconds = prefs.getInt(key);
+          if (seconds != null) {
+            map[convId] = seconds;
+          }
+        }
+      }
+      state = map;
+    } catch (_) {}
+  }
+
+  Future<void> setSelfDestruct(String conversationId, int seconds) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_self_destruct_$conversationId';
+      if (seconds <= 0) {
+        await prefs.remove(key);
+        final newState = Map<String, int>.from(state)..remove(conversationId);
+        state = newState;
+      } else {
+        await prefs.setInt(key, seconds);
+        final newState = Map<String, int>.from(state)..[conversationId] = seconds;
+        state = newState;
+      }
+    } catch (_) {}
+  }
+}
+
+final chatSelfDestructProvider =
+    StateNotifierProvider<ChatSelfDestructNotifier, Map<String, int>>((ref) {
+  return ChatSelfDestructNotifier();
+});
