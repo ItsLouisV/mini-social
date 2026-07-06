@@ -5,7 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
+import '../../../../core/constants/supabase_constants.dart';
 import '../../providers/chat_provider.dart';
 
 // ── System Wallpaper Definitions ─────────────────────────────────────────────
@@ -123,8 +126,10 @@ class WallpaperHistoryScreen extends ConsumerStatefulWidget {
 class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
     with SingleTickerProviderStateMixin {
   bool _selectMode = false;
+  bool _uploading = false;
   final Set<String> _selectedPaths = {};
   late TabController _tabController;
+  final _uuid = const Uuid();
 
   @override
   void initState() {
@@ -263,50 +268,31 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
     Color cardBgColor,
     ThemeData theme,
   ) {
-    // +1 for the "Add new" button when not in select mode
+    // +1 for the "Add new" button when not in select mode — always shown
     final itemCount = _selectMode ? historyList.length : historyList.length + 1;
 
     return Stack(
       children: [
-        if (historyList.isEmpty && !_selectMode)
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(CupertinoIcons.photo, size: 56, color: theme.hintColor.withValues(alpha: 0.35)),
-                const SizedBox(height: 12),
-                Text(
-                  'Chưa có hình nền nào trong lịch sử',
-                  style: TextStyle(color: theme.hintColor, fontSize: 14),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Nhấn + để chọn ảnh từ thư viện',
-                  style: TextStyle(color: theme.hintColor.withValues(alpha: 0.6), fontSize: 12),
-                ),
-              ],
-            ),
-          )
-        else
-          GridView.builder(
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(16, 16, 16, _selectMode ? 80 : 16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 0.65,
-            ),
-            itemCount: itemCount,
-            itemBuilder: (context, index) {
-              // "Add new" button at index 0 (non-select mode only)
-              if (!_selectMode && index == 0) {
-                return _buildAddNewButton(cardBgColor, theme);
-              }
+        // Grid is always rendered (so the + button is always visible)
+        GridView.builder(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, _selectMode ? 80 : 16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.65,
+          ),
+          itemCount: itemCount,
+          itemBuilder: (context, index) {
+            // "Add new" button at index 0 (non-select mode only)
+            if (!_selectMode && index == 0) {
+              return _buildAddNewButton(cardBgColor, theme);
+            }
 
-              final path = historyList[_selectMode ? index : index - 1];
-              final isSelected = _selectedPaths.contains(path);
-              final isActive = activeWallpaper == path;
+            final path = historyList[_selectMode ? index : index - 1];
+            final isSelected = _selectedPaths.contains(path);
+            final isActive = activeWallpaper == path;
 
               return _buildHistoryItem(
                 path: path,
@@ -322,30 +308,94 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
     );
   }
 
+  // ── Upload to Supabase Storage ─────────────────────────────────────────────
+
+  Future<String?> _uploadWallpaper(XFile picked) async {
+    try {
+      final client = Supabase.instance.client;
+      final uid = client.auth.currentUser?.id ?? 'anonymous';
+      final ext = picked.name.split('.').last.toLowerCase();
+      final fileName = '$uid/${_uuid.v4()}.$ext';
+      final bucket = SupabaseConstants.wallpapersBucket;
+
+      if (kIsWeb) {
+        final bytes = await picked.readAsBytes();
+        await client.storage.from(bucket).uploadBinary(
+          fileName,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: 'image/$ext',
+            upsert: false,
+          ),
+        );
+      } else {
+        await client.storage.from(bucket).upload(
+          fileName,
+          io.File(picked.path),
+          fileOptions: FileOptions(
+            contentType: 'image/$ext',
+            upsert: false,
+          ),
+        );
+      }
+
+      return client.storage.from(bucket).getPublicUrl(fileName);
+    } catch (e) {
+      return null;
+    }
+  }
+
   Widget _buildAddNewButton(Color cardBgColor, ThemeData theme) {
     return GestureDetector(
-      onTap: () async {
-        final picker = ImagePicker();
-        final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-        if (picked != null) {
-          await ref
-              .read(chatWallpaperProvider.notifier)
-              .setWallpaper(widget.conversationId, picked.path);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Đã cập nhật hình nền cuộc trò chuyện'),
-                duration: Duration(seconds: 1),
-              ),
-            );
-          }
-        }
-      },
+      onTap: _uploading
+          ? null
+          : () async {
+              final picker = ImagePicker();
+              final picked = await picker.pickImage(
+                source: ImageSource.gallery,
+                imageQuality: 85,
+              );
+              if (picked == null || !mounted) return;
+
+              setState(() => _uploading = true);
+              try {
+                // Upload to Supabase Storage → get persistent public URL
+                final url = await _uploadWallpaper(picked);
+                if (!mounted) return;
+
+                if (url == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Lỗi tải ảnh lên. Vui lòng thử lại.'),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                  return;
+                }
+
+                await ref
+                    .read(chatWallpaperProvider.notifier)
+                    .setWallpaper(widget.conversationId, url);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Đã cập nhật hình nền cuộc trò chuyện'),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                  Navigator.pop(context);
+                }
+              } finally {
+                if (mounted) setState(() => _uploading = false);
+              }
+            },
       child: Container(
         decoration: BoxDecoration(
           color: cardBgColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.15), width: 1),
+          border: Border.all(
+              color: theme.dividerColor.withValues(alpha: 0.15), width: 1),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -357,11 +407,21 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
                 color: theme.colorScheme.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(CupertinoIcons.plus, size: 22, color: theme.colorScheme.primary),
+              child: _uploading
+                  ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.primary,
+                      ),
+                    )
+                  : Icon(CupertinoIcons.plus,
+                      size: 22, color: theme.colorScheme.primary),
             ),
             const SizedBox(height: 8),
             Text(
-              'Thêm mới',
+              _uploading ? 'Đang tải...' : 'Thêm mới',
               style: TextStyle(
                 color: theme.colorScheme.primary,
                 fontSize: 11,
@@ -685,7 +745,9 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
       return Container(color: Colors.grey);
     }
 
-    if (path.startsWith('http') || path.startsWith('blob')) {
+    if (path.startsWith('blob:')) {
+      return const Center(child: Icon(CupertinoIcons.photo, size: 24));
+    } else if (path.startsWith('http')) {
       return Image.network(
         path,
         fit: BoxFit.cover,

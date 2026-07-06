@@ -61,7 +61,12 @@ final notificationsProvider =
     StreamProvider<List<Map<String, dynamic>>>((ref) {
   final currentUserId = ref.watch(currentUserIdProvider);
   if (currentUserId == null) return const Stream.empty();
-  return ref.watch(socialRepositoryProvider).watchNotifications();
+  return ref
+      .watch(socialRepositoryProvider)
+      .watchNotifications()
+      .handleError((err) {
+    print('Supabase watchNotifications stream error (WebSocket disconnected): $err');
+  });
 });
 
 final unreadNotificationsCountProvider = Provider<int>((ref) {

@@ -60,21 +60,28 @@ final conversationsProvider =
   }
 
   // ③ Subscribe Supabase Realtime stream cho updates
-  await for (final _ in repo.watchConversationsStream()) {
-    try {
-      final convs = await repo.getConversations();
-      // Lưu vào cache nếu có
-      if (local != null) {
-        await local.saveConversations(convs);
-        // Lưu profiles
-        for (final conv in convs) {
-          if (conv.otherUser != null) {
-            await local.saveProfile(conv.otherUser!);
+  try {
+    await for (final _ in repo.watchConversationsStream()) {
+      try {
+        final convs = await repo.getConversations();
+        // Lưu vào cache nếu có
+        if (local != null) {
+          await local.saveConversations(convs);
+          // Lưu profiles
+          for (final conv in convs) {
+            if (conv.otherUser != null) {
+              await local.saveProfile(conv.otherUser!);
+            }
           }
         }
+        yield convs;
+      } catch (e) {
+        print('Error fetching updated conversations inside stream: $e');
       }
-      yield convs;
-    } catch (_) {}
+    }
+  } catch (e) {
+    print('Supabase Realtime watchConversationsStream error (WebSocket disconnected): $e');
+    // Keep yielding last known state if possible
   }
 });
 
@@ -696,7 +703,12 @@ final realtimeMessagesProvider = AsyncNotifierProvider.autoDispose
 // ── Total unread count ────────────────────────────────────────────────────────
 
 final unreadMessagesCountProvider = StreamProvider.autoDispose<int>((ref) {
-  return ref.watch(chatRepositoryProvider).watchTotalUnreadMessagesCount();
+  return ref
+      .watch(chatRepositoryProvider)
+      .watchTotalUnreadMessagesCount()
+      .handleError((err) {
+    print('Supabase watchTotalUnreadMessagesCount stream error (WebSocket disconnected): $err');
+  });
 });
 
 // ── Pinned Messages ───────────────────────────────────────────────────────────
@@ -754,62 +766,156 @@ final pinnedMessagesProvider = AsyncNotifierProvider.autoDispose
 );
 
 // ── Chat Wallpaper Notifier & Provider ────────────────────────────────────────
+//
+// Primary storage: Supabase `conversation_settings` table (bền vững qua refresh).
+// Offline cache : SharedPreferences (fallback khi chưa có kết nối).
 
 class ChatWallpaperNotifier extends StateNotifier<Map<String, String>> {
   final Ref ref;
   ChatWallpaperNotifier(this.ref) : super({}) {
-    _loadWallpapers();
+    _load();
   }
 
-  Future<void> _loadWallpapers() async {
+  SupabaseClient get _client => Supabase.instance.client;
+  String? get _userId => _client.auth.currentUser?.id;
+
+  Future<void> _load() async {
+    // ① Try SharedPreferences first for instant display
+    await _loadFromPrefs();
+    // ② Then fetch from Supabase and override
+    await _loadFromSupabase();
+  }
+
+  Future<void> _loadFromPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final keys = prefs.getKeys();
       final wallpaperMap = <String, String>{};
-      for (final key in keys) {
-        if (key.startsWith('chat_wallpaper_')) {
+      for (final key in prefs.getKeys()) {
+        if (key.startsWith('chat_wallpaper_') &&
+            !key.startsWith('chat_wallpaper_history_')) {
           final convId = key.substring('chat_wallpaper_'.length);
           final path = prefs.getString(key);
-          if (path != null) {
+          if (path != null && !path.startsWith('blob:')) {
             wallpaperMap[convId] = path;
+          } else if (path != null && path.startsWith('blob:')) {
+            // Clean up invalid blob path from cache
+            await prefs.remove(key);
           }
         }
       }
-      state = wallpaperMap;
-    } catch (_) {}
+      if (wallpaperMap.isNotEmpty) {
+        state = wallpaperMap;
+      }
+    } catch (e) {
+      print('Error loading wallpapers from prefs: $e');
+    }
+  }
+
+  Future<void> _loadFromSupabase() async {
+    final uid = _userId;
+    if (uid == null) return;
+    try {
+      final rows = await _client
+          .from('conversation_settings')
+          .select('conversation_id, wallpaper')
+          .eq('user_id', uid);
+
+      final wallpaperMap = <String, String>{};
+      for (final row in (rows as List)) {
+        final convId = row['conversation_id'] as String?;
+        final path = row['wallpaper'] as String?;
+        if (convId != null && path != null && path.isNotEmpty && !path.startsWith('blob:')) {
+          wallpaperMap[convId] = path;
+        }
+      }
+      if (wallpaperMap.isNotEmpty) {
+        state = wallpaperMap;
+        // Sync back to prefs as cache
+        final prefs = await SharedPreferences.getInstance();
+        for (final e in wallpaperMap.entries) {
+          await prefs.setString('chat_wallpaper_${e.key}', e.value);
+        }
+      }
+    } catch (e) {
+      print('Error loading wallpapers from Supabase: $e');
+    }
   }
 
   Future<void> setWallpaper(String conversationId, String path) async {
+    // Update state immediately
+    if (path.isEmpty) {
+      state = Map<String, String>.from(state)..remove(conversationId);
+    } else {
+      state = Map<String, String>.from(state)..[conversationId] = path;
+    }
+
+    // Persist to SharedPreferences (cache)
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = 'chat_wallpaper_$conversationId';
       if (path.isEmpty) {
         await prefs.remove(key);
-        final newState = Map<String, String>.from(state)..remove(conversationId);
-        state = newState;
       } else {
         await prefs.setString(key, path);
-        final newState = Map<String, String>.from(state)..[conversationId] = path;
-        state = newState;
+      }
+    } catch (e) {
+      print('Error saving wallpaper to prefs: $e');
+    }
 
-        // Save to wallpaper history list
-        final historyKey = 'chat_wallpaper_history_$conversationId';
-        final historyJson = prefs.getString(historyKey);
-        var historyList = <String>[];
-        if (historyJson != null) {
-          try {
-            historyList = List<String>.from(jsonDecode(historyJson));
-          } catch (_) {}
+    // Persist to Supabase (primary)
+    final uid = _userId;
+    if (uid != null && path.isNotEmpty) {
+      try {
+        // Also update history in Supabase
+        final existing = await _client
+            .from('conversation_settings')
+            .select('wallpaper_history')
+            .eq('user_id', uid)
+            .eq('conversation_id', conversationId)
+            .maybeSingle();
+
+        List<String> historyList = [];
+        if (existing != null) {
+          final raw = existing['wallpaper_history'];
+          if (raw is List) historyList = List<String>.from(raw);
         }
         if (!historyList.contains(path)) {
           historyList.add(path);
-          await prefs.setString(historyKey, jsonEncode(historyList));
-
-          // Dynamically add to history provider state so the grid refreshes reactively
-          ref.read(chatWallpaperHistoryProvider.notifier).addWallpaperToHistoryState(conversationId, path);
         }
+
+        await _client.from('conversation_settings').upsert({
+          'user_id': uid,
+          'conversation_id': conversationId,
+          'wallpaper': path,
+          'wallpaper_history': historyList,
+        }, onConflict: 'user_id,conversation_id');
+
+        // Sync history state reactively
+        ref
+            .read(chatWallpaperHistoryProvider.notifier)
+            .addWallpaperToHistoryState(conversationId, path);
+
+        // Also persist history to prefs
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          'chat_wallpaper_history_$conversationId',
+          jsonEncode(historyList),
+        );
+      } catch (e) {
+        print('Error upserting wallpaper to Supabase: $e');
       }
-    } catch (_) {}
+    } else if (uid != null && path.isEmpty) {
+      // Clear wallpaper but keep history
+      try {
+        await _client.from('conversation_settings').upsert({
+          'user_id': uid,
+          'conversation_id': conversationId,
+          'wallpaper': '',
+        }, onConflict: 'user_id,conversation_id');
+      } catch (e) {
+        print('Error clearing wallpaper from Supabase: $e');
+      }
+    }
   }
 }
 
@@ -858,30 +964,77 @@ final chatMuteProvider =
   return ChatMuteNotifier();
 });
 
-// ── Chat Wallpaper History Notifier & Provider ─────────────────────────────────
+// ── Chat Wallpaper History Notifier & Provider ──────────────────────────────
+//
+// Primary storage: Supabase `conversation_settings.wallpaper_history` (JSONB).
+// Offline cache : SharedPreferences.
 
-class ChatWallpaperHistoryNotifier extends StateNotifier<Map<String, List<String>>> {
+class ChatWallpaperHistoryNotifier
+    extends StateNotifier<Map<String, List<String>>> {
   ChatWallpaperHistoryNotifier() : super({}) {
-    _loadHistories();
+    _load();
   }
 
-  Future<void> _loadHistories() async {
+  SupabaseClient get _client => Supabase.instance.client;
+  String? get _userId => _client.auth.currentUser?.id;
+
+  Future<void> _load() async {
+    await _loadFromPrefs();
+    await _loadFromSupabase();
+  }
+
+  Future<void> _loadFromPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final keys = prefs.getKeys();
       final map = <String, List<String>>{};
-      for (final key in keys) {
+      for (final key in prefs.getKeys()) {
         if (key.startsWith('chat_wallpaper_history_')) {
           final convId = key.substring('chat_wallpaper_history_'.length);
           final json = prefs.getString(key);
           if (json != null) {
             try {
-              map[convId] = List<String>.from(jsonDecode(json));
+              final rawList = List<String>.from(jsonDecode(json));
+              final cleanList = rawList.where((path) => !path.startsWith('blob:')).toList();
+              if (cleanList.isNotEmpty) {
+                map[convId] = cleanList;
+              } else {
+                await prefs.remove(key);
+              }
             } catch (_) {}
           }
         }
       }
-      state = map;
+      if (map.isNotEmpty) state = map;
+    } catch (_) {}
+  }
+
+  Future<void> _loadFromSupabase() async {
+    final uid = _userId;
+    if (uid == null) return;
+    try {
+      final rows = await _client
+          .from('conversation_settings')
+          .select('conversation_id, wallpaper_history')
+          .eq('user_id', uid);
+
+      final map = <String, List<String>>{};
+      final prefs = await SharedPreferences.getInstance();
+      for (final row in (rows as List)) {
+        final convId = row['conversation_id'] as String?;
+        final raw = row['wallpaper_history'];
+        if (convId != null && raw is List) {
+          final rawList = List<String>.from(raw);
+          final cleanList = rawList.where((path) => !path.startsWith('blob:')).toList();
+          if (cleanList.isNotEmpty) {
+            map[convId] = cleanList;
+            await prefs.setString(
+              'chat_wallpaper_history_$convId',
+              jsonEncode(cleanList),
+            );
+          }
+        }
+      }
+      if (map.isNotEmpty) state = map;
     } catch (_) {}
   }
 
@@ -889,35 +1042,66 @@ class ChatWallpaperHistoryNotifier extends StateNotifier<Map<String, List<String
     final currentList = List<String>.from(state[conversationId] ?? []);
     if (!currentList.contains(path)) {
       currentList.add(path);
-      state = Map<String, List<String>>.from(state)..[conversationId] = currentList;
+      state = Map<String, List<String>>.from(state)
+        ..[conversationId] = currentList;
     }
   }
 
-  Future<void> removeWallpaperFromHistory(String conversationId, String path) async {
+  Future<void> removeWallpaperFromHistory(
+      String conversationId, String path) async {
+    final currentList = List<String>.from(state[conversationId] ?? []);
+    currentList.remove(path);
+
+    state = Map<String, List<String>>.from(state)
+      ..[conversationId] = currentList;
+
+    // SharedPreferences cache
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key = 'chat_wallpaper_history_$conversationId';
-      final currentList = List<String>.from(state[conversationId] ?? []);
-      currentList.remove(path);
-      await prefs.setString(key, jsonEncode(currentList));
-      final newState = Map<String, List<String>>.from(state)..[conversationId] = currentList;
-      state = newState;
+      await prefs.setString(
+        'chat_wallpaper_history_$conversationId',
+        jsonEncode(currentList),
+      );
     } catch (_) {}
+
+    // Supabase
+    final uid = _userId;
+    if (uid != null) {
+      try {
+        await _client.from('conversation_settings').upsert({
+          'user_id': uid,
+          'conversation_id': conversationId,
+          'wallpaper_history': currentList,
+        }, onConflict: 'user_id,conversation_id');
+      } catch (_) {}
+    }
   }
 
   Future<void> clearHistory(String conversationId) async {
+    state = Map<String, List<String>>.from(state)..remove(conversationId);
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key = 'chat_wallpaper_history_$conversationId';
-      await prefs.remove(key);
-      final newState = Map<String, List<String>>.from(state)..remove(conversationId);
-      state = newState;
+      await prefs.remove('chat_wallpaper_history_$conversationId');
     } catch (_) {}
+
+    final uid = _userId;
+    if (uid != null) {
+      try {
+        await _client.from('conversation_settings').upsert({
+          'user_id': uid,
+          'conversation_id': conversationId,
+          'wallpaper': '',
+          'wallpaper_history': <String>[],
+        }, onConflict: 'user_id,conversation_id');
+      } catch (_) {}
+    }
   }
 }
 
 final chatWallpaperHistoryProvider =
-    StateNotifierProvider<ChatWallpaperHistoryNotifier, Map<String, List<String>>>((ref) {
+    StateNotifierProvider<ChatWallpaperHistoryNotifier,
+        Map<String, List<String>>>((ref) {
   return ChatWallpaperHistoryNotifier();
 });
 

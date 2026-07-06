@@ -139,6 +139,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   // ID tin nhắn đang được highlight (sau khi scroll tới)
   String? _highlightedMessageId;
 
+  // Trạng thái hiển thị nút cuộn xuống đáy
+  bool _showScrollToBottomBtn = false;
+
   @override
   void initState() {
     super.initState();
@@ -154,6 +157,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _onPositionChange() {
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isEmpty) return;
+
+    // Cập nhật trạng thái hiển thị nút "cuộn xuống đáy"
+    // Nếu index 0 (tin mới nhất) không hiển thị trong danh sách các item đang hiện diện trên màn hình,
+    // hoặc có nhưng nó bị che khuất một phần (leadingEdge < 0)
+    final hasLatest = positions.any((p) => p.index == 0);
+    bool showBtn = !hasLatest;
+    if (hasLatest) {
+      final latestPosition = positions.firstWhere((p) => p.index == 0);
+      if (latestPosition.itemLeadingEdge < 0) {
+        showBtn = true;
+      }
+    }
+
+    if (showBtn != _showScrollToBottomBtn) {
+      setState(() {
+        _showScrollToBottomBtn = showBtn;
+      });
+    }
 
     // Với reverse: true, item có index cao nhất = tin CŨ nhất (hiển thị trên cùng)
     final maxIndex =
@@ -200,7 +221,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (path.isEmpty || _isSystemWallpaper(path)) return null;
 
     ImageProvider imageProvider;
-    if (path.startsWith('http') || path.startsWith('blob')) {
+    if (path.startsWith('blob:')) {
+      return null; // Skip invalid temporary blob URLs
+    } else if (path.startsWith('http')) {
       imageProvider = CachedNetworkImageProvider(path);
     } else if (kIsWeb) {
       return null;
@@ -693,56 +716,147 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               _buildPinnedMessagesBar(
                   theme, pinnedMessages, currentUserId, otherUserName, hasWallpaper),
             Expanded(
-              child: messagesAsync.when(
-                data: (messagesState) {
-                  final failedModels = messagesState.failedMessages.map((f) {
-                    return MessageModel(
-                      id: f.localId,
-                      conversationId: f.conversationId,
-                      senderId: f.senderId,
-                      content: f.content,
-                      mediaUrl: f.mediaUrl,
-                      messageType: f.messageType,
-                      createdAt: DateTime.parse(f.createdAt).toLocal(),
-                      replyToMessageId: f.replyToMessageId,
-                      replyToMessage: (f.replyToMessageId != null && f.replySenderId != null)
-                          ? MessageModel(
-                              id: f.replyToMessageId!,
-                              conversationId: f.conversationId,
-                              senderId: f.replySenderId!,
-                              content: f.replyContent,
-                              messageType: 'text',
-                              createdAt: DateTime.now(),
-                            )
-                          : null,
-                      isFailed: true,
-                    );
-                  }).toList();
+              child: Stack(
+                children: [
+                  messagesAsync.when(
+                    data: (messagesState) {
+                      final failedModels = messagesState.failedMessages.map((f) {
+                        return MessageModel(
+                          id: f.localId,
+                          conversationId: f.conversationId,
+                          senderId: f.senderId,
+                          content: f.content,
+                          mediaUrl: f.mediaUrl,
+                          messageType: f.messageType,
+                          createdAt: DateTime.parse(f.createdAt).toLocal(),
+                          replyToMessageId: f.replyToMessageId,
+                          replyToMessage: (f.replyToMessageId != null && f.replySenderId != null)
+                              ? MessageModel(
+                                  id: f.replyToMessageId!,
+                                  conversationId: f.conversationId,
+                                  senderId: f.replySenderId!,
+                                  content: f.replyContent,
+                                  messageType: 'text',
+                                  createdAt: DateTime.now(),
+                                )
+                              : null,
+                          isFailed: true,
+                        );
+                      }).toList();
 
-                  final allMessages = [...failedModels, ...messagesState.messages];
-                  allMessages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                      final allMessages = [...failedModels, ...messagesState.messages];
+                      allMessages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-                  var displayedMessages = allMessages;
-                  if (selfDestructSecs > 0) {
-                    final now = DateTime.now();
-                    displayedMessages = allMessages.where((m) {
-                      final age = now.difference(m.createdAt).inSeconds;
-                      return age < selfDestructSecs;
-                    }).toList();
-                  }
+                      var displayedMessages = allMessages;
+                      if (selfDestructSecs > 0) {
+                        final now = DateTime.now();
+                        displayedMessages = allMessages.where((m) {
+                          final age = now.difference(m.createdAt).inSeconds;
+                          return age < selfDestructSecs;
+                        }).toList();
+                      }
 
-                  _updateCacheIfNeeded(displayedMessages);
-                  return _buildMessageList(
-                    messagesState,
-                    displayedMessages,
-                    currentUserId,
-                    otherUserName,
-                    pinnedIds,
-                  );
-                },
-                loading: () =>
-                    const Center(child: CupertinoActivityIndicator()),
-                error: (e, _) => Center(child: Text(e.toString())),
+                      _updateCacheIfNeeded(displayedMessages);
+                      return _buildMessageList(
+                        messagesState,
+                        displayedMessages,
+                        currentUserId,
+                        otherUserName,
+                        pinnedIds,
+                      );
+                    },
+                    loading: () =>
+                        const Center(child: CupertinoActivityIndicator()),
+                    error: (e, _) => Center(child: Text(e.toString())),
+                  ),
+                  // Nút cuộn xuống đáy cao cấp (Scroll to Bottom button)
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: AnimatedScale(
+                      scale: _showScrollToBottomBtn ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOutBack,
+                      child: AnimatedOpacity(
+                        opacity: _showScrollToBottomBtn ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            GestureDetector(
+                              onTap: () => _scrollToBottom(),
+                              child: Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: theme.brightness == Brightness.dark
+                                      ? const Color(0xFF1E1E2F).withValues(alpha: 0.9)
+                                      : Colors.white.withValues(alpha: 0.9),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.15),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                  border: Border.all(
+                                    color: theme.colorScheme.primary.withValues(alpha: 0.25),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Icon(
+                                    CupertinoIcons.chevron_down,
+                                    color: theme.colorScheme.primary,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Hiển thị số lượng tin nhắn chưa đọc (nếu có)
+                            messagesAsync.when(
+                              data: (state) {
+                                final unreadCount = state.messages
+                                    .where((m) => !m.isSeen && m.senderId != currentUserId)
+                                    .length;
+                                if (unreadCount == 0) return const SizedBox.shrink();
+
+                                return Positioned(
+                                  top: -4,
+                                  right: -4,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.redAccent,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 18,
+                                      minHeight: 18,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        unreadCount > 99 ? '99+' : '$unreadCount',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                              loading: () => const SizedBox.shrink(),
+                              error: (_, __) => const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             _buildInput(theme, hasWallpaper),

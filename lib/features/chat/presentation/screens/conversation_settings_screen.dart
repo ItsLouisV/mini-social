@@ -691,7 +691,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       return const SizedBox.shrink();
     }
 
-    if (path.startsWith('http') || path.startsWith('blob')) {
+    if (path.startsWith('blob:')) {
+      return const Icon(CupertinoIcons.photo, size: 16);
+    } else if (path.startsWith('http')) {
       return Image.network(
         path,
         fit: BoxFit.cover,
