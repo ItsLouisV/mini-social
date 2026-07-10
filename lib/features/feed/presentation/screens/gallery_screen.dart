@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
@@ -60,7 +61,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
             top: MediaQuery.of(context).padding.top + 10,
             left: 20,
             child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white, size: 30),
+              icon: const Icon(CupertinoIcons.xmark_circle_fill, color: Colors.white, size: 30),
               onPressed: () => Navigator.pop(context),
             ),
           ),

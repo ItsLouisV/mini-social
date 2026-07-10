@@ -26,6 +26,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _captionController = TextEditingController();
   final List<XFile> _media = [];
   bool _isPosting = false;
+  String _privacy = 'public';
 
   @override
   void dispose() {
@@ -91,6 +92,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       await ref.read(postRepositoryProvider).createPost(
             caption: caption,
             media: _media,
+            privacy: _privacy,
           );
       if (mounted) context.pop();
     } catch (e) {
@@ -107,29 +109,227 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
   }
 
+  String _getPrivacyLabel() {
+    switch (_privacy) {
+      case 'public':
+        return 'Công khai';
+      case 'friends':
+        return 'Bạn bè';
+      case 'followers':
+        return 'Người theo dõi';
+      case 'private':
+        return 'Riêng tư';
+      default:
+        return 'Công khai';
+    }
+  }
+
+  IconData _getPrivacyIcon() {
+    switch (_privacy) {
+      case 'public':
+        return CupertinoIcons.globe;
+      case 'friends':
+        return CupertinoIcons.person_2_fill;
+      case 'followers':
+        return CupertinoIcons.person_crop_circle_badge_checkmark;
+      case 'private':
+        return CupertinoIcons.lock_fill;
+      default:
+        return CupertinoIcons.globe;
+    }
+  }
+
+  void _showPrivacyBottomSheet() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(isDark ? 0.6 : 0.4),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.65,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border.all(
+                  color: theme.dividerColor.withOpacity(isDark ? 0.08 : 0.15),
+                  width: 1.5,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+              child: ListView(
+                controller: scrollController,
+                physics: const ClampingScrollPhysics(),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: theme.hintColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Chọn chế độ bài đăng',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Ai có thể nhìn thấy bài viết này của bạn?',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor.withOpacity(0.6),
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildPrivacyOption(ctx, 'public', 'Công khai', CupertinoIcons.globe, 'Bất kỳ ai ở trong và ngoài MiniSocial'),
+                  _buildPrivacyOption(ctx, 'friends', 'Bạn bè', CupertinoIcons.person_2_fill, 'Chỉ những người bạn của bạn mới có thể xem'),
+                  _buildPrivacyOption(ctx, 'followers', 'Người theo dõi', CupertinoIcons.person_crop_circle_badge_checkmark, 'Chỉ những người đang theo dõi bạn mới có thể xem'),
+                  _buildPrivacyOption(ctx, 'private', 'Riêng tư', CupertinoIcons.lock_fill, 'Chỉ mình bạn mới có thể xem bài viết này'),
+                  SizedBox(height: MediaQuery.of(ctx).padding.bottom),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPrivacyOption(
+    BuildContext ctx,
+    String value,
+    String label,
+    IconData icon,
+    String description,
+  ) {
+    final theme = Theme.of(ctx);
+    final isSelected = _privacy == value;
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() => _privacy = value);
+        Navigator.of(ctx).pop();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? theme.colorScheme.primary.withOpacity(0.08)
+              : theme.scaffoldBackgroundColor.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? theme.colorScheme.primary.withOpacity(0.3)
+                : theme.dividerColor.withOpacity(0.08),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? theme.colorScheme.primary.withOpacity(0.1)
+                    : theme.dividerColor.withOpacity(0.05),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: isSelected ? theme.colorScheme.primary : theme.hintColor,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor.withOpacity(0.5),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                CupertinoIcons.checkmark_alt_circle_fill,
+                color: theme.colorScheme.primary,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAttachmentToolbar(ThemeData theme) {
-    return Row(
-      children: [
-        IconButton(
-          onPressed: _pickImages,
-          icon: const Icon(CupertinoIcons.photo),
-          color: theme.hintColor.withValues(alpha: 0.6),
-          iconSize: 22,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          tooltip: 'Thêm ảnh',
+    final isDark = theme.brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.dividerColor.withOpacity(isDark ? 0.05 : 0.1),
+          width: 1,
         ),
-        const SizedBox(width: 20),
-        IconButton(
-          onPressed: _pickVideo,
-          icon: const Icon(CupertinoIcons.videocam),
-          color: theme.hintColor.withValues(alpha: 0.6),
-          iconSize: 24,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          tooltip: 'Thêm video',
-        ),
-      ],
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Thêm vào bài đăng:',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.hintColor.withOpacity(0.6),
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+          const Spacer(),
+          _ToolbarButton(
+            icon: CupertinoIcons.photo_fill_on_rectangle_fill,
+            color: const Color(0xFF9B59B6),
+            tooltip: 'Thêm ảnh',
+            onTap: _pickImages,
+          ),
+          const SizedBox(width: 12),
+          _ToolbarButton(
+            icon: CupertinoIcons.videocam_circle,
+            color: const Color(0xFF3A5BDB),
+            tooltip: 'Thêm video',
+            iconSize: 23,
+            onTap: _pickVideo,
+          ),
+        ],
+      ),
     );
   }
 
@@ -149,49 +349,67 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             width: 135,
             child: Stack(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    width: 135,
-                    height: 180,
-                    child: isVideo
-                        ? _LocalVideoPreview(file: file)
-                        : (kIsWeb
-                            ? Image.network(file.path, fit: BoxFit.cover)
-                            : Image.file(io.File(file.path), fit: BoxFit.cover)),
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: theme.dividerColor.withOpacity(0.15),
+                      width: 1,
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      width: 135,
+                      height: 180,
+                      child: isVideo
+                          ? _LocalVideoPreview(file: file)
+                          : (kIsWeb
+                              ? Image.network(file.path, fit: BoxFit.cover)
+                              : Image.file(io.File(file.path), fit: BoxFit.cover)),
+                    ),
                   ),
                 ),
-                // Remove button
                 Positioned(
                   top: 8,
                   right: 8,
                   child: GestureDetector(
                     onTap: () => setState(() => _media.removeAt(i)),
                     child: Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
+                        color: Colors.black.withOpacity(0.5),
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.2),
+                          width: 1,
+                        ),
                       ),
                       child: const Icon(
                         CupertinoIcons.xmark,
-                        size: 12,
+                        size: 10,
                         color: Colors.white,
                       ),
                     ),
                   ),
                 ),
-                // Video indicator badge
                 if (isVideo)
                   Positioned(
                     bottom: 8,
                     left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(4),
+                        color: Colors.black.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -201,13 +419,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                             size: 8,
                             color: Colors.white,
                           ),
-                          SizedBox(width: 2),
+                          SizedBox(width: 4),
                           Text(
                             'VIDEO',
                             style: TextStyle(
                               fontSize: 8,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
+                              letterSpacing: 0.5,
                             ),
                           ),
                         ],
@@ -227,11 +446,16 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final theme = Theme.of(context);
     final currentUserId = ref.watch(currentUserIdProvider);
     final profileAsync = ref.watch(profileProvider(currentUserId ?? ''));
+    final isDark = theme.brightness == Brightness.dark;
+    
+    final pageBg = isDark
+        ? const Color(0xFF12121A)
+        : const Color(0xFFF8F9FD);
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leadingWidth: 80,
         leading: TextButton(
@@ -241,6 +465,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             style: TextStyle(
               color: theme.textTheme.bodyLarge?.color,
               fontSize: 16,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
@@ -248,117 +473,178 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           'Bài viết mới',
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
+            fontSize: 18,
           ),
         ),
         centerTitle: true,
-        actions: const [
-          // Post button moved to bottomNavigationBar for Threads style
-          SizedBox(width: 80),
-        ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: IntrinsicHeight(
-          child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: theme.dividerColor.withOpacity(isDark ? 0.08 : 0.4),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.15 : 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Left Column: Avatar & Continuous Line
-              Column(
+              Row(
                 children: [
                   profileAsync.when(
                     data: (profile) => AppAvatar(
                       imageUrl: profile.avatarUrl,
                       name: profile.displayName,
-                      radius: 20,
+                      radius: 22,
                     ),
                     loading: () => const CircleAvatar(
-                      radius: 20,
+                      radius: 22,
                       backgroundColor: Colors.transparent,
                       child: CupertinoActivityIndicator(radius: 8),
                     ),
                     error: (_, __) => const CircleAvatar(
-                      radius: 20,
+                      radius: 22,
                       backgroundColor: Colors.grey,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Container(
-                      width: 1.5,
-                      color: theme.dividerColor.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Opacity(
-                    opacity: 0.3,
-                    child: profileAsync.when(
-                      data: (profile) => AppAvatar(
-                        imageUrl: profile.avatarUrl,
-                        name: profile.displayName,
-                        radius: 10,
-                      ),
-                      loading: () => const CircleAvatar(radius: 10),
-                      error: (_, __) => const CircleAvatar(radius: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        profileAsync.when(
+                          data: (profile) => Text(
+                            profile.displayName,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          loading: () => const SizedBox(),
+                          error: (_, __) => const SizedBox(),
+                        ),
+                        const SizedBox(height: 2),
+                        GestureDetector(
+                          onTap: _showPrivacyBottomSheet,
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _getPrivacyIcon(),
+                                    size: 12,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _getPrivacyLabel(),
+                                    style: TextStyle(
+                                      color: theme.colorScheme.primary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    CupertinoIcons.chevron_down,
+                                    size: 10,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(width: 14),
-
-              // Right Column: Display Name, Text Input, Media Preview, Quick Toolbar
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    profileAsync.when(
-                      data: (profile) => Text(
-                        profile.displayName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                      loading: () => const SizedBox(),
-                      error: (_, __) => const SizedBox(),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _captionController,
+                decoration: InputDecoration(
+                  hintText: 'Có gì mới thế?',
+                  hintStyle: TextStyle(
+                    color: theme.hintColor.withOpacity(0.5),
+                    fontSize: 16,
+                  ),
+                  filled: true,
+                  fillColor: isDark
+                      ? theme.scaffoldBackgroundColor
+                      : theme.scaffoldBackgroundColor.withOpacity(0.5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: theme.dividerColor.withOpacity(isDark ? 0.08 : 0.15),
+                      width: 1,
                     ),
-                    const SizedBox(height: 2),
-                    TextField(
-                      controller: _captionController,
-                      decoration: InputDecoration(
-                        hintText: 'Có gì mới?',
-                        hintStyle: TextStyle(
-                          color: theme.hintColor.withValues(alpha: 0.6),
-                          fontSize: 15,
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      maxLines: null,
-                      style: const TextStyle(fontSize: 15),
-                      autofocus: true,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: theme.dividerColor.withOpacity(isDark ? 0.08 : 0.15),
+                      width: 1,
                     ),
-                    const SizedBox(height: 12),
-                    _buildMediaPreview(theme),
-                    const SizedBox(height: 16),
-                    _buildAttachmentToolbar(theme),
-                  ],
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(
+                      color: theme.colorScheme.primary.withOpacity(0.6),
+                      width: 1.5,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 ),
+                maxLines: null,
+                minLines: 4,
+                style: const TextStyle(fontSize: 16, height: 1.4),
+                autofocus: true,
               ),
+              const SizedBox(height: 16),
+              _buildMediaPreview(theme),
+              const SizedBox(height: 20),
+              _buildAttachmentToolbar(theme),
             ],
           ),
         ),
       ),
       bottomNavigationBar: Container(
         padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 12,
-          bottom: MediaQuery.of(context).padding.bottom + 12,
+          left: 20,
+          right: 20,
+          top: 16,
+          bottom: MediaQuery.of(context).padding.bottom + 16,
         ),
         decoration: BoxDecoration(
           color: theme.scaffoldBackgroundColor,
+          border: Border(
+            top: BorderSide(
+              color: theme.dividerColor.withOpacity(isDark ? 0.05 : 0.1),
+              width: 1,
+            ),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -366,15 +652,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             Row(
               children: [
                 Icon(
-                  CupertinoIcons.globe,
+                  CupertinoIcons.info_circle,
                   size: 14,
-                  color: theme.hintColor.withValues(alpha: 0.6),
+                  color: theme.hintColor.withOpacity(0.5),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   'Bất kỳ ai cũng có thể trả lời',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.hintColor.withValues(alpha: 0.6),
+                    color: theme.hintColor.withOpacity(0.5),
                     fontSize: 13,
                   ),
                 ),
@@ -395,19 +681,101 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     ? AppColors.chatInputSendIconEnabled
                     : AppColors.chatInputSendIconDisabled;
 
-                return AppButton(
-                  label: 'Đăng',
-                  onPressed: hasContent ? _post : null,
-                  isLoading: _isPosting,
-                  width: 80,
-                  height: 36,
-                  borderRadius: 24,
-                  backgroundColor: bgColor,
-                  textColor: textColor,
+                return GestureDetector(
+                  onTap: hasContent && !_isPosting ? _post : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 90,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      gradient: hasContent
+                          ? LinearGradient(
+                              colors: [
+                                theme.colorScheme.primary,
+                                theme.colorScheme.secondary,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      color: hasContent ? null : bgColor,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: hasContent
+                          ? [
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Center(
+                      child: _isPosting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : Text(
+                              'Đăng',
+                              style: TextStyle(
+                                color: hasContent ? Colors.white : textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                    ),
+                  ),
                 );
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolbarButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+  final double iconSize;
+
+  const _ToolbarButton({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+    this.iconSize = 19,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: color.withOpacity(isDark ? 0.18 : 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Center(
+            child: Icon(
+              icon,
+              color: color,
+              size: iconSize,
+            ),
+          ),
         ),
       ),
     );

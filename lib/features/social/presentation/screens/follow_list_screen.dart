@@ -27,6 +27,11 @@ class FollowListScreen extends ConsumerWidget {
       initialIndex: initialIndex,
       child: Scaffold(
         appBar: AppBar(
+          leading: CupertinoButton(
+            padding: const EdgeInsets.only(left: 8),
+            onPressed: () => context.pop(),
+            child: const Icon(CupertinoIcons.chevron_back, size: 22),
+          ),
           title: const Text(
             'Kết nối',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),

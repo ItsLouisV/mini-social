@@ -47,11 +47,31 @@ class ChatRepository {
     return conversations;
   }
 
-  Stream<List<ConversationModel>> watchConversations() {
-    return _client
+  Stream<List<ConversationModel>> watchConversations() async* {
+    try {
+      final initialData = await getConversations();
+      yield initialData;
+    } catch (e) {
+      print('Error fetching initial conversations: $e');
+      rethrow;
+    }
+
+    final conversationsStream = _client
         .from(SupabaseConstants.conversationsTable)
         .stream(primaryKey: ['id'])
-        .asyncMap((_) => getConversations());
+        .asyncMap((_) => getConversations())
+        .handleError((err) {
+          print('Supabase watchConversations stream error: $err');
+          _service.handleAuthError(err);
+        });
+
+    try {
+      await for (final conversations in conversationsStream) {
+        yield conversations;
+      }
+    } catch (e) {
+      print('Supabase watchConversations main stream error: $e');
+    }
   }
 
   /// Stream thô — chỉ emit khi có thay đổi, không fetch models.
@@ -60,7 +80,11 @@ class ChatRepository {
     return _client
         .from(SupabaseConstants.conversationsTable)
         .stream(primaryKey: ['id'])
-        .map((_) {});
+        .map((_) {})
+        .handleError((err) {
+          print('Supabase watchConversationsStream error: $err');
+          _service.handleAuthError(err);
+        });
   }
 
   Future<ConversationModel> getOrCreateConversation(
@@ -98,21 +122,60 @@ class ChatRepository {
     return ConversationModel.fromJson(created);
   }
 
-  Stream<int> watchTotalUnreadMessagesCount() {
+  Future<int> getTotalUnreadMessagesCount() async {
     final userId = currentUserId!;
-    return _client
+    final data = await _client
         .from(SupabaseConstants.conversationsTable)
-        .stream(primaryKey: ['id']).map((data) {
-      int total = 0;
-      for (var row in data) {
-        if (row['participant_1'] == userId) {
-          total += (row['p1_unread_count'] as int?) ?? 0;
-        } else if (row['participant_2'] == userId) {
-          total += (row['p2_unread_count'] as int?) ?? 0;
-        }
+        .select('participant_1, participant_2, p1_unread_count, p2_unread_count')
+        .or('participant_1.eq.$userId,participant_2.eq.$userId');
+    
+    int total = 0;
+    for (var row in (data as List)) {
+      if (row['participant_1'] == userId) {
+        total += (row['p1_unread_count'] as int?) ?? 0;
+      } else if (row['participant_2'] == userId) {
+        total += (row['p2_unread_count'] as int?) ?? 0;
       }
-      return total;
-    });
+    }
+    return total;
+  }
+
+  Stream<int> watchTotalUnreadMessagesCount() async* {
+    final userId = currentUserId!;
+    try {
+      final initialCount = await getTotalUnreadMessagesCount();
+      yield initialCount;
+    } catch (e) {
+      print('Error fetching initial unread messages count: $e');
+      yield 0;
+    }
+
+    final countStream = _client
+        .from(SupabaseConstants.conversationsTable)
+        .stream(primaryKey: ['id'])
+        .map((data) {
+          int total = 0;
+          for (var row in data) {
+            if (row['participant_1'] == userId) {
+              total += (row['p1_unread_count'] as int?) ?? 0;
+            } else if (row['participant_2'] == userId) {
+              total += (row['p2_unread_count'] as int?) ?? 0;
+            }
+          }
+          return total;
+        })
+        .handleError((err) {
+          print('Supabase watchTotalUnreadMessagesCount stream error: $err');
+          _service.handleAuthError(err);
+        });
+
+    try {
+      await for (final count in countStream) {
+        yield count;
+      }
+    } catch (e) {
+      print('Supabase watchTotalUnreadMessagesCount main stream error: $e');
+    }
   }
 
   // ── Conversation Actions ──────────────────────────────────────────────────────

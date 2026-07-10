@@ -3,10 +3,12 @@ import '../data/social_repository.dart';
 import '../../../shared/providers/supabase_provider.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 
+import '../../../core/services/supabase_service.dart';
 import '../../profile/providers/profile_provider.dart';
+import 'follow_list_provider.dart';
 
 final socialRepositoryProvider = Provider<SocialRepository>((ref) {
-  return SocialRepository(ref.watch(supabaseClientProvider));
+  return SocialRepository(ref.watch(supabaseServiceProvider));
 });
 
 final isFollowingProvider = StateNotifierProvider.family<IsFollowingNotifier, AsyncValue<bool>, String>((ref, userId) {
@@ -77,3 +79,78 @@ final unreadNotificationsCountProvider = Provider<int>((ref) {
     error: (_, __) => 0,
   );
 });
+
+enum FriendStatus { none, pendingSent, pendingReceived, accepted }
+
+final friendStatusProvider = StateNotifierProvider.family<FriendStatusNotifier, AsyncValue<FriendStatus>, String>((ref, userId) {
+  return FriendStatusNotifier(ref, userId);
+});
+
+class FriendStatusNotifier extends StateNotifier<AsyncValue<FriendStatus>> {
+  final Ref ref;
+  final String userId;
+
+  FriendStatusNotifier(this.ref, this.userId) : super(const AsyncValue.loading()) {
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      final currentUserId = ref.read(currentUserIdProvider);
+      if (currentUserId == null || currentUserId == userId) {
+        if (mounted) state = const AsyncValue.data(FriendStatus.none);
+        return;
+      }
+      final rawStatus = await ref.read(socialRepositoryProvider).getFriendStatus(userId);
+      FriendStatus status = FriendStatus.none;
+      if (rawStatus == 'accepted') {
+        status = FriendStatus.accepted;
+      } else if (rawStatus == 'pending_sent') {
+        status = FriendStatus.pendingSent;
+      } else if (rawStatus == 'pending_received') {
+        status = FriendStatus.pendingReceived;
+      }
+      if (mounted) state = AsyncValue.data(status);
+    } catch (e, st) {
+      if (mounted) state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<void> sendRequest() async {
+    state = const AsyncValue.data(FriendStatus.pendingSent);
+    try {
+      await ref.read(socialRepositoryProvider).sendFriendRequest(userId);
+      _invalidateFriendLists();
+    } catch (e) {
+      state = const AsyncValue.data(FriendStatus.none);
+    }
+  }
+
+  Future<void> acceptRequest() async {
+    state = const AsyncValue.data(FriendStatus.accepted);
+    try {
+      await ref.read(socialRepositoryProvider).acceptFriendRequest(userId);
+      _invalidateFriendLists();
+    } catch (e) {
+      state = const AsyncValue.data(FriendStatus.pendingReceived);
+    }
+  }
+
+  Future<void> cancelOrUnfriend() async {
+    state = const AsyncValue.data(FriendStatus.none);
+    try {
+      await ref.read(socialRepositoryProvider).cancelFriendRequest(userId);
+      _invalidateFriendLists();
+    } catch (e) {
+      _init();
+    }
+  }
+
+  void _invalidateFriendLists() {
+    final myId = ref.read(currentUserIdProvider);
+    if (myId == null) return;
+    ref.invalidate(pendingSentProvider(myId));
+    ref.invalidate(pendingReceivedProvider(myId));
+    ref.invalidate(friendsListProvider(myId));
+  }
+}

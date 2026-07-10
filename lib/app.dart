@@ -78,6 +78,31 @@ class _MiniSocialAppState extends ConsumerState<MiniSocialApp> {
         }
       }
     });
+
+    ref.listenManual<bool>(sessionExpiredProvider, (prev, next) {
+      if (next == true) {
+        ref.read(sessionExpiredProvider.notifier).state = false;
+        final context = ref.read(appRouterProvider).routerDelegate.navigatorKey.currentContext;
+        if (context != null && context.mounted) {
+          showCupertinoDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => CupertinoAlertDialog(
+              title: const Text('Phiên đăng nhập hết hạn'),
+              content: const Text('Phiên đăng nhập của bạn đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.'),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('Đồng ý'),
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                  },
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    });
   }
 
   @override

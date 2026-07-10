@@ -77,3 +77,87 @@ final followingProvider = FutureProvider.family<List<ProfileModel>, String>((ref
   final data = await repo.getFollowing(userId);
   return data.map((e) => ProfileModel.fromJson(e)).toList();
 });
+
+final friendsListProvider = FutureProvider.family<List<ProfileModel>, String>((ref, userId) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final repo = ref.watch(socialRepositoryProvider);
+
+  final channel = supabase.channel('public:friend_requests:friends_$userId');
+  try {
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'friend_requests',
+      callback: (payload) {
+        ref.invalidateSelf();
+      },
+    ).subscribe();
+  } catch (e) {
+    print('Error subscribing to realtime friends: $e');
+  }
+
+  ref.onDispose(() {
+    try {
+      supabase.removeChannel(channel);
+    } catch (_) {}
+  });
+
+  final data = await repo.getFriends();
+  return data.map((e) => ProfileModel.fromJson(e)).toList();
+});
+
+final pendingReceivedProvider = FutureProvider.family<List<ProfileModel>, String>((ref, userId) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final repo = ref.watch(socialRepositoryProvider);
+
+  final channel = supabase.channel('public:friend_requests:pending_received_$userId');
+  try {
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'friend_requests',
+      callback: (payload) {
+        ref.invalidateSelf();
+      },
+    ).subscribe();
+  } catch (e) {
+    print('Error subscribing to realtime pending received: $e');
+  }
+
+  ref.onDispose(() {
+    try {
+      supabase.removeChannel(channel);
+    } catch (_) {}
+  });
+
+  final data = await repo.getPendingReceived();
+  return data.map((e) => ProfileModel.fromJson(e)).toList();
+});
+
+final pendingSentProvider = FutureProvider.family<List<ProfileModel>, String>((ref, userId) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  final repo = ref.watch(socialRepositoryProvider);
+
+  final channel = supabase.channel('public:friend_requests:pending_sent_$userId');
+  try {
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'friend_requests',
+      callback: (payload) {
+        ref.invalidateSelf();
+      },
+    ).subscribe();
+  } catch (e) {
+    print('Error subscribing to realtime pending sent: $e');
+  }
+
+  ref.onDispose(() {
+    try {
+      supabase.removeChannel(channel);
+    } catch (_) {}
+  });
+
+  final data = await repo.getPendingSent();
+  return data.map((e) => ProfileModel.fromJson(e)).toList();
+});

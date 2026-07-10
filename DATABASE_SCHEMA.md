@@ -124,6 +124,7 @@ create table posts (
   caption        text,
   likes_count    int default 0,
   comments_count int default 0,
+  privacy        text not null default 'public',
   created_at     timestamptz default now()
 );
 ```
@@ -353,6 +354,26 @@ $$ language plpgsql;
 create trigger friend_requests_updated_at
   before update on friend_requests
   for each row execute procedure set_updated_at();
+
+-- RLS Policies for friend_requests
+alter table friend_requests enable row level security;
+
+create policy "Users can view their own friend requests"
+  on friend_requests for select
+  using (auth.uid() = sender_id or auth.uid() = receiver_id);
+
+create policy "Users can insert their own friend requests"
+  on friend_requests for insert
+  with check (auth.uid() = sender_id);
+
+create policy "Users can update their own friend requests"
+  on friend_requests for update
+  using (auth.uid() = sender_id or auth.uid() = receiver_id)
+  with check (auth.uid() = sender_id or auth.uid() = receiver_id);
+
+create policy "Users can delete their own friend requests"
+  on friend_requests for delete
+  using (auth.uid() = sender_id or auth.uid() = receiver_id);
 ```
 
 **Cách dùng:**

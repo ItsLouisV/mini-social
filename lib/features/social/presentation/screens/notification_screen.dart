@@ -140,13 +140,13 @@ class NotificationScreen extends ConsumerWidget {
   }
 }
 
-class _NotificationTile extends StatelessWidget {
+class _NotificationTile extends ConsumerWidget {
   final Map<String, dynamic> notification;
 
   const _NotificationTile({required this.notification});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
@@ -176,12 +176,12 @@ class _NotificationTile extends StatelessWidget {
       case 'comment':
         actionText = ' đã bình luận về bài viết của bạn';
         icon = CupertinoIcons.chat_bubble_fill;
-        iconColor = theme.colorScheme.primary;
+        iconColor = const Color(0xFF007AFF);
         break;
       case 'reply':
         actionText = ' đã trả lời bình luận của bạn';
         icon = CupertinoIcons.chat_bubble_2_fill;
-        iconColor = theme.colorScheme.primary;
+        iconColor = const Color(0xFF007AFF);
         break;
       case 'follow':
         actionText = ' đã bắt đầu theo dõi bạn';
@@ -213,6 +213,15 @@ class _NotificationTile extends StatelessWidget {
       color: bgColor,
       child: InkWell(
         onTap: () {
+          // Mark as read on tap if unread
+          if (!isRead) {
+            final notifId = notification['id'] as String?;
+            if (notifId != null) {
+              ref.read(socialRepositoryProvider).markNotificationAsRead(notifId).then((_) {
+                ref.invalidate(notificationsProvider);
+              });
+            }
+          }
           switch (type) {
             case 'like':
             case 'comment':

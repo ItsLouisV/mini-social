@@ -85,6 +85,12 @@ class PostCard extends ConsumerWidget {
                         color: Theme.of(context).hintColor,
                       ),
                     ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      _getPrivacyIcon(post.privacy),
+                      size: 10,
+                      color: Theme.of(context).hintColor,
+                    ),
                     const SizedBox(width: 8),
                     if (isOwner)
                       GestureDetector(
@@ -187,5 +193,20 @@ class PostCard extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  IconData _getPrivacyIcon(String privacy) {
+    switch (privacy) {
+      case 'public':
+        return CupertinoIcons.globe;
+      case 'friends':
+        return CupertinoIcons.person_2_fill;
+      case 'followers':
+        return CupertinoIcons.person_crop_circle_badge_checkmark;
+      case 'private':
+        return CupertinoIcons.lock_fill;
+      default:
+        return CupertinoIcons.globe;
+    }
   }
 }

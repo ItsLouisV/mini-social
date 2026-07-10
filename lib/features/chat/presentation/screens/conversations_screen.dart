@@ -149,7 +149,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.wifi_off, color: Colors.amber, size: 16),
+                      const Icon(CupertinoIcons.wifi_slash, color: Colors.amber, size: 16),
                       const SizedBox(width: 8),
                       Text(
                         'Đang ngoại tuyến. Dùng bản lưu ngoại tuyến.',

@@ -91,7 +91,7 @@ class _NewMessageModalState extends ConsumerState<NewMessageModal> {
                               : Colors.grey[200],
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close, size: 20),
+                        child: const Icon(CupertinoIcons.xmark, size: 20),
                       ),
                       onPressed: () => context.pop(),
                       padding: EdgeInsets.zero,

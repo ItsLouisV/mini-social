@@ -27,3 +27,6 @@ final currentUserProvider = Provider<User?>((ref) {
 final currentUserIdProvider = Provider<String?>((ref) {
   return ref.watch(currentUserProvider)?.id;
 });
+
+// Session expired state provider
+final sessionExpiredProvider = StateProvider<bool>((ref) => false);

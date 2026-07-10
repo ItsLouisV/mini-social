@@ -5,7 +5,21 @@ extension DateTimeExtension on DateTime {
   DateTime get _local => isUtc ? toLocal() : this;
 
   String get timeAgo {
-    return timeago.format(_local, locale: 'vi');
+    final local = _local;
+    final now = DateTime.now();
+    final difference = now.difference(local);
+
+    if (difference.isNegative || difference.inSeconds < 60) {
+      return '1m';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h';
+    } else if (difference.inDays < 30) {
+      return '${difference.inDays}d';
+    } else {
+      return formattedDate;
+    }
   }
 
   String get timeAgoEn {

@@ -81,6 +81,13 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       _Divider(color: theme.dividerColor),
                       _IosRow(
+                        iconBg: Colors.orange,
+                        icon: CupertinoIcons.person_2_fill,
+                        title: 'Bạn bè',
+                        onTap: () => context.push('/profile/${currentUserId ?? "me"}/friends'),
+                      ),
+                      _Divider(color: theme.dividerColor),
+                      _IosRow(
                         iconBg: Colors.green,
                         icon: CupertinoIcons.shield_lefthalf_fill,
                         title: 'Quyền riêng tư',

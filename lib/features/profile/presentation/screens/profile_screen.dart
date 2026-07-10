@@ -136,18 +136,17 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      isMine
-                          ? OutlinedButton(
-                              onPressed: () => context.push('/profile/edit'),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                              ),
-                              child: const Text('Chỉnh sửa hồ sơ', style: TextStyle(fontWeight: FontWeight.bold)),
-                            )
-                          : _buildFollowButton(context, ref, profile),
+                      if (isMine)
+                        OutlinedButton(
+                          onPressed: () => context.push('/profile/edit'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          child: const Text('Chỉnh sửa hồ sơ', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
                     ],
                   ),
                   if (profile.bio?.isNotEmpty == true) ...[
@@ -187,6 +186,16 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  if (!isMine) ...[
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(child: _buildFriendButton(context, ref, profile)),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildFollowButton(context, ref, profile)),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -256,6 +265,90 @@ class ProfileScreen extends ConsumerWidget {
       ),
       loading: () => const SizedBox(width: 100, child: Center(child: CupertinoActivityIndicator())),
       error: (_, __) => const SizedBox(),
+    );
+  }
+
+  Widget _buildFriendButton(
+      BuildContext context, WidgetRef ref, ProfileModel profile) {
+    final friendStatusAsync = ref.watch(friendStatusProvider(profile.id));
+    return friendStatusAsync.when(
+      data: (status) {
+        String label = 'Kết bạn';
+        Color? bgColor;
+        Color? textColor;
+        BorderSide? borderSide;
+        VoidCallback? onTap;
+
+        switch (status) {
+          case FriendStatus.none:
+            label = 'Kết bạn';
+            bgColor = Colors.blue;
+            textColor = Colors.white;
+            onTap = () => ref.read(friendStatusProvider(profile.id).notifier).sendRequest();
+            break;
+          case FriendStatus.pendingSent:
+            label = 'Đã gửi lời mời';
+            bgColor = Theme.of(context).dividerColor.withOpacity(0.1);
+            textColor = Theme.of(context).textTheme.bodyLarge?.color;
+            onTap = () => ref.read(friendStatusProvider(profile.id).notifier).cancelOrUnfriend();
+            break;
+          case FriendStatus.pendingReceived:
+            label = 'Chấp nhận';
+            bgColor = Colors.green;
+            textColor = Colors.white;
+            onTap = () => ref.read(friendStatusProvider(profile.id).notifier).acceptRequest();
+            break;
+          case FriendStatus.accepted:
+            label = 'Bạn bè';
+            bgColor = Colors.green.withOpacity(0.1);
+            textColor = Colors.green;
+            borderSide = BorderSide(color: Colors.green.withOpacity(0.2), width: 1);
+            onTap = () => _showUnfriendOptions(context, ref, profile.id);
+            break;
+        }
+
+        return ElevatedButton(
+          onPressed: onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: bgColor,
+            foregroundColor: textColor,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            side: borderSide,
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        );
+      },
+      loading: () => const SizedBox(width: 100, child: Center(child: CupertinoActivityIndicator())),
+      error: (_, __) => const SizedBox(),
+    );
+  }
+
+  void _showUnfriendOptions(BuildContext context, WidgetRef ref, String targetUserId) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              ctx.pop();
+              ref.read(friendStatusProvider(targetUserId).notifier).cancelOrUnfriend();
+            },
+            child: const Text('Hủy kết bạn'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => ctx.pop(),
+          child: const Text('Hủy'),
+        ),
+      ),
     );
   }
 

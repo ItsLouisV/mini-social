@@ -440,6 +440,9 @@ class ChatMessagesNotifier
           .subscribe((status, [error]) {
             if (status == RealtimeSubscribeStatus.channelError) {
               print('Supabase Realtime messages channel error: $error');
+              if (error != null) {
+                ref.read(supabaseServiceProvider).handleAuthError(error);
+              }
             }
           });
 
@@ -477,7 +480,14 @@ class ChatMessagesNotifier
             } catch (_) {}
           },
         )
-        .subscribe();
+        .subscribe((status, [error]) {
+          if (status == RealtimeSubscribeStatus.channelError) {
+            print('Supabase Realtime reactions channel error: $error');
+            if (error != null) {
+              ref.read(supabaseServiceProvider).handleAuthError(error);
+            }
+          }
+        });
 
     } catch (e) {
       print('Error subscribing to realtime messages: $e');
@@ -748,6 +758,9 @@ class PinnedMessagesNotifier
           .subscribe((status, [error]) {
             if (status == RealtimeSubscribeStatus.channelError) {
               print('Supabase Realtime pinned messages channel error: $error');
+              if (error != null) {
+                ref.read(supabaseServiceProvider).handleAuthError(error);
+              }
             }
           });
     } catch (e) {

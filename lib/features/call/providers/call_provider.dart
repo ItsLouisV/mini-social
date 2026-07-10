@@ -1,12 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/services/supabase_service.dart';
 import '../data/call_repository.dart';
 import '../domain/call_model.dart';
 
 /// Cung cấp instance của CallRepository
 final callRepositoryProvider = Provider<CallRepository>((ref) {
-  return CallRepository(Supabase.instance.client);
+  return CallRepository(ref.watch(supabaseServiceProvider));
 });
 
 /// Theo dõi cuộc gọi đến cho current user

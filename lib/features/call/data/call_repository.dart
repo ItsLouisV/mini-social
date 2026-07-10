@@ -2,12 +2,15 @@ import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/services/supabase_service.dart';
 
 import '../domain/call_model.dart';
 
 class CallRepository {
-  final SupabaseClient _client;
-  CallRepository(this._client);
+  final SupabaseService _service;
+  CallRepository(this._service);
+
+  SupabaseClient get _client => _service.client;
 
   String getLiveKitUrl() => dotenv.env['LIVEKIT_URL'] ?? '';
 
@@ -106,6 +109,9 @@ class CallRepository {
       channel.subscribe((status, [error]) async {
         if (status == RealtimeSubscribeStatus.channelError) {
           print('Supabase Realtime incoming calls channel error: $error');
+          if (error != null) {
+            await _service.handleAuthError(error);
+          }
         }
         if (status != RealtimeSubscribeStatus.subscribed) return;
 
@@ -174,9 +180,12 @@ class CallRepository {
         callback: (payload) {
           controller.add(CallModel.fromJson(payload.newRecord));
         },
-      ).subscribe((status, [error]) {
+      ).subscribe((status, [error]) async {
         if (status == RealtimeSubscribeStatus.channelError) {
           print('Supabase Realtime watch call channel error: $error');
+          if (error != null) {
+            await _service.handleAuthError(error);
+          }
         }
       });
     } catch (e) {

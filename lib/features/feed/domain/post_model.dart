@@ -48,6 +48,7 @@ class PostModel {
   final DateTime createdAt;
   final ProfileModel? author;
   final bool isLiked;
+  final String privacy;
 
   const PostModel({
     required this.id,
@@ -59,6 +60,7 @@ class PostModel {
     required this.createdAt,
     this.author,
     this.isLiked = false,
+    this.privacy = 'public',
   });
 
   factory PostModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
@@ -78,6 +80,7 @@ class PostModel {
               Map<String, dynamic>.from(json['profiles'] as Map))
           : null,
       isLiked: isLiked,
+      privacy: json['privacy'] as String? ?? 'public',
     );
   }
 
@@ -88,6 +91,7 @@ class PostModel {
         'likes_count': likesCount,
         'comments_count': commentsCount,
         'created_at': createdAt.toIso8601String(),
+        'privacy': privacy,
       };
 
   PostModel copyWith({
@@ -105,6 +109,7 @@ class PostModel {
       createdAt: createdAt,
       author: author,
       isLiked: isLiked ?? this.isLiked,
+      privacy: privacy,
     );
   }
 }

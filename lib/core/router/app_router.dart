@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../constants/app_colors.dart';
 import '../utils/notifications.dart';
@@ -28,6 +27,7 @@ import '../../features/profile/presentation/screens/account_settings_screen.dart
 import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/social/presentation/screens/follow_list_screen.dart';
+import '../../features/social/presentation/screens/friends_list_screen.dart';
 import '../../features/social/presentation/screens/notification_screen.dart';
 import '../../features/social/providers/follow_provider.dart';
 import '../../features/call/presentation/screens/call_screens.dart';
@@ -262,6 +262,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: '/profile/:userId/friends',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) {
+          final tab = state.uri.queryParameters['tab'];
+          int idx = 0;
+          if (tab == 'pending') {
+            idx = 1;
+          } else if (tab == 'sent') {
+            idx = 2;
+          }
+          return CupertinoPage(
+            child: FriendsListScreen(
+              userId: state.pathParameters['userId']!,
+              initialIndex: idx,
+            ),
+          );
+        },
+      ),
 
       // ── StatefulShellRoute — each tab keeps its own navigator stack ──
       StatefulShellRoute.indexedStack(
@@ -421,16 +440,16 @@ class _IosTabBar extends StatelessWidget {
               _TabItem(
                 visualIdx: 0,
                 currentVisualIdx: visualIndex,
-                icon: FontAwesomeIcons.house,
-                activeIcon: FontAwesomeIcons.houseUser,
+                icon: CupertinoIcons.house,
+                activeIcon: CupertinoIcons.house_fill,
                 label: '',
                 onTap: onTap,
               ),
               _TabItem(
                 visualIdx: 1,
                 currentVisualIdx: visualIndex,
-                icon: FontAwesomeIcons.message,
-                activeIcon: FontAwesomeIcons.solidMessage,
+                icon: CupertinoIcons.bubble_left,
+                activeIcon: CupertinoIcons.bubble_left_fill,
                 label: 'Tin nhắn',
                 badge: unreadMsgCount > 0 ? '$unreadMsgCount' : null,
                 onTap: onTap,
@@ -475,8 +494,8 @@ class _IosTabBar extends StatelessWidget {
               _TabItem(
                 visualIdx: 3,
                 currentVisualIdx: visualIndex,
-                icon: FontAwesomeIcons.bell,
-                activeIcon: FontAwesomeIcons.solidBell,
+                icon: CupertinoIcons.bell,
+                activeIcon: CupertinoIcons.bell_fill,
                 label: 'Thông báo',
                 badge: unreadNotifCount > 0 ? '$unreadNotifCount' : null,
                 onTap: onTap,
@@ -484,8 +503,8 @@ class _IosTabBar extends StatelessWidget {
               _TabItem(
                 visualIdx: 4,
                 currentVisualIdx: visualIndex,
-                icon: FontAwesomeIcons.user,
-                activeIcon: FontAwesomeIcons.solidUser,
+                icon: CupertinoIcons.person,
+                activeIcon: CupertinoIcons.person_fill,
                 label: 'Cài đặt',
                 onTap: onTap,
               ),
@@ -500,8 +519,8 @@ class _IosTabBar extends StatelessWidget {
 class _TabItem extends StatelessWidget {
   final int visualIdx;
   final int currentVisualIdx;
-  final dynamic icon;
-  final dynamic activeIcon;
+  final IconData icon;
+  final IconData activeIcon;
   final String label;
   final String? badge;
   final void Function(int) onTap;
@@ -537,7 +556,7 @@ class _TabItem extends StatelessWidget {
                     scale: anim,
                     child: FadeTransition(opacity: anim, child: child),
                   ),
-                  child: FaIcon(
+                  child: Icon(
                     isActive ? activeIcon : icon,
                     key: ValueKey(isActive),
                     color: color,
