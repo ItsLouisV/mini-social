@@ -19,6 +19,7 @@ import '../../domain/message_model.dart';
 import '../../domain/pinned_message_model.dart';
 import '../../providers/chat_provider.dart';
 import '../widgets/full_screen_image_viewer.dart';
+import '../widgets/elastic_scroll_to_bottom_button.dart';
 import '../../presentation/widgets/message_popup_menu_content.dart';
 import '../../presentation/widgets/message_context_menu_route.dart';
 
@@ -780,78 +781,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       child: AnimatedOpacity(
                         opacity: _showScrollToBottomBtn ? 1.0 : 0.0,
                         duration: const Duration(milliseconds: 200),
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            GestureDetector(
+                        child: messagesAsync.when(
+                          data: (state) {
+                            final unreadCount = state.messages
+                                .where((m) => !m.isSeen && m.senderId != currentUserId)
+                                .length;
+                            return ElasticScrollToBottomButton(
                               onTap: () => _scrollToBottom(),
-                              child: Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: theme.brightness == Brightness.dark
-                                      ? const Color(0xFF1E1E2F).withValues(alpha: 0.9)
-                                      : Colors.white.withValues(alpha: 0.9),
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.15),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                  border: Border.all(
-                                    color: theme.colorScheme.primary.withValues(alpha: 0.25),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    CupertinoIcons.chevron_down,
-                                    color: theme.colorScheme.primary,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            // Hiển thị số lượng tin nhắn chưa đọc (nếu có)
-                            messagesAsync.when(
-                              data: (state) {
-                                final unreadCount = state.messages
-                                    .where((m) => !m.isSeen && m.senderId != currentUserId)
-                                    .length;
-                                if (unreadCount == 0) return const SizedBox.shrink();
-
-                                return Positioned(
-                                  top: -4,
-                                  right: -4,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.redAccent,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 18,
-                                      minHeight: 18,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        unreadCount > 99 ? '99+' : '$unreadCount',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                              loading: () => const SizedBox.shrink(),
-                              error: (_, __) => const SizedBox.shrink(),
-                            ),
-                          ],
+                              unreadCount: unreadCount,
+                            );
+                          },
+                          loading: () => ElasticScrollToBottomButton(
+                            onTap: () => _scrollToBottom(),
+                            unreadCount: 0,
+                          ),
+                          error: (_, __) => ElasticScrollToBottomButton(
+                            onTap: () => _scrollToBottom(),
+                            unreadCount: 0,
+                          ),
                         ),
                       ),
                     ),
