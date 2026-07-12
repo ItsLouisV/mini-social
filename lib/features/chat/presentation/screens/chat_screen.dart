@@ -200,29 +200,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Wallpaper Helpers ──────────────────────────────────────────────────────
 
-  // System wallpaper gradient map (must match wallpaper_history_screen.dart)
-  static const _kSystemGradients = <String, List<Color>>{
-    'sys:aurora':   [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-    'sys:sunset':   [Color(0xFFFF6B6B), Color(0xFFFFE66D)],
-    'sys:ocean':    [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
-    'sys:lavender': [Color(0xFF667EEA), Color(0xFF764BA2)],
-    'sys:mint':     [Color(0xFF11998E), Color(0xFF38EF7D)],
-    'sys:rose':     [Color(0xFFFC5C7D), Color(0xFF6A3093)],
-    'sys:peach':    [Color(0xFFFFB347), Color(0xFFFF6B35)],
-    'sys:midnight': [Color(0xFF0F0C29), Color(0xFF302B63), Color(0xFF24243E)],
-    'sys:sakura':   [Color(0xFFFFE0EC), Color(0xFFFFC5D9), Color(0xFFFFABC8)],
-    'sys:forest':   [Color(0xFF1B4332), Color(0xFF2D6A4F), Color(0xFF52B788)],
-    'sys:galaxy':   [Color(0xFF200122), Color(0xFF6F0000)],
-    'sys:sky':      [Color(0xFF56CCF2), Color(0xFF2F80ED)],
-  };
-
   bool _isSystemWallpaper(String path) => path.startsWith('sys:');
 
+  String? _getSystemAssetPath(String path) {
+    if (!path.startsWith('sys:wp_')) return null;
+    final match = RegExp(r'^sys:wp_(\d+)$').firstMatch(path);
+    if (match != null) {
+      final numStr = match.group(1);
+      return 'assets/images/wallpapers/wallpaper$numStr.jpg';
+    }
+    return null;
+  }
+
   DecorationImage? _getWallpaperDecorationImage(String path) {
-    if (path.isEmpty || _isSystemWallpaper(path)) return null;
+    if (path.isEmpty) return null;
 
     ImageProvider imageProvider;
-    if (path.startsWith('blob:')) {
+    if (_isSystemWallpaper(path)) {
+      final assetPath = _getSystemAssetPath(path);
+      if (assetPath != null) {
+        imageProvider = AssetImage(assetPath);
+      } else {
+        return null;
+      }
+    } else if (path.startsWith('blob:')) {
       return null; // Skip invalid temporary blob URLs
     } else if (path.startsWith('http')) {
       imageProvider = CachedNetworkImageProvider(path);
@@ -240,18 +241,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   BoxDecoration _getWallpaperDecoration(String path, ThemeData theme) {
-    if (_isSystemWallpaper(path)) {
-      final colors = _kSystemGradients[path];
-      if (colors != null) {
-        return BoxDecoration(
-          gradient: LinearGradient(
-            colors: colors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        );
-      }
-    }
     final image = _getWallpaperDecorationImage(path);
     return BoxDecoration(
       color: theme.scaffoldBackgroundColor,
@@ -606,13 +595,62 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final otherUserName = otherUser?.displayName ?? 'Chat';
 
     final hasWallpaper = wallpaperPath.isNotEmpty;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final btnBgColor = hasWallpaper
+        ? (isDark
+            ? Colors.black.withValues(alpha: 0.3)
+            : Colors.white.withValues(alpha: 0.3))
+        : Colors.transparent;
+
+    final btnBorder = hasWallpaper
+        ? Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.04),
+            width: 0.5,
+          )
+        : null;
+
+    Widget buildHeaderButton({
+      required Widget icon,
+      required VoidCallback onPressed,
+      String? tooltip,
+    }) {
+      if (!hasWallpaper) {
+        return IconButton(
+          icon: icon,
+          onPressed: onPressed,
+          tooltip: tooltip,
+        );
+      }
+      return Container(
+        width: 32,
+        height: 32,
+        margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 8),
+        decoration: BoxDecoration(
+          color: btnBgColor,
+          shape: BoxShape.circle,
+          border: btnBorder,
+        ),
+        alignment: Alignment.center,
+        child: IconButton(
+          icon: icon,
+          onPressed: onPressed,
+          tooltip: tooltip,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          splashRadius: 16,
+        ),
+      );
+    }
 
     Widget scaffold = Scaffold(
       backgroundColor: hasWallpaper ? Colors.transparent : theme.scaffoldBackgroundColor,
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: hasWallpaper
-            ? theme.scaffoldBackgroundColor.withValues(alpha: 0.7)
+            ? Colors.transparent
             : theme.scaffoldBackgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -620,15 +658,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         titleSpacing: 0,
         title: Row(
           children: [
-            IconButton(
-              icon: Icon(
-                CupertinoIcons.chevron_back,
-                color: theme.colorScheme.primary,
-                size: 24,
+            if (hasWallpaper)
+              Container(
+                width: 32,
+                height: 32,
+                margin: const EdgeInsets.only(left: 12, right: 8),
+                decoration: BoxDecoration(
+                  color: btnBgColor,
+                  shape: BoxShape.circle,
+                  border: btnBorder,
+                ),
+                alignment: Alignment.center,
+                child: IconButton(
+                  icon: Icon(
+                    CupertinoIcons.chevron_back,
+                    color: theme.colorScheme.primary,
+                    size: 18,
+                  ),
+                  onPressed: () => context.pop(),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  splashRadius: 16,
+                ),
+              )
+            else
+              IconButton(
+                icon: Icon(
+                  CupertinoIcons.chevron_back,
+                  color: theme.colorScheme.primary,
+                  size: 24,
+                ),
+                onPressed: () => context.pop(),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
               ),
-              onPressed: () => context.pop(),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-            ),
             Flexible(
               child: GestureDetector(
                 onTap: () {
@@ -664,9 +726,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: Icon(CupertinoIcons.videocam,
-                color: theme.colorScheme.primary, size: 24),
+          buildHeaderButton(
+            icon: Icon(CupertinoIcons.videocam_circle,
+                color: theme.colorScheme.primary, size: 22),
             onPressed: () {
               if (otherUser?.id == null) return;
               context.push('/call/outgoing', extra: {
@@ -679,9 +741,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             },
             tooltip: 'Gọi video',
           ),
-          IconButton(
+          buildHeaderButton(
             icon: Icon(CupertinoIcons.phone,
-                color: theme.colorScheme.primary, size: 20),
+                color: theme.colorScheme.primary, size: 18),
             onPressed: () {
               if (otherUser?.id == null) return;
               context.push('/call/outgoing', extra: {
@@ -694,19 +756,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             },
             tooltip: 'Gọi thoại',
           ),
-          IconButton(
+          buildHeaderButton(
             icon: Icon(CupertinoIcons.ellipsis,
-                color: theme.colorScheme.primary, size: 20),
+                color: theme.colorScheme.primary, size: 18),
             onPressed: () => context.push('/chat/${widget.conversationId}/settings'),
             tooltip: 'Thêm',
           ),
+          if (hasWallpaper) const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(0.5),
           child: Divider(
             height: 0.5,
             thickness: 0.5,
-            color: theme.dividerColor.withValues(alpha: 0.25),
+            color: hasWallpaper ? Colors.transparent : theme.dividerColor.withValues(alpha: 0.25),
           ),
         ),
       ),

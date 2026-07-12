@@ -75,6 +75,7 @@ flutter:
   assets:
     - .env
     - assets/images/
+    - assets/images/wallpapers/
     - assets/sounds/
 
   # fonts: (download Inter from https://fonts.google.com and place in assets/fonts/)

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/supabase_constants.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 
 // ── System Wallpaper Definitions ─────────────────────────────────────────────
@@ -16,91 +17,23 @@ import '../../providers/chat_provider.dart';
 class _SystemWallpaper {
   final String id;
   final String label;
-  final List<Color> colors;
-  final AlignmentGeometry begin;
-  final AlignmentGeometry end;
+  final String assetPath;
 
   const _SystemWallpaper({
     required this.id,
     required this.label,
-    required this.colors,
-    this.begin = Alignment.topLeft,
-    this.end = Alignment.bottomRight,
+    required this.assetPath,
   });
 }
 
-const _kSystemWallpapers = [
-  _SystemWallpaper(
-    id: 'sys:aurora',
-    label: 'Bắc cực quang',
-    colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-  ),
-  _SystemWallpaper(
-    id: 'sys:sunset',
-    label: 'Hoàng hôn',
-    colors: [Color(0xFFFF6B6B), Color(0xFFFFE66D)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  ),
-  _SystemWallpaper(
-    id: 'sys:ocean',
-    label: 'Đại dương',
-    colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  ),
-  _SystemWallpaper(
-    id: 'sys:lavender',
-    label: 'Oải hương',
-    colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-  ),
-  _SystemWallpaper(
-    id: 'sys:mint',
-    label: 'Bạc hà',
-    colors: [Color(0xFF11998E), Color(0xFF38EF7D)],
-  ),
-  _SystemWallpaper(
-    id: 'sys:rose',
-    label: 'Hoa hồng',
-    colors: [Color(0xFFFC5C7D), Color(0xFF6A3093)],
-  ),
-  _SystemWallpaper(
-    id: 'sys:peach',
-    label: 'Đào',
-    colors: [Color(0xFFFFB347), Color(0xFFFF6B35)],
-  ),
-  _SystemWallpaper(
-    id: 'sys:midnight',
-    label: 'Đêm khuya',
-    colors: [Color(0xFF0F0C29), Color(0xFF302B63), Color(0xFF24243E)],
-  ),
-  _SystemWallpaper(
-    id: 'sys:sakura',
-    label: 'Sakura',
-    colors: [Color(0xFFFFE0EC), Color(0xFFFFC5D9), Color(0xFFFFABC8)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  ),
-  _SystemWallpaper(
-    id: 'sys:forest',
-    label: 'Rừng xanh',
-    colors: [Color(0xFF1B4332), Color(0xFF2D6A4F), Color(0xFF52B788)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  ),
-  _SystemWallpaper(
-    id: 'sys:galaxy',
-    label: 'Thiên hà',
-    colors: [Color(0xFF200122), Color(0xFF6F0000)],
-  ),
-  _SystemWallpaper(
-    id: 'sys:sky',
-    label: 'Bầu trời',
-    colors: [Color(0xFF56CCF2), Color(0xFF2F80ED)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  ),
-];
+final _kSystemWallpapers = List.generate(28, (index) {
+  final num = index + 1;
+  return _SystemWallpaper(
+    id: 'sys:wp_$num',
+    label: 'Hình nền $num',
+    assetPath: 'assets/images/wallpapers/wallpaper$num.jpg',
+  );
+});
 
 bool _isSystemWallpaper(String path) => path.startsWith('sys:');
 
@@ -373,19 +306,7 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
                   return;
                 }
 
-                await ref
-                    .read(chatWallpaperProvider.notifier)
-                    .setWallpaper(widget.conversationId, url);
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Đã cập nhật hình nền cuộc trò chuyện'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-                  Navigator.pop(context);
-                }
+                _showPreviewAndApply(url);
               } finally {
                 if (mounted) setState(() => _uploading = false);
               }
@@ -458,7 +379,7 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
           });
         } else {
           HapticFeedback.lightImpact();
-          _applyWallpaper(path);
+          _showPreviewAndApply(path);
         }
       },
       child: AnimatedContainer(
@@ -574,7 +495,7 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
         return GestureDetector(
           onTap: () {
             HapticFeedback.lightImpact();
-            _applyWallpaper(wp.id);
+            _showPreviewAndApply(wp.id);
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -599,15 +520,10 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Gradient preview
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: wp.colors,
-                        begin: wp.begin,
-                        end: wp.end,
-                      ),
-                    ),
+                  // Image preview
+                  Image.asset(
+                    wp.assetPath,
+                    fit: BoxFit.cover,
                   ),
                   // Label at bottom
                   Positioned(
@@ -736,10 +652,9 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
     if (_isSystemWallpaper(path)) {
       final wp = _findSystemWallpaper(path);
       if (wp != null) {
-        return Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: wp.colors, begin: wp.begin, end: wp.end),
-          ),
+        return Image.asset(
+          wp.assetPath,
+          fit: BoxFit.cover,
         );
       }
       return Container(color: Colors.grey);
@@ -764,15 +679,46 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
     }
   }
 
-  void _applyWallpaper(String path) {
-    ref.read(chatWallpaperProvider.notifier).setWallpaper(widget.conversationId, path);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đã cập nhật hình nền cuộc trò chuyện'),
-        duration: Duration(seconds: 1),
+  void _showPreviewAndApply(String path) async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => _WallpaperPreviewScreen(
+          path: path,
+          buildPreviewWidget: _buildWallpaperPreview(path),
+        ),
       ),
     );
-    Navigator.pop(context);
+
+    if (result != null && result['apply'] == true && mounted) {
+      final applyToBoth = result['applyToBoth'] as bool? ?? false;
+      
+      String? otherUserId;
+      if (applyToBoth) {
+        final conversations = ref.read(conversationsProvider).valueOrNull ?? [];
+        final matches = conversations.where((c) => c.id == widget.conversationId);
+        final conversation = matches.isNotEmpty ? matches.first : null;
+        final currentUserId = ref.read(currentUserIdProvider) ?? '';
+        if (conversation != null) {
+          otherUserId = conversation.getOtherUserId(currentUserId);
+        }
+      }
+
+      await ref
+          .read(chatWallpaperProvider.notifier)
+          .setWallpaper(widget.conversationId, path, otherUserId: otherUserId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã cập nhật hình nền cuộc trò chuyện'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    }
   }
 
   void _deleteSelected() {
@@ -831,6 +777,310 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
               }
             },
             child: const Text('Xóa tất cả'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Wallpaper Preview Screen with Simulated Chat ─────────────────────────────
+
+class _WallpaperPreviewScreen extends StatefulWidget {
+  final String path;
+  final Widget buildPreviewWidget;
+
+  const _WallpaperPreviewScreen({
+    required this.path,
+    required this.buildPreviewWidget,
+  });
+
+  @override
+  State<_WallpaperPreviewScreen> createState() => _WallpaperPreviewScreenState();
+}
+
+class _WallpaperPreviewScreenState extends State<_WallpaperPreviewScreen> {
+  bool _applyToBoth = false;
+  bool _xHoveredOrPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Background wallpaper preview
+        Positioned.fill(child: widget.buildPreviewWidget),
+        // Dark screen overlay to read messages easily
+        Positioned.fill(
+          child: Container(
+            color: Colors.black.withValues(alpha: 0.1),
+          ),
+        ),
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.black.withValues(alpha: 0.5),
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(CupertinoIcons.xmark, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: const Text(
+              'Xem trước hình nền',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            centerTitle: true,
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: _buildSimulatedChat(context),
+              ),
+              _buildBottomPanel(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSimulatedChat(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final myBgColor = isDark ? const Color(0xFF1B3D6D) : const Color(0xFFD0ECFC);
+    final theirBgColor = isDark ? const Color(0xFF2E2E3E) : const Color(0xFFEBEBEB);
+    final myTextColor = isDark ? Colors.white : Colors.black87;
+    final theirTextColor = isDark ? Colors.white70 : Colors.black87;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 40),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Hôm nay',
+                style: TextStyle(color: Colors.white70, fontSize: 11),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: myBgColor,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(18),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Text(
+                'Chào bạn, hình nền này trông thế nào?',
+                style: TextStyle(color: myTextColor, fontSize: 15),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.blueAccent,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'U',
+                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: theirBgColor,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(18),
+                        topRight: Radius.circular(18),
+                        bottomLeft: Radius.circular(4),
+                        bottomRight: Radius.circular(18),
+                      ),
+                    ),
+                    child: Text(
+                      'Đẹp quá! Nhìn rất dễ chịu và hợp mắt.',
+                      style: TextStyle(color: theirTextColor, fontSize: 15),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: myBgColor,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(18),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Text(
+                'Ok, mình sẽ chọn hình này nhé! 😊',
+                style: TextStyle(color: myTextColor, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomPanel(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 16,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Theme(
+                data: ThemeData(
+                  unselectedWidgetColor: Colors.white,
+                ),
+                child: Checkbox(
+                  value: _applyToBoth,
+                  activeColor: const Color(0xFF007AFF),
+                  checkColor: Colors.white,
+                  side: const BorderSide(color: Colors.white, width: 1.5),
+                  onChanged: (val) {
+                    setState(() {
+                      _applyToBoth = val ?? false;
+                    });
+                  },
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Áp dụng cho cả hai bên',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black54,
+                            offset: Offset(0, 1),
+                            blurRadius: 3,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Cả bạn và người kia đều thấy hình nền này trong chat',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black54,
+                            offset: Offset(0, 1),
+                            blurRadius: 3,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Circular X/Cancel button on the left
+              MouseRegion(
+                onEnter: (_) => setState(() => _xHoveredOrPressed = true),
+                onExit: (_) => setState(() => _xHoveredOrPressed = false),
+                child: GestureDetector(
+                  onTapDown: (_) => setState(() => _xHoveredOrPressed = true),
+                  onTapUp: (_) => setState(() => _xHoveredOrPressed = false),
+                  onTapCancel: () => setState(() => _xHoveredOrPressed = false),
+                  onTap: () => Navigator.pop(context),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: _xHoveredOrPressed
+                          ? const Color(0xFFFF2D55) // Apple Music Red
+                          : Colors.black.withValues(alpha: 0.3),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _xHoveredOrPressed ? Colors.transparent : Colors.white.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Icon(CupertinoIcons.xmark, color: Colors.white, size: 24),
+                  ),
+                ),
+              ),
+              // Circular Checkmark/Apply button on the right
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(context, {
+                    'apply': true,
+                    'applyToBoth': _applyToBoth,
+                  });
+                },
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF007AFF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(CupertinoIcons.checkmark, color: Colors.white, size: 24),
+                ),
+              ),
+            ],
           ),
         ],
       ),

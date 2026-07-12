@@ -854,7 +854,7 @@ class ChatWallpaperNotifier extends StateNotifier<Map<String, String>> {
     }
   }
 
-  Future<void> setWallpaper(String conversationId, String path) async {
+  Future<void> setWallpaper(String conversationId, String path, {String? otherUserId}) async {
     // Update state immediately
     if (path.isEmpty) {
       state = Map<String, String>.from(state)..remove(conversationId);
@@ -879,29 +879,36 @@ class ChatWallpaperNotifier extends StateNotifier<Map<String, String>> {
     final uid = _userId;
     if (uid != null && path.isNotEmpty) {
       try {
-        // Also update history in Supabase
-        final existing = await _client
-            .from('conversation_settings')
-            .select('wallpaper_history')
-            .eq('user_id', uid)
-            .eq('conversation_id', conversationId)
-            .maybeSingle();
-
-        List<String> historyList = [];
-        if (existing != null) {
-          final raw = existing['wallpaper_history'];
-          if (raw is List) historyList = List<String>.from(raw);
-        }
-        if (!historyList.contains(path)) {
-          historyList.add(path);
+        final targetUserIds = [uid];
+        if (otherUserId != null && otherUserId.isNotEmpty) {
+          targetUserIds.add(otherUserId);
         }
 
-        await _client.from('conversation_settings').upsert({
-          'user_id': uid,
-          'conversation_id': conversationId,
-          'wallpaper': path,
-          'wallpaper_history': historyList,
-        }, onConflict: 'user_id,conversation_id');
+        for (final targetUid in targetUserIds) {
+          // Also update history in Supabase
+          final existing = await _client
+              .from('conversation_settings')
+              .select('wallpaper_history')
+              .eq('user_id', targetUid)
+              .eq('conversation_id', conversationId)
+              .maybeSingle();
+
+          List<String> historyList = [];
+          if (existing != null) {
+            final raw = existing['wallpaper_history'];
+            if (raw is List) historyList = List<String>.from(raw);
+          }
+          if (!historyList.contains(path)) {
+            historyList.add(path);
+          }
+
+          await _client.from('conversation_settings').upsert({
+            'user_id': targetUid,
+            'conversation_id': conversationId,
+            'wallpaper': path,
+            'wallpaper_history': historyList,
+          }, onConflict: 'user_id,conversation_id');
+        }
 
         // Sync history state reactively
         ref
@@ -910,21 +917,35 @@ class ChatWallpaperNotifier extends StateNotifier<Map<String, String>> {
 
         // Also persist history to prefs
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(
-          'chat_wallpaper_history_$conversationId',
-          jsonEncode(historyList),
-        );
+        final key = 'chat_wallpaper_history_$conversationId';
+        final existingPrefs = prefs.getString(key);
+        List<String> localHistory = [];
+        if (existingPrefs != null) {
+          try {
+            localHistory = List<String>.from(jsonDecode(existingPrefs));
+          } catch (_) {}
+        }
+        if (!localHistory.contains(path)) {
+          localHistory.add(path);
+          await prefs.setString(key, jsonEncode(localHistory));
+        }
       } catch (e) {
         print('Error upserting wallpaper to Supabase: $e');
       }
     } else if (uid != null && path.isEmpty) {
       // Clear wallpaper but keep history
       try {
-        await _client.from('conversation_settings').upsert({
-          'user_id': uid,
-          'conversation_id': conversationId,
-          'wallpaper': '',
-        }, onConflict: 'user_id,conversation_id');
+        final targetUserIds = [uid];
+        if (otherUserId != null && otherUserId.isNotEmpty) {
+          targetUserIds.add(otherUserId);
+        }
+        for (final targetUid in targetUserIds) {
+          await _client.from('conversation_settings').upsert({
+            'user_id': targetUid,
+            'conversation_id': conversationId,
+            'wallpaper': '',
+          }, onConflict: 'user_id,conversation_id');
+        }
       } catch (e) {
         print('Error clearing wallpaper from Supabase: $e');
       }
