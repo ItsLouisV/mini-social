@@ -45,19 +45,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     final themeState = ref.watch(chatThemeColorProvider);
     final activeThemeId = themeState[widget.conversationId] ?? 'blue';
     final activeThemeItem = _chatThemes.firstWhere((t) => t['id'] == activeThemeId, orElse: () => _chatThemes.first);
-    final selfDestructState = ref.watch(chatSelfDestructProvider);
-    final selfDestructSecs = selfDestructState[widget.conversationId] ?? 0;
 
-    String selfDestructLabel = 'Tắt';
-    if (selfDestructSecs == 10) {
-      selfDestructLabel = '10 giây';
-    } else if (selfDestructSecs == 86400) {
-      selfDestructLabel = '24 giờ';
-    } else if (selfDestructSecs == 604800) {
-      selfDestructLabel = '7 ngày';
-    } else if (selfDestructSecs == 2592000) {
-      selfDestructLabel = '30 ngày';
-    }
 
     // Fetch shared media images from the conversation history
     final messagesAsync = ref.watch(realtimeMessagesProvider(widget.conversationId));
@@ -422,23 +410,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                       _handleToggleHide(context, ref, conv, currentUserId);
                     },
                   ),
-                  Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
-                  _buildListTile(
-                    context: context,
-                    icon: CupertinoIcons.timer,
-                    gradientColors: [Colors.orange, Colors.red],
-                    title: 'Tin nhắn tự hủy',
-                    subtitle: 'Tự động xóa tin nhắn cũ sau khi đọc',
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(selfDestructLabel, style: TextStyle(color: theme.hintColor, fontSize: 14)),
-                        const SizedBox(width: 4),
-                        const Icon(CupertinoIcons.right_chevron, size: 16, color: Colors.grey),
-                      ],
-                    ),
-                    onTap: () => _showSelfDestructOptions(context),
-                  ),
+
                 ],
               ),
               const SizedBox(height: 24),
@@ -716,56 +688,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
 
 
 
-  void _showSelfDestructOptions(BuildContext context) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text('Tin nhắn tự hủy'),
-        message: const Text('Chọn thời gian tự động xóa tin nhắn sau khi gửi'),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(chatSelfDestructProvider.notifier).setSelfDestruct(widget.conversationId, 0);
-            },
-            child: const Text('Tắt'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(chatSelfDestructProvider.notifier).setSelfDestruct(widget.conversationId, 10);
-            },
-            child: const Text('10 giây (Thử nghiệm)'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(chatSelfDestructProvider.notifier).setSelfDestruct(widget.conversationId, 86400);
-            },
-            child: const Text('24 giờ'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(chatSelfDestructProvider.notifier).setSelfDestruct(widget.conversationId, 604800);
-            },
-            child: const Text('7 ngày'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(chatSelfDestructProvider.notifier).setSelfDestruct(widget.conversationId, 2592000);
-            },
-            child: const Text('30 ngày'),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Huỷ'),
-        ),
-      ),
-    );
-  }
+
 
   Future<void> _handleToggleHide(BuildContext context, WidgetRef ref, dynamic conv, String currentUserId) async {
     final isHidden = conv.isHidden(currentUserId);

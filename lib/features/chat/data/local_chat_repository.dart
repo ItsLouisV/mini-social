@@ -103,6 +103,16 @@ class LocalChatRepository {
     _msgBox.put(_modelToCachedMsg(msg, now));
   }
 
+  /// Xóa 1 message theo string id
+  Future<void> deleteMessage(String messageId) async {
+    final query = _msgBox.query(CachedMessage_.id.equals(messageId)).build();
+    final result = query.findFirst();
+    query.close();
+    if (result != null) {
+      _msgBox.remove(result.obxId);
+    }
+  }
+
   /// Giữ tối đa [keepCount] tin mới nhất per conversation, xóa tin cũ
   Future<void> pruneOldMessages(String conversationId,
       {int keepCount = 650}) async {

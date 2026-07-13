@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io' as io;
 import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,6 +29,8 @@ import '../../presentation/widgets/message_context_menu_route.dart';
 
 class _MessageListItem {
   final bool isDivider;
+  final bool isSystemMessage;
+  final String? systemMessageText;
   final DateTime? dateTime;
   final MessageModel? message;
   final bool showInlineTime;
@@ -34,6 +38,8 @@ class _MessageListItem {
 
   const _MessageListItem._({
     required this.isDivider,
+    this.isSystemMessage = false,
+    this.systemMessageText,
     this.dateTime,
     this.message,
     this.showInlineTime = false,
@@ -42,6 +48,14 @@ class _MessageListItem {
 
   factory _MessageListItem.divider(DateTime dt) =>
       _MessageListItem._(isDivider: true, dateTime: dt);
+
+  factory _MessageListItem.system(String text, DateTime dt) =>
+      _MessageListItem._(
+        isDivider: false,
+        isSystemMessage: true,
+        systemMessageText: text,
+        dateTime: dt,
+      );
 
   factory _MessageListItem.message(
     MessageModel msg, {
@@ -73,12 +87,19 @@ class _MessageListItem {
 
   for (int i = 0; i < messages.length; i++) {
     final msg = messages[i];
+
+    if (msg.isSystem) {
+      items.add(_MessageListItem.system(msg.content ?? '', msg.createdAt));
+      continue;
+    }
+
     // Tin trước đó theo thứ tự thời gian = index i+1 (cũ hơn)
     final olderMsg = i < messages.length - 1 ? messages[i + 1] : null;
     // Tin sau đó theo thứ tự thời gian = index i-1 (mới hơn)
     final newerMsg = i > 0 ? messages[i - 1] : null;
 
     final isLastInGroup = newerMsg == null ||
+        newerMsg.isSystem ||
         newerMsg.senderId != msg.senderId ||
         newerMsg.createdAt.difference(msg.createdAt).inMinutes.abs() >= 5;
 
@@ -90,16 +111,17 @@ class _MessageListItem {
 
     // Time divider nếu cách tin cũ hơn >= 10 phút, hoặc tin đầu tiên
     if (olderMsg == null ||
+        olderMsg.isSystem ||
         msg.createdAt.difference(olderMsg.createdAt).inMinutes.abs() >= 10) {
       items.add(_MessageListItem.divider(msg.createdAt));
     }
   }
 
-  // Build index map: messageId → index trong items (bỏ qua divider)
+  // Build index map: messageId → index trong items (bỏ qua divider và system)
   final indexMap = <String, int>{};
   for (int i = 0; i < items.length; i++) {
     final item = items[i];
-    if (!item.isDivider && item.message != null) {
+    if (!item.isDivider && !item.isSystemMessage && item.message != null) {
       indexMap[item.message!.id] = i;
     }
   }
@@ -143,6 +165,276 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   // Trạng thái hiển thị nút cuộn xuống đáy
   bool _showScrollToBottomBtn = false;
 
+  double _pullUpDistance = 0.0;
+  bool _hasCrossedVanishThreshold = false;
+  bool _isVanishTriggering = false;
+
+  // Vanish gesture tracking (works on Web too)
+  double? _vanishDragStartDy;
+  bool _isAtBottom = true; // true when index-0 item is visible
+
+  void _deleteExpiredMessage(String messageId) {
+    Future.microtask(() async {
+      try {
+        await ref
+            .read(realtimeMessagesProvider(widget.conversationId).notifier)
+            .deleteMessage(messageId);
+      } catch (err) {
+        debugPrint('Failed to delete expired message: $err');
+      }
+    });
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    // Native overscroll path (iOS / Android)
+    if (!kIsWeb) {
+      if (_isVanishTriggering) {
+        final pixels = notification.metrics.pixels;
+        if (pixels >= 0.0) {
+          setState(() {
+            _isVanishTriggering = false;
+            _pullUpDistance = 0.0;
+            _hasCrossedVanishThreshold = false;
+          });
+        } else {
+          setState(() {
+            _pullUpDistance = -pixels;
+          });
+        }
+        return false;
+      }
+
+      final pixels = notification.metrics.pixels;
+      if (pixels < 0.0) {
+        setState(() {
+          _pullUpDistance = -pixels;
+          if (_pullUpDistance > 80.0 && !_hasCrossedVanishThreshold) {
+            _hasCrossedVanishThreshold = true;
+            HapticFeedback.mediumImpact();
+          } else if (_pullUpDistance <= 80.0 && _hasCrossedVanishThreshold) {
+            _hasCrossedVanishThreshold = false;
+          }
+        });
+      } else {
+        if (_pullUpDistance != 0.0) {
+          setState(() {
+            _pullUpDistance = 0.0;
+          });
+        }
+      }
+
+      if (notification is UserScrollNotification &&
+          notification.direction == ScrollDirection.idle) {
+        if (_hasCrossedVanishThreshold) {
+          _isVanishTriggering = true;
+          _toggleVanishMode();
+          setState(() {
+            _hasCrossedVanishThreshold = false;
+          });
+        }
+      }
+    }
+    return false;
+  }
+
+  Future<void> _toggleVanishMode() async {
+    HapticFeedback.heavyImpact();
+    await ref.read(vanishModeProvider.notifier).toggle(widget.conversationId);
+
+    final isVanish = ref.read(vanishModeProvider)[widget.conversationId] ?? false;
+
+    if (isVanish) {
+      await ref.read(chatSelfDestructProvider.notifier).setSelfDestruct(widget.conversationId, 86400);
+    } else {
+      await ref.read(chatSelfDestructProvider.notifier).setSelfDestruct(widget.conversationId, 0);
+    }
+
+    final newSelfDestructSecs = ref.read(chatSelfDestructProvider)[widget.conversationId] ?? 0;
+    final label = _formatDurationLabel(newSelfDestructSecs > 0 ? newSelfDestructSecs : 86400);
+
+    // For "on" state: send system message with a special marker so the UI can show "Thay đổi"
+    final text = isVanish
+        ? "Tính năng tự hủy đã được bật. Tin nhắn mới sẽ tự động biến mất sau $label.|vanish_change"
+        : "Tính năng tự hủy đã được tắt.";
+
+    try {
+      await ref.read(chatRepositoryProvider).sendMessage(
+        widget.conversationId,
+        text,
+        messageType: 'system',
+      );
+    } catch (_) {}
+  }
+
+  void _showVanishBottomSheet(BuildContext context) {
+    final selfDestructSecs =
+        ref.read(chatSelfDestructProvider)[widget.conversationId] ?? 0;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF1E1E2F)
+                : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Tin nhắn tự hủy',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Chọn thời gian tự động xóa tin nhắn sau khi gửi',
+                style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade500),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              // Tắt option
+              _buildVanishOption(
+                ctx: ctx,
+                label: 'Tắt',
+                isSelected: selfDestructSecs == 0,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await ref.read(chatSelfDestructProvider.notifier)
+                      .setSelfDestruct(widget.conversationId, 0);
+                  await ref.read(vanishModeProvider.notifier)
+                      .setVanish(widget.conversationId, false);
+                },
+              ),
+              const Divider(height: 1),
+              // 24 giờ option
+              _buildVanishOption(
+                ctx: ctx,
+                label: '24 giờ',
+                isSelected: selfDestructSecs == 86400,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await ref.read(chatSelfDestructProvider.notifier)
+                      .setSelfDestruct(widget.conversationId, 86400);
+                  await ref.read(vanishModeProvider.notifier)
+                      .setVanish(widget.conversationId, true);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildVanishOption({
+    required BuildContext ctx,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        label,
+        style: TextStyle(
+          fontSize: 16,
+          color: isSelected ? Colors.purpleAccent : null,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
+      trailing: isSelected
+          ? const Icon(Icons.check_rounded, color: Colors.purpleAccent)
+          : null,
+      onTap: onTap,
+    );
+  }
+
+
+  String _formatDurationLabel(int seconds) {
+    if (seconds == 86400) return '24 giờ';
+    if (seconds == 604800) return '7 ngày';
+    if (seconds == 2592000) return '30 ngày';
+    if (seconds == 7776000) return '90 ngày';
+    return '$seconds giây';
+  }
+
+
+  int _getVanishDuration(String messageType) {
+    final parts = messageType.split(':');
+    if (parts.length > 1) {
+      return int.tryParse(parts[1]) ?? 86400;
+    }
+    return 86400;
+  }
+
+  Widget _buildVanishPullIndicator() {
+    if (_pullUpDistance < 10) return const SizedBox.shrink();
+
+    final selfDestructState = ref.watch(chatSelfDestructProvider);
+    final selfDestructSecs = selfDestructState[widget.conversationId] ?? 0;
+    final vanishModeState = ref.watch(vanishModeProvider);
+    final isVanishActive = (vanishModeState[widget.conversationId] ?? false) || (selfDestructSecs > 0);
+
+    String text;
+    if (isVanishActive) {
+      text = _hasCrossedVanishThreshold
+          ? "Thả tay để tắt tính năng tự hủy"
+          : "Kéo lên để tắt tính năng tự hủy";
+    } else {
+      text = _hasCrossedVanishThreshold
+          ? "Thả tay để bật tính năng tự hủy"
+          : "Kéo lên để bật tính năng tự hủy";
+    }
+
+    final progress = (_pullUpDistance / 80.0).clamp(0.0, 1.0);
+
+    return Container(
+      height: 60,
+      color: Colors.transparent,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              value: progress,
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                _hasCrossedVanishThreshold ? Colors.purpleAccent : Colors.grey,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            text,
+            style: TextStyle(
+              color: _hasCrossedVanishThreshold ? Colors.purpleAccent : Colors.grey,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -174,7 +466,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (showBtn != _showScrollToBottomBtn) {
       setState(() {
         _showScrollToBottomBtn = showBtn;
+        _isAtBottom = !showBtn; // isAtBottom = index-0 fully visible
       });
+    } else {
+      final newIsAtBottom = !showBtn;
+      if (newIsAtBottom != _isAtBottom) {
+        setState(() {
+          _isAtBottom = newIsAtBottom;
+        });
+      }
     }
 
     // Với reverse: true, item có index cao nhất = tin CŨ nhất (hiển thị trên cùng)
@@ -443,6 +743,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (text.isEmpty && image == null) return;
     if (_sending) return;
 
+    final vanishModeState = ref.read(vanishModeProvider);
+    final isVanishMode = vanishModeState[widget.conversationId] ?? false;
+    final selfDestructState = ref.read(chatSelfDestructProvider);
+    final selfDestructSecs = selfDestructState[widget.conversationId] ?? 0;
+    final vanishDuration = selfDestructSecs > 0 ? selfDestructSecs : 86400;
+
+    final msgType = isVanishMode
+        ? (image != null ? 'vanish_image:$vanishDuration' : 'vanish_text:$vanishDuration')
+        : (image != null ? 'image' : 'text');
+
     setState(() {
       _sending = true;
       _pendingImage = null;
@@ -458,12 +768,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               image,
               caption: text.isNotEmpty ? text : null,
               replyToMessageId: replyId,
+              messageType: msgType,
             );
       } else if (text.isNotEmpty) {
         await ref
             .read(chatRepositoryProvider)
             .sendMessage(widget.conversationId, text,
-                replyToMessageId: replyId);
+                replyToMessageId: replyId,
+                messageType: msgType);
       }
 
       WidgetsBinding.instance
@@ -479,7 +791,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 senderId: currentUserId,
                 content: text.isNotEmpty ? text : 'Đã gửi một ảnh',
                 mediaUrl: image.path,
-                messageType: 'image',
+                messageType: msgType,
                 replyToMessageId: replyId,
                 replyContent: _replyingToMessage?.content,
                 replySenderId: _replyingToMessage?.senderId,
@@ -491,7 +803,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 conversationId: widget.conversationId,
                 senderId: currentUserId,
                 content: text,
-                messageType: 'text',
+                messageType: msgType,
                 replyToMessageId: replyId,
                 replyContent: _replyingToMessage?.content,
                 replySenderId: _replyingToMessage?.senderId,
@@ -549,6 +861,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final selfDestructState = ref.watch(chatSelfDestructProvider);
     final selfDestructSecs = selfDestructState[widget.conversationId] ?? 0;
 
+    final vanishModeState = ref.watch(vanishModeProvider);
+    final isVanishMode = (vanishModeState[widget.conversationId] ?? false) || (selfDestructSecs > 0);
+
     // Lắng nghe tin mới → auto scroll nếu đang ở đáy
     // Dùng ref.listen ổn định (không đặt inline trong build tree)
     ref.listen(realtimeMessagesProvider(widget.conversationId),
@@ -595,43 +910,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final otherUserName = otherUser?.displayName ?? 'Chat';
 
     final hasWallpaper = wallpaperPath.isNotEmpty;
-    final isDark = theme.brightness == Brightness.dark;
-
-    final btnBgColor = hasWallpaper
-        ? (isDark
-            ? Colors.black.withValues(alpha: 0.3)
-            : Colors.white.withValues(alpha: 0.3))
-        : Colors.transparent;
-
-    final btnBorder = hasWallpaper
-        ? Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.04),
-            width: 0.5,
-          )
-        : null;
 
     Widget buildHeaderButton({
       required Widget icon,
       required VoidCallback onPressed,
       String? tooltip,
     }) {
-      if (!hasWallpaper) {
-        return IconButton(
-          icon: icon,
-          onPressed: onPressed,
-          tooltip: tooltip,
-        );
-      }
       return Container(
         width: 32,
         height: 32,
         margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 8),
-        decoration: BoxDecoration(
-          color: btnBgColor,
+        decoration: const BoxDecoration(
+          color: Colors.black38,
           shape: BoxShape.circle,
-          border: btnBorder,
         ),
         alignment: Alignment.center,
         child: IconButton(
@@ -639,8 +930,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           onPressed: onPressed,
           tooltip: tooltip,
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          splashRadius: 16,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          splashRadius: 18,
         ),
       );
     }
@@ -658,39 +949,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         titleSpacing: 0,
         title: Row(
           children: [
-            if (hasWallpaper)
-              Container(
-                width: 32,
-                height: 32,
-                margin: const EdgeInsets.only(left: 12, right: 8),
-                decoration: BoxDecoration(
-                  color: btnBgColor,
-                  shape: BoxShape.circle,
-                  border: btnBorder,
-                ),
-                alignment: Alignment.center,
-                child: IconButton(
-                  icon: Icon(
-                    CupertinoIcons.chevron_back,
-                    color: theme.colorScheme.primary,
-                    size: 18,
-                  ),
-                  onPressed: () => context.pop(),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  splashRadius: 16,
-                ),
-              )
-            else
-              IconButton(
-                icon: Icon(
+            Container(
+              width: 32,
+              height: 32,
+              margin: const EdgeInsets.only(left: 12, right: 8),
+              decoration: const BoxDecoration(
+                color: Colors.black38,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: IconButton(
+                icon: const Icon(
                   CupertinoIcons.chevron_back,
-                  color: theme.colorScheme.primary,
-                  size: 24,
+                  color: Colors.white,
+                  size: 20,
                 ),
                 onPressed: () => context.pop(),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                splashRadius: 18,
               ),
+            ),
             Flexible(
               child: GestureDetector(
                 onTap: () {
@@ -727,8 +1006,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
         actions: [
           buildHeaderButton(
-            icon: Icon(CupertinoIcons.videocam_circle,
-                color: theme.colorScheme.primary, size: 22),
+            icon: const Icon(CupertinoIcons.videocam_circle,
+                color: Colors.white, size: 22),
             onPressed: () {
               if (otherUser?.id == null) return;
               context.push('/call/outgoing', extra: {
@@ -742,8 +1021,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             tooltip: 'Gọi video',
           ),
           buildHeaderButton(
-            icon: Icon(CupertinoIcons.phone,
-                color: theme.colorScheme.primary, size: 18),
+            icon: const Icon(CupertinoIcons.phone,
+                color: Colors.white, size: 18),
             onPressed: () {
               if (otherUser?.id == null) return;
               context.push('/call/outgoing', extra: {
@@ -757,12 +1036,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             tooltip: 'Gọi thoại',
           ),
           buildHeaderButton(
-            icon: Icon(CupertinoIcons.ellipsis,
-                color: theme.colorScheme.primary, size: 18),
+            icon: const Icon(CupertinoIcons.ellipsis,
+                color: Colors.white, size: 18),
             onPressed: () => context.push('/chat/${widget.conversationId}/settings'),
             tooltip: 'Thêm',
           ),
-          if (hasWallpaper) const SizedBox(width: 8),
+          const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(0.5),
@@ -782,6 +1061,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             Expanded(
               child: Stack(
                 children: [
+                  if (isVanishMode) const _VanishBackground(),
                   messagesAsync.when(
                     data: (messagesState) {
                       final failedModels = messagesState.failedMessages.map((f) {
@@ -811,28 +1091,99 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       final allMessages = [...failedModels, ...messagesState.messages];
                       allMessages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-                      var displayedMessages = allMessages;
-                      if (selfDestructSecs > 0) {
-                        final now = DateTime.now();
-                        displayedMessages = allMessages.where((m) {
-                          final age = now.difference(m.createdAt).inSeconds;
-                          return age < selfDestructSecs;
-                        }).toList();
+                      final now = DateTime.now();
+                      final displayedMessages = <MessageModel>[];
+                      for (final m in allMessages) {
+                        if (m.isVanish) {
+                          final duration = _getVanishDuration(m.messageType);
+                          final expirationTime = m.createdAt.add(Duration(seconds: duration));
+                          if (now.isAfter(expirationTime)) {
+                            _deleteExpiredMessage(m.id);
+                            continue;
+                          }
+                        }
+                        displayedMessages.add(m);
                       }
 
                       _updateCacheIfNeeded(displayedMessages);
-                      return _buildMessageList(
-                        messagesState,
-                        displayedMessages,
-                        currentUserId,
-                        otherUserName,
-                        pinnedIds,
+
+                      Widget listWidget = NotificationListener<ScrollNotification>(
+                        onNotification: _handleScrollNotification,
+                        child: _buildMessageList(
+                          messagesState,
+                          displayedMessages,
+                          currentUserId,
+                          otherUserName,
+                          pinnedIds,
+                        ),
                       );
+
+                      // On Web, BouncingScrollPhysics overscroll doesn't fire,
+                      // so we use a Listener (receives pointer events unconditionally,
+                      // never "stolen" by child scroll widgets) to simulate pull-up vanish.
+                      if (kIsWeb) {
+                        listWidget = Listener(
+                          behavior: HitTestBehavior.translucent,
+                          onPointerDown: (event) {
+                            if (_isAtBottom) {
+                              _vanishDragStartDy = event.position.dy;
+                            }
+                          },
+                          onPointerMove: (event) {
+                            if (_vanishDragStartDy == null) return;
+                            final dy = _vanishDragStartDy! - event.position.dy; // positive = dragging up
+                            if (dy > 0) {
+                              setState(() {
+                                _pullUpDistance = dy;
+                                if (dy > 80.0 && !_hasCrossedVanishThreshold) {
+                                  _hasCrossedVanishThreshold = true;
+                                  HapticFeedback.mediumImpact();
+                                } else if (dy <= 80.0 && _hasCrossedVanishThreshold) {
+                                  _hasCrossedVanishThreshold = false;
+                                }
+                              });
+                            } else if (_pullUpDistance > 0) {
+                              // dragging back down — reset indicator
+                              setState(() {
+                                _pullUpDistance = 0.0;
+                                _hasCrossedVanishThreshold = false;
+                              });
+                            }
+                          },
+                          onPointerUp: (event) {
+                            if (_hasCrossedVanishThreshold) {
+                              _toggleVanishMode();
+                            }
+                            setState(() {
+                              _pullUpDistance = 0.0;
+                              _hasCrossedVanishThreshold = false;
+                              _vanishDragStartDy = null;
+                            });
+                          },
+                          onPointerCancel: (event) {
+                            setState(() {
+                              _pullUpDistance = 0.0;
+                              _hasCrossedVanishThreshold = false;
+                              _vanishDragStartDy = null;
+                            });
+                          },
+                          child: listWidget,
+                        );
+                      }
+
+                      return listWidget;
                     },
                     loading: () =>
                         const Center(child: CupertinoActivityIndicator()),
                     error: (e, _) => Center(child: Text(e.toString())),
                   ),
+                  if (_pullUpDistance > 5)
+                    Positioned(
+                      bottom: 12,
+                      left: 0,
+                      right: 0,
+                      child: _buildVanishPullIndicator(),
+                    ),
                   // Nút cuộn xuống đáy cao cấp (Scroll to Bottom button)
                   Positioned(
                     bottom: 12,
@@ -915,6 +1266,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       itemScrollController: _itemScrollController,
       itemPositionsListener: _itemPositionsListener,
       reverse: true, // index 0 = đáy màn hình = tin mới nhất
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       itemCount: _cachedItems.length + (isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {
@@ -930,6 +1282,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
         if (item.isDivider) {
           return _TimeDivider(dateTime: item.dateTime!);
+        }
+
+        if (item.isSystemMessage) {
+          final rawText = item.systemMessageText!;
+          final hasChangeTap = rawText.endsWith('|vanish_change');
+          final displayText = hasChangeTap
+              ? rawText.substring(0, rawText.length - '|vanish_change'.length)
+              : rawText;
+          return _SystemMessageDivider(
+            text: displayText,
+            onChangeTap: hasChangeTap ? () => _showVanishBottomSheet(context) : null,
+          );
         }
 
         final msg = item.message!;
@@ -1419,6 +1783,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final hasPendingImage = _pendingImage != null;
 
+    final selfDestructState = ref.watch(chatSelfDestructProvider);
+    final selfDestructSecs = selfDestructState[widget.conversationId] ?? 0;
+    final vanishModeState = ref.watch(vanishModeProvider);
+    final isVanishMode = (vanishModeState[widget.conversationId] ?? false) || (selfDestructSecs > 0);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1472,7 +1841,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           color: theme.hintColor, fontSize: 15),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(22),
-                        borderSide: BorderSide.none,
+                        borderSide: isVanishMode
+                            ? const BorderSide(color: Colors.purpleAccent, width: 1.5)
+                            : BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: isVanishMode
+                            ? const BorderSide(color: Colors.purpleAccent, width: 1.5)
+                            : BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: isVanishMode
+                            ? const BorderSide(color: Colors.purpleAccent, width: 2.0)
+                            : BorderSide(color: theme.colorScheme.primary, width: 1.5),
                       ),
                       filled: true,
                       fillColor: isDark
@@ -1495,7 +1878,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   final hasContent =
                       value.text.trim().isNotEmpty || hasPendingImage;
                   final bgColor = hasContent
-                      ? AppColors.chatInputSendEnabled
+                      ? (isVanishMode ? Colors.purpleAccent : AppColors.chatInputSendEnabled)
                       : (isDark
                           ? AppColors.darkChatInputSendDisabled
                           : AppColors.chatInputSendDisabled);
@@ -1593,6 +1976,72 @@ class _TimeDivider extends StatelessWidget {
               fontWeight: FontWeight.w500,
               color: theme.hintColor,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SystemMessageDivider extends StatelessWidget {
+  final String text;
+  final VoidCallback? onChangeTap;
+
+  const _SystemMessageDivider({required this.text, this.onChangeTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.04)
+                : Colors.black.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.06),
+              width: 0.5,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: theme.hintColor,
+                  height: 1.3,
+                ),
+              ),
+              if (onChangeTap != null) ...
+                [
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: onChangeTap,
+                    child: const Text(
+                      'Thay đổi',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purpleAccent,
+                        decoration: TextDecoration.underline,
+                        decorationColor: Colors.purpleAccent,
+                      ),
+                    ),
+                  ),
+                ],
+            ],
           ),
         ),
       ),
@@ -2388,7 +2837,31 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                       ),
                     ),
                   ),
+                if (message.isVanish && isMine) ...[
+                  _VanishTimerIndicator(
+                    message: message,
+                    onExpired: () {
+                      ref
+                          .read(realtimeMessagesProvider(message.conversationId)
+                              .notifier)
+                          .deleteMessage(message.id);
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 bubbleContent,
+                if (message.isVanish && !isMine) ...[
+                  const SizedBox(width: 6),
+                  _VanishTimerIndicator(
+                    message: message,
+                    onExpired: () {
+                      ref
+                          .read(realtimeMessagesProvider(message.conversationId)
+                              .notifier)
+                          .deleteMessage(message.id);
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -3086,6 +3559,169 @@ class _ReactionUserRow extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Vanish Timer Indicator Widget ─────────────────────────────────────────────
+
+class _VanishTimerIndicator extends StatefulWidget {
+  final MessageModel message;
+  final VoidCallback onExpired;
+
+  const _VanishTimerIndicator({
+    super.key,
+    required this.message,
+    required this.onExpired,
+  });
+
+  @override
+  State<_VanishTimerIndicator> createState() => _VanishTimerIndicatorState();
+}
+
+class _VanishTimerIndicatorState extends State<_VanishTimerIndicator> {
+  Timer? _timer;
+  late DateTime _expirationTime;
+  String _timeLeftStr = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final durationSecs = _getVanishDuration(widget.message.messageType);
+    _expirationTime = widget.message.createdAt.add(Duration(seconds: durationSecs));
+    _updateTimeLeft();
+
+    // Update every 10 seconds for general efficiency, or every second if less than a minute remains
+    _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      _updateTimeLeft();
+    });
+  }
+
+  int _getVanishDuration(String messageType) {
+    final parts = messageType.split(':');
+    if (parts.length > 1) {
+      return int.tryParse(parts[1]) ?? 86400;
+    }
+    return 86400;
+  }
+
+  void _updateTimeLeft() {
+    final now = DateTime.now();
+    final diff = _expirationTime.difference(now);
+
+    if (diff.isNegative) {
+      _timer?.cancel();
+      widget.onExpired();
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      if (diff.inDays > 0) {
+        _timeLeftStr = '${diff.inDays}n';
+      } else if (diff.inHours > 0) {
+        _timeLeftStr = '${diff.inHours}g';
+      } else if (diff.inMinutes > 0) {
+        _timeLeftStr = '${diff.inMinutes}p';
+      } else {
+        _timeLeftStr = '${diff.inSeconds}s';
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.purple.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.purple.withValues(alpha: 0.25), width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            '👻',
+            style: TextStyle(fontSize: 10),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            _timeLeftStr,
+            style: const TextStyle(
+              fontSize: 9,
+              color: Colors.purpleAccent,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Vanish Floating Ghosts Background Widget ──────────────────────────────────
+
+class _VanishBackground extends StatefulWidget {
+  const _VanishBackground();
+
+  @override
+  State<_VanishBackground> createState() => _VanishBackgroundState();
+}
+
+class _VanishBackgroundState extends State<_VanishBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 15),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final size = MediaQuery.of(context).size;
+        return Stack(
+          children: List.generate(6, (index) {
+            final t = (_controller.value + (index / 6.0)) % 1.0;
+            final y = size.height * (1.0 - t);
+            final x = (size.width * 0.1) + ((index * 67) % (size.width * 0.8));
+            final opacity = (1.0 - (t - 0.5).abs() * 2.0).clamp(0.0, 0.18); // Max opacity 18% for better visibility
+
+            return Positioned(
+              left: x,
+              top: y,
+              child: Opacity(
+                opacity: opacity,
+                child: const Text(
+                  '👻',
+                  style: TextStyle(fontSize: 36),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

@@ -85,10 +85,12 @@ class MessageModel {
     };
   }
 
-  bool get isText => messageType == 'text';
-  bool get isImage => messageType == 'image';
+  bool get isText => messageType == 'text' || messageType.startsWith('vanish_text');
+  bool get isImage => messageType == 'image' || messageType.startsWith('vanish_image');
   bool get isCall => messageType == 'call_log';
   bool get isRecalled => messageType == 'recalled';
+  bool get isVanish => messageType.startsWith('vanish_');
+  bool get isSystem => messageType == 'system';
   bool get hasReactions => reactions.isNotEmpty;
 
   MessageModel copyWith({

@@ -162,6 +162,18 @@ class ChatMessagesNotifier
     } catch (_) {}
   }
 
+  Future<void> deleteMessage(String messageId) async {
+    await deleteMessageLocally(messageId);
+    final local = ref.read(localChatRepositoryProvider);
+    if (local != null) {
+      await local.deleteMessage(messageId);
+    }
+    final repo = ref.read(chatRepositoryProvider);
+    await repo.deleteMessage(messageId).catchError((err) {
+      print("Failed to delete message on Supabase: $err");
+    });
+  }
+
   Future<void> recallMessage(String messageId) async {
     // ① Optimistic update: cập nhật UI ngay lập tức
     final current = state.valueOrNull;
@@ -432,6 +444,9 @@ class ChatMessagesNotifier
                 final deletedId = payload.oldRecord['id'] as String?;
                 if (deletedId == null) return;
 
+                if (local != null) {
+                  await local.deleteMessage(deletedId);
+                }
                 final updatedList = current.messages.where((m) => m.id != deletedId).toList();
                 state = AsyncData(current.copyWith(messages: updatedList));
               }
@@ -1231,4 +1246,55 @@ class ChatSelfDestructNotifier extends StateNotifier<Map<String, int>> {
 final chatSelfDestructProvider =
     StateNotifierProvider<ChatSelfDestructNotifier, Map<String, int>>((ref) {
   return ChatSelfDestructNotifier();
+});
+
+// ── Chat Vanish Mode Notifier & Provider ───────────────────────────────────────
+
+class VanishModeNotifier extends StateNotifier<Map<String, bool>> {
+  VanishModeNotifier() : super({}) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      final map = <String, bool>{};
+      for (final key in keys) {
+        if (key.startsWith('chat_vanish_mode_')) {
+          final convId = key.substring('chat_vanish_mode_'.length);
+          final active = prefs.getBool(key);
+          if (active != null) {
+            map[convId] = active;
+          }
+        }
+      }
+      state = map;
+    } catch (_) {}
+  }
+
+  Future<void> toggle(String conversationId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_vanish_mode_$conversationId';
+      final current = state[conversationId] ?? false;
+      final next = !current;
+      await prefs.setBool(key, next);
+      state = Map<String, bool>.from(state)..[conversationId] = next;
+    } catch (_) {}
+  }
+
+  Future<void> setVanish(String conversationId, bool active) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_vanish_mode_$conversationId';
+      await prefs.setBool(key, active);
+      state = Map<String, bool>.from(state)..[conversationId] = active;
+    } catch (_) {}
+  }
+}
+
+final vanishModeProvider =
+    StateNotifierProvider<VanishModeNotifier, Map<String, bool>>((ref) {
+  return VanishModeNotifier();
 });

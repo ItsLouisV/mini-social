@@ -327,6 +327,7 @@ class ChatRepository {
     XFile image, {
     String? caption,
     String? replyToMessageId,
+    String messageType = 'image',
   }) async {
     final ext = image.name.contains('.')
         ? image.name.split('.').last.toLowerCase()
@@ -356,7 +357,7 @@ class ChatRepository {
           'sender_id': currentUserId,
           'content': caption ?? 'Đã gửi một ảnh',
           'media_url': url,
-          'message_type': 'image',
+          'message_type': messageType,
           if (replyToMessageId != null)
             'reply_to_message_id': replyToMessageId,
         })
@@ -419,6 +420,13 @@ class ChatRepository {
           'message_type': 'recalled',
           'media_url': null,
         })
+        .eq('id', messageId);
+  }
+
+  Future<void> deleteMessage(String messageId) async {
+    await _client
+        .from(SupabaseConstants.messagesTable)
+        .delete()
         .eq('id', messageId);
   }
 

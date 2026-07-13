@@ -34,6 +34,7 @@ class LocalChatRepository {
 
   Future<void> saveMessages(List<MessageModel> messages) async {}
   Future<void> insertMessage(MessageModel msg) async {}
+  Future<void> deleteMessage(String messageId) async {}
   Future<void> pruneOldMessages(String conversationId, {int keepCount = 650}) async {}
 
   Future<ProfileModel?> getProfile(String userId) async => null;

@@ -34,20 +34,26 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     with TickerProviderStateMixin {
   final TransformationController _transformationController = TransformationController();
   
-  // Các Controller độc lập để quản lý mượt mà luồng Animation
+  // Các Controller độc lập quản lý mượt mà luồng Animation
   late AnimationController _zoomAnimationController;
   late AnimationController _dismissAnimationController;
   
   Animation<Matrix4>? _zoomAnimation;
-  Animation<double>? _dismissAnimation;
+  Animation<Offset>? _dismissAnimation;
 
-  // Cập nhật giá trị đồ họa qua ValueNotifier để bypass việc re-build toàn bộ UI
-  final ValueNotifier<double> _dragY = ValueNotifier<double>(0.0);
+  // Cập nhật giá trị tương tác qua ValueNotifier để tránh rebuild toàn bộ cây widget
+  final ValueNotifier<Offset> _dragOffset = ValueNotifier<Offset>(Offset.zero);
   final ValueNotifier<bool> _isDragging = ValueNotifier<bool>(false);
 
-  double _dragStartY = 0.0;
-  bool _isZoomed = false;
+  // Quản lý vuốt chạm nâng cao (Bypass Gesture Arena Latency)
+  int? _activePointerId;
+  Offset _dragStartPoint = Offset.zero;
   bool _pointerDownInsideImage = false;
+  bool _isZoomed = false;
+
+  // Lưu trữ vị trí và tỉ lệ kéo cuối cùng để truyền vào Hero Flight Shuttle
+  Offset _lastDragOffset = Offset.zero;
+  double _lastDragScale = 1.0;
 
   bool get _isLocalPath =>
       !widget.imageUrl.startsWith('http') && !widget.imageUrl.startsWith('blob');
@@ -63,12 +69,15 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
+    
     _transformationController.addListener(_handleZoomChanged);
+    _zoomAnimationController.addListener(_applyZoomAnimation);
+    _dismissAnimationController.addListener(_applyDismissAnimation);
   }
 
   void _handleZoomChanged() {
     final scale = _transformationController.value.getMaxScaleOnAxis();
-    // Đặt ngưỡng > 1.02 để xác định ảnh có đang bị phóng to hay không
+    // Ngưỡng xác định xem ảnh có đang phóng to hay không
     final zoomed = scale > 1.02;
     if (zoomed != _isZoomed) {
       setState(() { _isZoomed = zoomed; });
@@ -78,15 +87,18 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
   @override
   void dispose() {
     _transformationController.removeListener(_handleZoomChanged);
+    _zoomAnimationController.removeListener(_applyZoomAnimation);
+    _dismissAnimationController.removeListener(_applyDismissAnimation);
+    
     _transformationController.dispose();
     _zoomAnimationController.dispose();
     _dismissAnimationController.dispose();
-    _dragY.dispose();
+    _dragOffset.dispose();
     _isDragging.dispose();
     super.dispose();
   }
 
-  // ── 1. Đúp chạm phóng to / thu nhỏ chuẩn xác theo vị trí ngón tay ─────────────
+  // ── 1. Đúp chạm phóng to / thu nhỏ mượt mà chuẩn vị trí chạm ngón tay ───────────
   void _onDoubleTapDown(TapDownDetails details) {
     if (_zoomAnimationController.isAnimating) return;
 
@@ -97,10 +109,17 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     if (targetScale == 1.0) {
       endMatrix = Matrix4.identity();
     } else {
-      final pos = details.localPosition;
-      endMatrix = Matrix4.identity()
-        ..translate(-pos.dx * (targetScale - 1), -pos.dy * (targetScale - 1))
-        ..scale(targetScale);
+      final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+      if (renderBox == null) return;
+      // Lấy tọa độ chạm so với toàn bộ màn hình (viewport của InteractiveViewer) thay vì tọa độ ảnh
+      final pos = renderBox.globalToLocal(details.globalPosition);
+      final translation = Matrix4.translationValues(
+        -pos.dx * (targetScale - 1),
+        -pos.dy * (targetScale - 1),
+        0.0,
+      );
+      final scaling = Matrix4.diagonal3Values(targetScale, targetScale, 1.0);
+      endMatrix = translation * scaling;
     }
 
     _zoomAnimation = Matrix4Tween(
@@ -114,8 +133,6 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     _zoomAnimationController.forward(from: 0.0).then((_) {
       _transformationController.value = endMatrix;
     });
-    
-    _zoomAnimationController.addListener(_applyZoomAnimation);
   }
 
   void _applyZoomAnimation() {
@@ -124,11 +141,11 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     }
   }
 
-  // ── 2. Xử lý tương tác thu phóng bằng hai ngón tay (InteractiveViewer) ────────
+  // ── 2. Xử lý đàn hồi khi pinch-zoom quá nhỏ ──────────────────────────────────────
   void _handleInteractionEnd(ScaleEndDetails details) {
     final currentScale = _transformationController.value.getMaxScaleOnAxis();
 
-    // Hiệu ứng Elastic Snapback: Bật ảnh về kích thước gốc 1.0 nếu bị bóp nhỏ quá mức
+    // Elastic Snapback: Đưa ảnh về kích thước chuẩn 1.0 nếu pinch nhỏ quá mức
     if (currentScale < 1.0) {
       if (_zoomAnimationController.isAnimating) return;
 
@@ -137,45 +154,76 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
         end: Matrix4.identity(),
       ).animate(CurvedAnimation(
         parent: _zoomAnimationController,
-        curve: Curves.easeOutBack, // Đường cong mô phỏng lực đàn hồi vật lý
+        curve: Curves.easeOutBack, // Hiệu ứng đàn hồi mô phỏng vật lý iOS
       ));
 
       _zoomAnimationController.forward(from: 0.0).then((_) {
         _transformationController.value = Matrix4.identity();
       });
-
-      _zoomAnimationController.addListener(_applyZoomAnimation);
     }
   }
 
-  // ── 3. Hệ thống xử lý vuốt dọc để đóng tốc độ cao (Bypass Gesture Latency) ────
+  void _applyDismissAnimation() {
+    if (_dismissAnimation != null) {
+      _dragOffset.value = _dismissAnimation!.value;
+    }
+  }
+
+  // ── 3. Quản lý tương tác vuốt dọc 2D để đóng chuẩn iOS ───────────────────────────
   void _handlePointerDown(PointerDownEvent event) {
     if (_isZoomed) return;
+
+    // Ngăn chặn đa điểm chạm (pinch) xung đột với hành động vuốt đóng
+    if (_activePointerId != null) {
+      if (_isDragging.value) {
+        _isDragging.value = false;
+        _dismissAnimation = Tween<Offset>(
+          begin: _dragOffset.value,
+          end: Offset.zero,
+        ).animate(CurvedAnimation(
+          parent: _dismissAnimationController,
+          curve: Curves.easeOutBack,
+        ));
+        _dismissAnimationController.forward(from: 0.0);
+      }
+      _pointerDownInsideImage = false;
+      return;
+    }
+
+    _activePointerId = event.pointer;
     _pointerDownInsideImage = true;
-    _dragStartY = event.position.dy;
+    _dragStartPoint = event.position;
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
-    if (!_pointerDownInsideImage || _isZoomed) return;
-    
-    final deltaY = event.position.dy - _dragStartY;
-    
-    // Ngưỡng lọc nhiễu (Slop): Tránh nhận diện nhầm khi chỉ chạm tay nhẹ
-    if (!_isDragging.value && deltaY.abs() > 12) {
-      _isDragging.value = true;
+    if (event.pointer != _activePointerId || !_pointerDownInsideImage || _isZoomed) return;
+
+    final delta = event.position - _dragStartPoint;
+
+    // Nhận diện kéo: Ưu tiên kéo dọc (dy) lớn hơn kéo ngang (dx) để tránh xung đột
+    if (!_isDragging.value) {
+      if (delta.dy.abs() > 10 && delta.dy.abs() > delta.dx.abs()) {
+        _isDragging.value = true;
+        // Triệt tiêu khoảng lệch ban đầu để tránh bị giật hình khi bắt đầu kéo
+        _dragStartPoint = event.position - Offset(delta.dx, delta.dy.sign * 10);
+      }
     }
 
     if (_isDragging.value) {
-      // Công thức cản lực (Damping) của iOS khi kéo ngược lên hoặc kéo quá sâu
-      if (deltaY > 0) {
-        _dragY.value = deltaY;
-      } else {
-        _dragY.value = deltaY * 0.65; 
+      final currentDelta = event.position - _dragStartPoint;
+      double dy = currentDelta.dy;
+      // Damping (giảm chấn) khi kéo lên trên giống hệt iOS
+      if (dy < 0) {
+        dy = dy * 0.65;
       }
+      _dragOffset.value = Offset(currentDelta.dx, dy);
     }
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    if (event.pointer != _activePointerId) return;
+    _activePointerId = null;
+
     if (!_isDragging.value) {
       _pointerDownInsideImage = false;
       return;
@@ -184,22 +232,24 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     _pointerDownInsideImage = false;
     _isDragging.value = false;
 
-    // Quãng đường vuốt đủ lớn (> 140px) -> Đóng màn hình
-    if (_dragY.value.abs() > 140) {
+    final finalOffset = _dragOffset.value;
+    final size = MediaQuery.of(context).size;
+
+    // Nếu khoảng cách kéo theo trục dọc đủ lớn (> 100px) -> Tiến hành đóng
+    if (finalOffset.dy.abs() > 100) {
+      _lastDragOffset = finalOffset;
+      _lastDragScale = (1.0 - (finalOffset.dy.abs() / (size.height * 2.5))).clamp(0.75, 1.0);
       Navigator.pop(context);
     } else {
-      // Trả ảnh về tâm đối xứng bằng hiệu ứng đàn hồi Spring mượt mà
-      _dismissAnimation = Tween<double>(begin: _dragY.value, end: 0.0).animate(
-        CurvedAnimation(parent: _dismissAnimationController, curve: Curves.easeOutBack),
-      );
+      // Trả ảnh về vị trí tâm ban đầu với hiệu ứng Spring mượt mà
+      _dismissAnimation = Tween<Offset>(
+        begin: finalOffset,
+        end: Offset.zero,
+      ).animate(CurvedAnimation(
+        parent: _dismissAnimationController,
+        curve: Curves.easeOutBack,
+      ));
       _dismissAnimationController.forward(from: 0.0);
-      _dismissAnimationController.addListener(_applyDismissAnimation);
-    }
-  }
-
-  void _applyDismissAnimation() {
-    if (_dismissAnimation != null) {
-      _dragY.value = _dismissAnimation!.value;
     }
   }
 
@@ -215,32 +265,34 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
           onPointerDown: _handlePointerDown,
           onPointerMove: _handlePointerMove,
           onPointerUp: _handlePointerUp,
-          child: ValueListenableBuilder<double>(
-            valueListenable: _dragY,
-            builder: (context, dragY, child) {
-              // Nội suy độ mờ của nền dựa trên biên độ kéo dọc
-              final opacity = (1.0 - (dragY.abs() / (size.height * 0.55))).clamp(0.0, 1.0);
+          child: ValueListenableBuilder<Offset>(
+            valueListenable: _dragOffset,
+            builder: (context, dragOffset, child) {
+              final dragDistance = dragOffset.dy.abs();
+              // Tính toán độ mờ nền đen dựa trên biên độ kéo dọc
+              final opacity = (1.0 - (dragDistance / (size.height * 0.55))).clamp(0.0, 1.0);
+              // Tỉ lệ scale thu nhỏ ảnh khi kéo (chuẩn Instagram/iOS)
+              final scale = (1.0 - (dragDistance / (size.height * 2.5))).clamp(0.75, 1.0);
 
               return Container(
                 color: Colors.black.withValues(alpha: opacity),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // Tap vào vùng trống bao quanh để đóng nhanh
+                    // Tap vào vùng trống ngoài ảnh để đóng nhanh
                     GestureDetector(
                       onTap: () {
                         if (!_isZoomed) Navigator.pop(context);
                       },
                       child: Transform.translate(
-                        offset: Offset(0, dragY),
-                        // Hiệu ứng Scale Down thu nhỏ nhẹ ảnh khi kéo xuống (Chuẩn Instagram/Telegram)
+                        offset: dragOffset,
                         child: Transform.scale(
-                          scale: (1.0 - (dragY.abs() / (size.height * 2.8))).clamp(0.85, 1.0),
+                          scale: scale,
                           child: InteractiveViewer(
                             transformationController: _transformationController,
                             clipBehavior: Clip.none,
                             boundaryMargin: const EdgeInsets.all(30),
-                            minScale: 0.2, // Cho phép bóp nhỏ hơn 1.0 để kích hoạt Elastic Snapback
+                            minScale: 0.2,
                             maxScale: 8.0,
                             panEnabled: _isZoomed,
                             scaleEnabled: true,
@@ -248,19 +300,63 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
                             child: Center(
                               child: Hero(
                                 tag: widget.imageUrl,
-                                // Khắc phục triệt để lỗi giật khung hình / méo ảnh khi Hero chuyển trạng thái bay
+                                createRectTween: (begin, end) {
+                                  // Chuyển động bay thẳng tuyến tính thay vì bay cong (Arc) giúp ảnh bay tự nhiên hơn
+                                  return RectTween(begin: begin, end: end);
+                                },
                                 flightShuttleBuilder: (flightContext, animation, flightDirection, fromHeroContext, toHeroContext) {
+                                  final Hero fromHero = fromHeroContext.widget as Hero;
                                   final Hero toHero = toHeroContext.widget as Hero;
-                                  return SizeChangedLayoutNotifier(
-                                    child: FadeTransition(
-                                      opacity: animation,
-                                      child: toHero.child,
-                                    ),
+
+                                  // Xác định component nguồn và đích dựa trên hướng bay (Push/Pop)
+                                  final thumbnailChild = flightDirection == HeroFlightDirection.push
+                                      ? fromHero.child
+                                      : toHero.child;
+                                  final fullscreenChild = flightDirection == HeroFlightDirection.push
+                                      ? toHero.child
+                                      : fromHero.child;
+
+                                  return AnimatedBuilder(
+                                    animation: animation,
+                                    builder: (context, child) {
+                                      final t = animation.value;
+
+                                      // Nội suy vị trí bay từ tọa độ kéo tay cuối cùng về vị trí ảnh gốc
+                                      final offset = (flightDirection == HeroFlightDirection.pop)
+                                          ? Offset.lerp(Offset.zero, _lastDragOffset, t)!
+                                          : Offset.zero;
+
+                                      final scaleVal = (flightDirection == HeroFlightDirection.pop)
+                                          ? 1.0 + (_lastDragScale - 1.0) * t
+                                          : 1.0;
+
+                                      return Transform.translate(
+                                        offset: offset,
+                                        child: Transform.scale(
+                                          scale: scaleVal,
+                                          child: Stack(
+                                            fit: StackFit.passthrough,
+                                            children: [
+                                              // Cross-fade mượt mà giữa ảnh thumbnail và ảnh phóng to để triệt tiêu hiện tượng vỡ tỉ lệ ảnh
+                                              Opacity(
+                                                opacity: (1.0 - t).clamp(0.0, 1.0),
+                                                child: thumbnailChild,
+                                              ),
+                                              Opacity(
+                                                opacity: t.clamp(0.0, 1.0),
+                                                child: fullscreenChild,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   );
                                 },
                                 child: GestureDetector(
+                                  onTap: () {}, // Ngăn chặn sự kiện tap lan truyền ra GestureDetector ngoài gây đóng ảnh
                                   onDoubleTapDown: _onDoubleTapDown,
-                                  onDoubleTap: () {}, // Cần giữ block trống này để kích hoạt luồng onDoubleTapDown riêng
+                                  onDoubleTap: () {}, // Giữ block trống để kích hoạt Double Tap Down độc lập
                                   child: _buildImage(),
                                 ),
                               ),
@@ -270,7 +366,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
                       ),
                     ),
 
-                    // Nút Đóng thiết kế cao cấp ứng dụng lớn
+                    // Nút đóng (X) thiết kế tinh xảo, ẩn đi khi bắt đầu kéo ảnh
                     Positioned(
                       top: MediaQuery.of(context).padding.top + 12,
                       right: 16,
@@ -309,7 +405,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
         : CachedNetworkImage(
             imageUrl: widget.imageUrl,
             fit: BoxFit.contain,
-            // Ép thời gian chuyển đổi ảnh bằng 0 để triệt tiêu hiện tượng nháy ảnh khi bắt đầu bay Hero
+            // Triệt tiêu thời gian chuyển đổi của CachedNetworkImage để tránh chớp nháy ảnh khi bắt đầu bay Hero
             fadeInDuration: Duration.zero,
             fadeOutDuration: Duration.zero,
             placeholder: (_, __) => const Center(child: CupertinoActivityIndicator(color: Colors.white)),

@@ -2,8 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
@@ -17,13 +15,6 @@ class NotificationScreen extends ConsumerWidget {
     final notificationsAsync = ref.watch(notificationsProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
-    // Mark all as read when opened
-    ref.listen(notificationsProvider, (_, next) {
-      next.whenData((_) {
-        ref.read(socialRepositoryProvider).markAllAsRead();
-      });
-    });
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -41,7 +32,9 @@ class NotificationScreen extends ConsumerWidget {
                 icon: const Icon(CupertinoIcons.checkmark_circle, size: 24),
                 tooltip: 'Đánh dấu đã đọc',
                 onPressed: () {
-                  ref.read(socialRepositoryProvider).markAllAsRead();
+                  ref.read(socialRepositoryProvider).markAllAsRead().then((_) {
+                    ref.invalidate(notificationsProvider);
+                  });
                 },
               ),
               const SizedBox(width: 8),
