@@ -208,10 +208,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (pixels < 0.0) {
         setState(() {
           _pullUpDistance = -pixels;
-          if (_pullUpDistance > 80.0 && !_hasCrossedVanishThreshold) {
+          if (_pullUpDistance > 200.0 && !_hasCrossedVanishThreshold) {
             _hasCrossedVanishThreshold = true;
             HapticFeedback.mediumImpact();
-          } else if (_pullUpDistance <= 80.0 && _hasCrossedVanishThreshold) {
+          } else if (_pullUpDistance <= 200.0 && _hasCrossedVanishThreshold) {
             _hasCrossedVanishThreshold = false;
           }
         });
@@ -401,7 +401,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           : "Kéo lên để bật tính năng tự hủy";
     }
 
-    final progress = (_pullUpDistance / 80.0).clamp(0.0, 1.0);
+    final progress = (_pullUpDistance / 200.0).clamp(0.0, 1.0);
 
     return Container(
       height: 60,
@@ -864,6 +864,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final vanishModeState = ref.watch(vanishModeProvider);
     final isVanishMode = (vanishModeState[widget.conversationId] ?? false) || (selfDestructSecs > 0);
 
+    final themeState = ref.watch(chatThemeColorProvider);
+    final themeName = themeState[widget.conversationId] ?? 'blue';
+    final chatThemeColor = getChatThemePrimaryColor(themeName);
+
     // Lắng nghe tin mới → auto scroll nếu đang ở đáy
     // Dùng ref.listen ổn định (không đặt inline trong build tree)
     ref.listen(realtimeMessagesProvider(widget.conversationId),
@@ -1135,10 +1139,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             if (dy > 0) {
                               setState(() {
                                 _pullUpDistance = dy;
-                                if (dy > 80.0 && !_hasCrossedVanishThreshold) {
+                                if (dy > 200.0 && !_hasCrossedVanishThreshold) {
                                   _hasCrossedVanishThreshold = true;
                                   HapticFeedback.mediumImpact();
-                                } else if (dy <= 80.0 && _hasCrossedVanishThreshold) {
+                                } else if (dy <= 200.0 && _hasCrossedVanishThreshold) {
                                   _hasCrossedVanishThreshold = false;
                                 }
                               });
@@ -1203,15 +1207,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             return ElasticScrollToBottomButton(
                               onTap: () => _scrollToBottom(),
                               unreadCount: unreadCount,
+                              themeColor: chatThemeColor,
                             );
                           },
                           loading: () => ElasticScrollToBottomButton(
                             onTap: () => _scrollToBottom(),
                             unreadCount: 0,
+                            themeColor: chatThemeColor,
                           ),
                           error: (_, __) => ElasticScrollToBottomButton(
                             onTap: () => _scrollToBottom(),
                             unreadCount: 0,
+                            themeColor: chatThemeColor,
                           ),
                         ),
                       ),
@@ -1788,6 +1795,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final vanishModeState = ref.watch(vanishModeProvider);
     final isVanishMode = (vanishModeState[widget.conversationId] ?? false) || (selfDestructSecs > 0);
 
+    final themeState = ref.watch(chatThemeColorProvider);
+    final themeName = themeState[widget.conversationId] ?? 'blue';
+    final chatThemeColor = getChatThemePrimaryColor(themeName);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1819,7 +1830,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 icon: Icon(
                   CupertinoIcons.photo,
                   color: hasPendingImage
-                      ? theme.colorScheme.primary
+                      ? chatThemeColor
                       : (isDark ? Colors.white60 : Colors.black45),
                   size: 24,
                 ),
@@ -1833,6 +1844,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   child: TextField(
                     controller: _messageController,
                     focusNode: _focusNode,
+                    cursorColor: isVanishMode ? Colors.purpleAccent : chatThemeColor,
                     decoration: InputDecoration(
                       hintText: hasPendingImage
                           ? 'Thêm chú thích...'
@@ -1855,7 +1867,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         borderRadius: BorderRadius.circular(22),
                         borderSide: isVanishMode
                             ? const BorderSide(color: Colors.purpleAccent, width: 2.0)
-                            : BorderSide(color: theme.colorScheme.primary, width: 1.5),
+                            : BorderSide(color: chatThemeColor, width: 1.5),
                       ),
                       filled: true,
                       fillColor: isDark
@@ -1878,7 +1890,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   final hasContent =
                       value.text.trim().isNotEmpty || hasPendingImage;
                   final bgColor = hasContent
-                      ? (isVanishMode ? Colors.purpleAccent : AppColors.chatInputSendEnabled)
+                      ? (isVanishMode ? Colors.purpleAccent : chatThemeColor)
                       : (isDark
                           ? AppColors.darkChatInputSendDisabled
                           : AppColors.chatInputSendDisabled);
@@ -2104,29 +2116,7 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
 
     final themeState = ref.read(chatThemeColorProvider);
     final themeName = themeState[message.conversationId] ?? 'blue';
-    Color customColor;
-    switch (themeName) {
-      case 'purple':
-        customColor = Colors.purple;
-        break;
-      case 'orange':
-        customColor = Colors.orange;
-        break;
-      case 'teal':
-        customColor = Colors.teal;
-        break;
-      case 'pink':
-        customColor = Colors.pink;
-        break;
-      case 'blue':
-      default:
-        customColor = isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender;
-        break;
-    }
-
-    final myBubbleColor = (themeName == 'blue')
-        ? (isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender)
-        : customColor;
+    final myBubbleColor = getChatThemeColor(themeName, isDark: isDark);
     final theirBubbleColor = isDark
         ? AppColors.darkChatBubbleReceiver
         : AppColors.chatBubbleReceiver;
@@ -2524,29 +2514,7 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
 
     final themeState = ref.watch(chatThemeColorProvider);
     final themeName = themeState[message.conversationId] ?? 'blue';
-    Color customColor;
-    switch (themeName) {
-      case 'purple':
-        customColor = Colors.purple;
-        break;
-      case 'orange':
-        customColor = Colors.orange;
-        break;
-      case 'teal':
-        customColor = Colors.teal;
-        break;
-      case 'pink':
-        customColor = Colors.pink;
-        break;
-      case 'blue':
-      default:
-        customColor = isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender;
-        break;
-    }
-
-    final myBubbleColor = (themeName == 'blue')
-        ? (isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender)
-        : customColor;
+    final myBubbleColor = getChatThemeColor(themeName, isDark: isDark);
     final theirBubbleColor = isDark
         ? AppColors.darkChatBubbleReceiver
         : AppColors.chatBubbleReceiver;
@@ -2564,9 +2532,12 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
         message.content != 'Đã gửi một ảnh' &&
         message.content!.trim().isNotEmpty;
 
+    final replyThemeColor = getChatThemePrimaryColor(themeName);
+
     Widget bubbleContent = SwipeToReply(
       key: _bubbleKey,
       enabled: !message.isFailed && !message.isRecalled,
+      replyThemeColor: replyThemeColor,
       onReply: () => widget.onSwipeToReply?.call(),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
@@ -3179,12 +3150,14 @@ class SwipeToReply extends StatefulWidget {
   final Widget child;
   final VoidCallback onReply;
   final bool enabled;
+  final Color replyThemeColor;
 
   const SwipeToReply({
     super.key,
     required this.child,
     required this.onReply,
     this.enabled = true,
+    required this.replyThemeColor,
   });
 
   @override
@@ -3262,7 +3235,7 @@ class _SwipeToReplyState extends State<SwipeToReply>
   Widget build(BuildContext context) {
     final progress =
         (_dragOffset.abs() / _triggerThreshold).clamp(0.0, 1.0);
-    final theme = Theme.of(context);
+    final replyThemeColor = widget.replyThemeColor;
 
     return GestureDetector(
       onHorizontalDragStart: _onHorizontalDragStart,
@@ -3289,13 +3262,13 @@ class _SwipeToReplyState extends State<SwipeToReply>
                     height: 36,
                     decoration: BoxDecoration(
                       color: _isTriggered
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.primary.withValues(alpha: 0.15),
+                          ? replyThemeColor
+                          : replyThemeColor.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                       boxShadow: _isTriggered
                           ? [
                               BoxShadow(
-                                color: theme.colorScheme.primary
+                                color: replyThemeColor
                                     .withValues(alpha: 0.25),
                                 blurRadius: 6,
                                 spreadRadius: 1,
@@ -3311,7 +3284,7 @@ class _SwipeToReplyState extends State<SwipeToReply>
                         size: 16,
                         color: _isTriggered
                             ? Colors.white
-                            : theme.colorScheme.primary,
+                            : replyThemeColor,
                       ),
                     ),
                   ),

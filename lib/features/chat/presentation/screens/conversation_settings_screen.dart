@@ -25,13 +25,7 @@ class ConversationSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _ConversationSettingsScreenState extends ConsumerState<ConversationSettingsScreen> {
-  final List<Map<String, dynamic>> _chatThemes = [
-    {'id': 'blue', 'name': 'Cổ điển (Xanh)', 'color': Colors.blue},
-    {'id': 'purple', 'name': 'Neon (Tím)', 'color': Colors.purple},
-    {'id': 'orange', 'name': 'Hoàng hôn (Cam)', 'color': Colors.orange},
-    {'id': 'teal', 'name': 'Lục bảo (Xanh lá)', 'color': Colors.teal},
-    {'id': 'pink', 'name': 'Hoa anh đào (Hồng)', 'color': Colors.pink},
-  ];
+  // Centralized themes configuration imported from chat_provider.dart
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +38,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     final muteState = ref.watch(chatMuteProvider);
     final themeState = ref.watch(chatThemeColorProvider);
     final activeThemeId = themeState[widget.conversationId] ?? 'blue';
-    final activeThemeItem = _chatThemes.firstWhere((t) => t['id'] == activeThemeId, orElse: () => _chatThemes.first);
+    final activeThemeItem = kChatThemes.firstWhere((t) => t.id == activeThemeId, orElse: () => kChatThemes.first);
 
 
     // Fetch shared media images from the conversation history
@@ -106,7 +100,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: (activeThemeItem['color'] as Color).withValues(alpha: 0.4),
+                              color: activeThemeItem.color.withValues(alpha: 0.4),
                               width: 3,
                             ),
                           ),
@@ -337,8 +331,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                             ),
                             Text(
-                              activeThemeItem['name'],
-                              style: TextStyle(fontSize: 13, color: activeThemeItem['color'], fontWeight: FontWeight.bold),
+                              activeThemeItem.name,
+                              style: TextStyle(fontSize: 13, color: activeThemeItem.color, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -347,18 +341,18 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                           height: 36,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
-                            itemCount: _chatThemes.length,
+                            itemCount: kChatThemes.length,
                             itemBuilder: (context, idx) {
-                              final item = _chatThemes[idx];
-                              final isSelected = activeThemeId == item['id'];
+                              final item = kChatThemes[idx];
+                              final isSelected = activeThemeId == item.id;
                               return GestureDetector(
                                 onTap: () {
                                   HapticFeedback.selectionClick();
-                                  ref.read(chatThemeColorProvider.notifier).setTheme(widget.conversationId, item['id']);
+                                  ref.read(chatThemeColorProvider.notifier).setTheme(widget.conversationId, item.id);
                                   ScaffoldMessenger.of(context).clearSnackBars();
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Đã cập nhật chủ đề chat sang ${item['name']}'),
+                                      content: Text('Đã cập nhật chủ đề chat sang ${item.name}'),
                                       duration: const Duration(seconds: 1),
                                     ),
                                   );
@@ -368,14 +362,14 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                                   width: 32,
                                   height: 32,
                                   decoration: BoxDecoration(
-                                    color: item['color'],
+                                    color: item.color,
                                     shape: BoxShape.circle,
                                     border: isSelected
                                         ? Border.all(color: isDark ? Colors.white : Colors.black87, width: 3)
                                         : null,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: (item['color'] as Color).withValues(alpha: 0.3),
+                                        color: item.color.withValues(alpha: 0.3),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       ),

@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart' show Color, Colors;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../data/chat_repository.dart';
 import '../data/chat_sync_service.dart';
 import '../data/local_chat_repository_exports.dart';
@@ -1298,3 +1300,49 @@ final vanishModeProvider =
     StateNotifierProvider<VanishModeNotifier, Map<String, bool>>((ref) {
   return VanishModeNotifier();
 });
+
+// ── Chat Themes Shared Configuration & Helpers ─────────────────────────────────
+
+class ChatThemeInfo {
+  final String id;
+  final String name;
+  final Color color;
+
+  const ChatThemeInfo({
+    required this.id,
+    required this.name,
+    required this.color,
+  });
+}
+
+const List<ChatThemeInfo> kChatThemes = [
+  ChatThemeInfo(id: 'blue', name: 'Cổ điển (Xanh)', color: Colors.blue),
+  ChatThemeInfo(id: 'purple', name: 'Neon (Tím)', color: Colors.purple),
+  ChatThemeInfo(id: 'orange', name: 'Hoàng hôn (Cam)', color: Colors.orange),
+  ChatThemeInfo(id: 'teal', name: 'Lục bảo (Xanh lá)', color: Colors.teal),
+  ChatThemeInfo(id: 'pink', name: 'Hoa anh đào (Hồng)', color: Colors.pink),
+  ChatThemeInfo(id: 'red', name: 'Đỏ Ruby (Đỏ)', color: Colors.red),
+  ChatThemeInfo(id: 'indigo', name: 'Hoàng gia (Chàm)', color: Colors.indigo),
+  ChatThemeInfo(id: 'amber', name: 'Mật ong (Vàng)', color: Colors.amber),
+  ChatThemeInfo(id: 'green', name: 'Rừng nhiệt đới (Xanh)', color: Colors.green),
+  ChatThemeInfo(id: 'deepPurple', name: 'Huyền bí (Tím sẫm)', color: Colors.deepPurple),
+];
+
+Color getChatThemeColor(String themeName, {required bool isDark}) {
+  final theme = kChatThemes.firstWhere(
+    (t) => t.id == themeName,
+    orElse: () => kChatThemes.first,
+  );
+  if (theme.id == 'blue') {
+    return isDark ? AppColors.darkChatBubbleSender : AppColors.chatBubbleSender;
+  }
+  return theme.color;
+}
+
+Color getChatThemePrimaryColor(String themeName) {
+  final theme = kChatThemes.firstWhere(
+    (t) => t.id == themeName,
+    orElse: () => kChatThemes.first,
+  );
+  return theme.color;
+}

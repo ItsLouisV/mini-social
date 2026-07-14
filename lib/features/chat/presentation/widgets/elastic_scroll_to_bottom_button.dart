@@ -8,11 +8,13 @@ import 'package:flutter/scheduler.dart';
 class ElasticScrollToBottomButton extends StatefulWidget {
   final VoidCallback onTap;
   final int unreadCount;
+  final Color? themeColor;
 
   const ElasticScrollToBottomButton({
     super.key,
     required this.onTap,
     required this.unreadCount,
+    this.themeColor,
   });
 
   @override
@@ -229,6 +231,7 @@ class _ElasticScrollToBottomButtonState extends State<ElasticScrollToBottomButto
 
   Widget _buildButtonBody(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
+    final activeColor = widget.themeColor ?? theme.colorScheme.primary;
 
     return Listener(
       onPointerDown: _handlePointerDown,
@@ -258,14 +261,14 @@ class _ElasticScrollToBottomButtonState extends State<ElasticScrollToBottomButto
                     ),
                   ],
                   border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: _isPressed ? 0.5 : 0.18),
+                    color: activeColor.withValues(alpha: _isPressed ? 0.5 : 0.18),
                     width: 1.2,
                   ),
                 ),
                 child: Center(
                   child: Icon(
                     CupertinoIcons.chevron_down,
-                    color: theme.colorScheme.primary.withValues(alpha: _isPressed ? 1.0 : 0.7),
+                    color: activeColor.withValues(alpha: _isPressed ? 1.0 : 0.7),
                     size: 20,
                   ),
                 ),
