@@ -1,0 +1,5 @@
+# Thư mục chứa các Edge Functions của Supabase (Deno / TypeScript)
+# Các function như:
+# - ai-service (Kiểm duyệt, dịch thuật, tạo caption bằng Gemini/OpenAI)
+# - recommendation-engine (Đề xuất bảng tin và bạn bè)
+# - webrtc-token (Cung cấp LiveKit token)

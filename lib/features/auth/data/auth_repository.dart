@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthRepository {
@@ -44,5 +45,33 @@ class AuthRepository {
     return await _client.auth.updateUser(
       UserAttributes(password: newPassword),
     );
+  }
+
+  /// Kích hoạt luồng đăng nhập bằng Google (Web-based OAuth)
+  Future<bool> signInWithGoogle() async {
+    return await _client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: kIsWeb ? null : 'minisocial://login-callback',
+    );
+  }
+
+  /// Kích hoạt luồng đăng nhập bằng Apple (Web-based OAuth)
+  Future<bool> signInWithApple() async {
+    return await _client.auth.signInWithOAuth(
+      OAuthProvider.apple,
+      redirectTo: kIsWeb ? null : 'minisocial://login-callback',
+    );
+  }
+
+  /// Lấy danh sách các phiên thiết bị đăng nhập đang hoạt động
+  Future<List<Map<String, dynamic>>> getActiveSessions() async {
+    final response = await _client.rpc('get_active_sessions');
+    if (response == null) return [];
+    return List<Map<String, dynamic>>.from(response as List);
+  }
+
+  /// Thu hồi một phiên làm việc cụ thể để đăng xuất từ xa
+  Future<void> revokeSession(String sessionId) async {
+    await _client.rpc('revoke_session', params: {'session_id': sessionId});
   }
 }

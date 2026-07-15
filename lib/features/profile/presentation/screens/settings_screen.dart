@@ -88,6 +88,13 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       _Divider(color: theme.dividerColor),
                       _IosRow(
+                        iconBg: Colors.teal,
+                        icon: CupertinoIcons.device_phone_portrait,
+                        title: 'Thiết bị đăng nhập',
+                        onTap: () => context.push('/settings/devices'),
+                      ),
+                      _Divider(color: theme.dividerColor),
+                      _IosRow(
                         iconBg: Colors.green,
                         icon: CupertinoIcons.shield_lefthalf_fill,
                         title: 'Quyền riêng tư',

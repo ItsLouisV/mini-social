@@ -46,3 +46,7 @@ app.*.map.json
 
 # Environment
 .env
+.env.development
+.env.staging
+.env.production
+.env.local

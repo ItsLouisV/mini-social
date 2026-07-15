@@ -30,3 +30,8 @@ final currentUserIdProvider = Provider<String?>((ref) {
 
 // Session expired state provider
 final sessionExpiredProvider = StateProvider<bool>((ref) => false);
+
+// Active device sessions provider
+final activeSessionsProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  return ref.watch(authRepositoryProvider).getActiveSessions();
+});

@@ -1,7 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../../core/services/logger_service.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
@@ -40,7 +43,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passwordController.text,
           );
       // GoRouter sẽ tự redirect sau khi auth state thay đổi
-    } catch (e) {
+    } catch (e, stack) {
+      CoreLogger.error('Lỗi khi đăng nhập bằng email: $e', stackTrace: stack, tag: 'Auth');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -61,6 +65,81 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return 'Email chưa được xác nhận. Kiểm tra hộp thư của bạn';
     }
     return 'Đăng nhập thất bại. Vui lòng thử lại';
+  }
+
+  Future<void> _loginWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authRepositoryProvider).signInWithGoogle();
+    } catch (e, stack) {
+      CoreLogger.error('Lỗi đăng nhập Google: $e', stackTrace: stack, tag: 'Auth');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi đăng nhập Google: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loginWithApple() async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authRepositoryProvider).signInWithApple();
+    } catch (e, stack) {
+      CoreLogger.error('Lỗi đăng nhập Apple: $e', stackTrace: stack, tag: 'Auth');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi đăng nhập Apple: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _buildSocialButtons() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Column(
+      children: [
+        OutlinedButton.icon(
+          onPressed: _isLoading ? null : _loginWithGoogle,
+          icon: const FaIcon(FontAwesomeIcons.google, size: 18, color: Colors.redAccent),
+          label: const Text('Tiếp tục với Google'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            side: BorderSide(color: theme.dividerColor),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: _isLoading ? null : _loginWithApple,
+          icon: FaIcon(
+            FontAwesomeIcons.apple,
+            size: 20,
+            color: isDark ? Colors.black : Colors.white,
+          ),
+          label: const Text('Tiếp tục với Apple'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: isDark ? Colors.white : Colors.black,
+            foregroundColor: isDark ? Colors.black : Colors.white,
+            minimumSize: const Size(double.infinity, 50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -175,6 +254,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Expanded(child: Divider()),
                 ],
               ),
+
+              const SizedBox(height: 24),
+
+              _buildSocialButtons(),
 
               const SizedBox(height: 24),
 
