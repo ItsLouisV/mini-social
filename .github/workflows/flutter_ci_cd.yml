@@ -45,10 +45,16 @@ jobs:
         run: |
           if [ -f .env.example ]; then
             cp .env.example .env
+            cp .env.example .env.development
+            cp .env.example .env.staging
+            cp .env.example .env.production
           else
             echo "SUPABASE_URL=https://dummy-url.supabase.co" > .env
             echo "SUPABASE_ANON_KEY=dummy-key" >> .env
             echo "LIVEKIT_URL=wss://dummy-url.livekit.cloud" >> .env
+            cp .env .env.development
+            cp .env .env.staging
+            cp .env .env.production
           fi
 
       # 5. Tải về toàn bộ Flutter Dependencies
