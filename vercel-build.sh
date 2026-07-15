@@ -5,6 +5,12 @@ echo "SUPABASE_URL=$SUPABASE_URL" > .env
 echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" >> .env
 echo "LIVEKIT_URL=$LIVEKIT_URL" >> .env
 
+# Nhân bản file .env cho các môi trường dev, staging, production để tránh lỗi đóng gói Asset của Flutter
+cp .env .env.development
+cp .env .env.staging
+cp .env .env.production
+
+
 # 2. Clone Flutter SDK bản stable trực tiếp từ GitHub
 git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter-sdk
 
