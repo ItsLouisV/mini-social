@@ -208,10 +208,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (pixels < 0.0) {
         setState(() {
           _pullUpDistance = -pixels;
-          if (_pullUpDistance > 200.0 && !_hasCrossedVanishThreshold) {
+          if (_pullUpDistance > 300.0 && !_hasCrossedVanishThreshold) {
             _hasCrossedVanishThreshold = true;
             HapticFeedback.mediumImpact();
-          } else if (_pullUpDistance <= 200.0 && _hasCrossedVanishThreshold) {
+          } else if (_pullUpDistance <= 300.0 && _hasCrossedVanishThreshold) {
             _hasCrossedVanishThreshold = false;
           }
         });
@@ -401,7 +401,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           : "Kéo lên để bật tính năng tự hủy";
     }
 
-    final progress = (_pullUpDistance / 200.0).clamp(0.0, 1.0);
+    final progress = (_pullUpDistance / 300.0).clamp(0.0, 1.0);
 
     return Container(
       height: 60,
@@ -912,6 +912,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     }).valueOrNull;
     final otherUserName = otherUser?.displayName ?? 'Chat';
+    // Dùng chat_blocks (bảng riêng, độc lập với blocks của profile/feed)
+    final isBlocked = ref.watch(isChatBlockedProvider(otherUser?.id ?? ''));
+    final isBlockedBy = ref.watch(isChatBlockedByProvider(otherUser?.id ?? '')).valueOrNull ?? false;
 
     final hasWallpaper = wallpaperPath.isNotEmpty;
 
@@ -1139,10 +1142,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             if (dy > 0) {
                               setState(() {
                                 _pullUpDistance = dy;
-                                if (dy > 200.0 && !_hasCrossedVanishThreshold) {
+                                if (dy > 300.0 && !_hasCrossedVanishThreshold) {
                                   _hasCrossedVanishThreshold = true;
                                   HapticFeedback.mediumImpact();
-                                } else if (dy <= 200.0 && _hasCrossedVanishThreshold) {
+                                } else if (dy <= 300.0 && _hasCrossedVanishThreshold) {
                                   _hasCrossedVanishThreshold = false;
                                 }
                               });
@@ -1227,7 +1230,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ],
               ),
             ),
-            _buildInput(theme, hasWallpaper),
+            _buildInput(theme, hasWallpaper, isBlocked, isBlockedBy),
           ],
         ),
       ),
@@ -1786,8 +1789,54 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Input Bar ─────────────────────────────────────────────────────────────────
 
-  Widget _buildInput(ThemeData theme, bool hasWallpaper) {
+  Widget _buildInput(ThemeData theme, bool hasWallpaper, bool isBlocked, bool isBlockedBy) {
     final isDark = theme.brightness == Brightness.dark;
+
+    // ━━ Banner: Bạn đang chặn người kia ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if (isBlocked || isBlockedBy) {
+      final message = isBlocked
+          ? 'Bạn đang chặn người dùng này'
+          : 'Bạn đã bị chặn bởi người dùng này';
+      return Container(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 12,
+          bottom: MediaQuery.of(context).padding.bottom + 12,
+        ),
+        decoration: BoxDecoration(
+          color: hasWallpaper
+              ? theme.scaffoldBackgroundColor.withValues(alpha: 0.85)
+              : theme.scaffoldBackgroundColor,
+          border: Border(
+            top: BorderSide(
+              color: theme.dividerColor.withValues(alpha: 0.3),
+              width: 0.5,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isBlocked ? CupertinoIcons.slash_circle_fill : CupertinoIcons.lock_fill,
+              color: Colors.red.withValues(alpha: 0.7),
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              message,
+              style: TextStyle(
+                color: theme.hintColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final hasPendingImage = _pendingImage != null;
 
     final selfDestructState = ref.watch(chatSelfDestructProvider);

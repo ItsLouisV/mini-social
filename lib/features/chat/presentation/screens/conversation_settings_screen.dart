@@ -11,6 +11,7 @@ import '../widgets/full_screen_image_viewer.dart';
 
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../profile/providers/profile_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
 import '../widgets/passcode_dialog.dart';
@@ -441,30 +442,33 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
 
               // ── Group 5: Danger Zone ─────────────────────────────────────────────
               _buildSectionHeader('HÀNH ĐỘNG'),
-              _buildCardContainer(
-                cardBgColor,
-                children: [
-                  _buildListTile(
-                    context: context,
-                    icon: CupertinoIcons.slash_circle,
-                    gradientColors: [Colors.redAccent, Colors.red],
-                    title: 'Chặn người dùng này',
-                    titleColor: Colors.red,
-                    trailing: const SizedBox.shrink(),
-                    onTap: () => _confirmBlockUser(context, otherUserName),
-                  ),
-                  Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
-                  _buildListTile(
-                    context: context,
-                    icon: CupertinoIcons.trash,
-                    gradientColors: [Colors.red, Colors.deepOrange],
-                    title: 'Xóa lịch sử trò chuyện',
-                    titleColor: Colors.red,
-                    trailing: const SizedBox.shrink(),
-                    onTap: () => _confirmDeleteConversation(context, ref, conv),
-                  ),
-                ],
-              ),
+              Builder(builder: (context) {
+                final isChatBlocked = ref.watch(isChatBlockedProvider(otherUser?.id ?? ''));
+                return _buildCardContainer(
+                  cardBgColor,
+                  children: [
+                    _buildListTile(
+                      context: context,
+                      icon: isChatBlocked ? CupertinoIcons.checkmark_shield_fill : CupertinoIcons.slash_circle,
+                      gradientColors: isChatBlocked ? [Colors.grey, Colors.blueGrey] : [Colors.redAccent, Colors.red],
+                      title: isChatBlocked ? 'Đã chặn tin nhắn từ người này' : 'Chặn tin nhắn từ người này',
+                      titleColor: isChatBlocked ? Colors.grey : Colors.red,
+                      trailing: const SizedBox.shrink(),
+                      onTap: () => _confirmChatBlockUser(context, ref, otherUser?.id ?? '', otherUserName, isChatBlocked),
+                    ),
+                    Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                    _buildListTile(
+                      context: context,
+                      icon: CupertinoIcons.trash,
+                      gradientColors: [Colors.red, Colors.deepOrange],
+                      title: 'Xóa lịch sử trò chuyện',
+                      titleColor: Colors.red,
+                      trailing: const SizedBox.shrink(),
+                      onTap: () => _confirmDeleteConversation(context, ref, conv),
+                    ),
+                  ],
+                );
+              }),
             ],
           );
         },
@@ -722,26 +726,50 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     }
   }
 
-  void _confirmBlockUser(BuildContext context, String userName) {
+  void _confirmChatBlockUser(BuildContext context, WidgetRef ref, String targetUserId, String userName, bool isChatBlocked) {
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: Text('Chặn $userName?'),
-        content: const Text('Người dùng này sẽ không thể nhắn tin hoặc gọi điện cho bạn nữa.'),
+        title: Text(isChatBlocked ? 'Bỏ chặn tin nhắn từ $userName?' : 'Chặn tin nhắn từ $userName?'),
+        content: Text(
+          isChatBlocked
+              ? 'Người dùng này sẽ có thể nhắn tin cho bạn trở lại.'
+              : 'Người dùng này sẽ không thể nhắn tin cho bạn nữa.',
+        ),
         actions: [
           CupertinoDialogAction(
             child: const Text('Huỷ'),
             onPressed: () => Navigator.pop(ctx),
           ),
           CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () {
+            isDestructiveAction: !isChatBlocked,
+            onPressed: () async {
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Đã chặn thành công $userName')),
-              );
+              try {
+                if (isChatBlocked) {
+                  await ref.read(profileRepositoryProvider).chatUnblockUser(targetUserId);
+                } else {
+                  await ref.read(profileRepositoryProvider).chatBlockUser(targetUserId);
+                }
+                ref.invalidate(chatBlockedUserIdsProvider);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isChatBlocked
+                          ? 'Đã bỏ chặn tin nhắn từ $userName'
+                          : 'Đã chặn tin nhắn từ $userName'),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
             },
-            child: const Text('Chặn'),
+            child: Text(isChatBlocked ? 'Bỏ chặn' : 'Chặn tin nhắn'),
           ),
         ],
       ),

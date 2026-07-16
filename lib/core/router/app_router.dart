@@ -26,6 +26,7 @@ import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/account_settings_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
+import '../../features/profile/presentation/screens/privacy_settings_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/social/presentation/screens/follow_list_screen.dart';
 import '../../features/social/presentation/screens/friends_list_screen.dart';
@@ -121,6 +122,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, __) =>
             const CupertinoPage(child: DeviceManagementScreen()),
+      ),
+      GoRoute(
+        path: '/settings/privacy',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: PrivacySettingsScreen()),
       ),
       GoRoute(
         path: '/create',

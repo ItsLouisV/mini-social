@@ -98,7 +98,7 @@ class SettingsScreen extends ConsumerWidget {
                         iconBg: Colors.green,
                         icon: CupertinoIcons.shield_lefthalf_fill,
                         title: 'Quyền riêng tư',
-                        onTap: () {},
+                        onTap: () => context.push('/settings/privacy'),
                       ),
                     ],
                   ),
@@ -116,7 +116,6 @@ class SettingsScreen extends ConsumerWidget {
                         title: 'Chế độ tối',
                         showChevron: false,
                         trailing: CupertinoSwitch(
-                          activeTrackColor: theme.colorScheme.primary,
                           value: themeMode == ThemeMode.dark,
                           onChanged: (val) {
                             ref.read(themeModeProvider.notifier).setTheme(

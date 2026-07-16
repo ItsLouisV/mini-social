@@ -79,3 +79,43 @@ final userPostsProvider =
   ref.watch(profileRefreshProvider);
   return ref.watch(profileRepositoryProvider).getUserPosts(userId);
 });
+
+final blockedUsersProvider = FutureProvider.autoDispose<List<ProfileModel>>((ref) async {
+  return ref.watch(profileRepositoryProvider).getBlockedUsers();
+});
+
+final mutedUsersProvider = FutureProvider.autoDispose<List<ProfileModel>>((ref) async {
+  return ref.watch(profileRepositoryProvider).getMutedUsers();
+});
+
+final isBlockedProvider = Provider.family<bool, String>((ref, targetUserId) {
+  final blockedUsersAsync = ref.watch(blockedUsersProvider);
+  return blockedUsersAsync.when(
+    data: (users) => users.any((u) => u.id == targetUserId),
+    loading: () => false,
+    error: (_, __) => false,
+  );
+});
+
+// ──────── CHAT BLOCKS PROVIDERS (dùng bảng chat_blocks, độc lập với blocks) ───────────
+
+/// Danh sách userId mình đã chặn chat.
+final chatBlockedUserIdsProvider = FutureProvider.autoDispose<List<String>>((ref) async {
+  return ref.watch(profileRepositoryProvider).getChatBlockedUserIds();
+});
+
+/// Bạn có đang chặn chat của [targetUserId] không?
+final isChatBlockedProvider = Provider.family<bool, String>((ref, targetUserId) {
+  final idsAsync = ref.watch(chatBlockedUserIdsProvider);
+  return idsAsync.when(
+    data: (ids) => ids.contains(targetUserId),
+    loading: () => false,
+    error: (_, __) => false,
+  );
+});
+
+/// [targetUserId] có đang chặn chat của bạn không?
+final isChatBlockedByProvider = FutureProvider.family<bool, String>((ref, targetUserId) async {
+  if (targetUserId.isEmpty) return false;
+  return ref.watch(profileRepositoryProvider).isChatBlockedByUser(targetUserId);
+});

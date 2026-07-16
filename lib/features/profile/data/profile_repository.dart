@@ -44,6 +44,8 @@ class ProfileRepository {
     String? bio,
     String? avatarUrl,
     String? coverUrl,
+    List<String>? interests,
+    bool? isPrivateProfile,
   }) async {
     final updates = <String, dynamic>{};
     if (fullName != null) updates['full_name'] = fullName;
@@ -51,11 +53,131 @@ class ProfileRepository {
     if (bio != null) updates['bio'] = bio;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
     if (coverUrl != null) updates['cover_url'] = coverUrl;
+    if (interests != null) updates['interests'] = interests;
+    if (isPrivateProfile != null) updates['is_private_profile'] = isPrivateProfile;
 
     await _client
         .from(SupabaseConstants.profilesTable)
         .update(updates)
         .eq('id', userId);
+  }
+
+  // ── BLOCKING METHODS ───────────────────────────────────────────────────────
+  Future<void> blockUser(String targetUserId) async {
+    final currentId = currentUserId;
+    if (currentId == null) throw Exception('Not authenticated');
+    await _client.from('blocks').insert({
+      'blocker_id': currentId,
+      'blocked_id': targetUserId,
+    });
+  }
+
+  Future<void> unblockUser(String targetUserId) async {
+    final currentId = currentUserId;
+    if (currentId == null) throw Exception('Not authenticated');
+    await _client
+        .from('blocks')
+        .delete()
+        .eq('blocker_id', currentId)
+        .eq('blocked_id', targetUserId);
+  }
+
+  Future<List<ProfileModel>> getBlockedUsers() async {
+    final currentId = currentUserId;
+    if (currentId == null) return [];
+    
+    final response = await _client
+        .from('blocks')
+        .select('blocked:profiles!blocks_blocked_id_fkey(*)')
+        .eq('blocker_id', currentId);
+        
+    final list = response as List;
+    return list
+        .map((e) => e['blocked'])
+        .where((x) => x != null)
+        .map((e) => ProfileModel.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  // \u2500\u2500 CHAT BLOCKING METHODS (b\u1ea3ng chat_blocks \u2014 \u0111\u1ed9c l\u1eadp v\u1edbi blocks) \u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  Future<void> chatBlockUser(String targetUserId) async {
+    final currentId = currentUserId;
+    if (currentId == null) throw Exception('Not authenticated');
+    await _client.from('chat_blocks').insert({
+      'blocker_id': currentId,
+      'blocked_id': targetUserId,
+    });
+  }
+
+  Future<void> chatUnblockUser(String targetUserId) async {
+    final currentId = currentUserId;
+    if (currentId == null) throw Exception('Not authenticated');
+    await _client
+        .from('chat_blocks')
+        .delete()
+        .eq('blocker_id', currentId)
+        .eq('blocked_id', targetUserId);
+  }
+
+  /// Danh s\u00e1ch ng\u01b0\u1eddi m\u00ecnh \u0111\u00e3 ch\u1eb7n tin nh\u1eafn.
+  Future<List<String>> getChatBlockedUserIds() async {
+    final currentId = currentUserId;
+    if (currentId == null) return [];
+    final response = await _client
+        .from('chat_blocks')
+        .select('blocked_id')
+        .eq('blocker_id', currentId);
+    return (response as List).map((e) => e['blocked_id'] as String).toList();
+  }
+
+  /// Ki\u1ec3m tra xem [targetUserId] c\u00f3 \u0111ang ch\u1eb7n tin nh\u1eafn c\u1ee7a m\u00ecnh kh\u00f4ng (chi\u1ec1u ng\u01b0\u1ee3c).
+  Future<bool> isChatBlockedByUser(String targetUserId) async {
+    final currentId = currentUserId;
+    if (currentId == null) return false;
+    final response = await _client
+        .from('chat_blocks')
+        .select('blocker_id')
+        .eq('blocker_id', targetUserId)
+        .eq('blocked_id', currentId)
+        .limit(1);
+    return (response as List).isNotEmpty;
+  }
+
+  // ── MUTING METHODS ─────────────────────────────────────────────────────────
+  Future<void> muteUser(String targetUserId) async {
+    final currentId = currentUserId;
+    if (currentId == null) throw Exception('Not authenticated');
+    await _client.from('mutes').insert({
+      'muter_id': currentId,
+      'muted_id': targetUserId,
+    });
+  }
+
+  Future<void> unmuteUser(String targetUserId) async {
+    final currentId = currentUserId;
+    if (currentId == null) throw Exception('Not authenticated');
+    await _client
+        .from('mutes')
+        .delete()
+        .eq('muter_id', currentId)
+        .eq('muted_id', targetUserId);
+  }
+
+  Future<List<ProfileModel>> getMutedUsers() async {
+    final currentId = currentUserId;
+    if (currentId == null) return [];
+    
+    final response = await _client
+        .from('mutes')
+        .select('muted:profiles!mutes_muted_id_fkey(*)')
+        .eq('muter_id', currentId);
+        
+    final list = response as List;
+    return list
+        .map((e) => e['muted'])
+        .where((x) => x != null)
+        .map((e) => ProfileModel.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
   }
 
   Future<String> uploadAvatar(String userId, XFile file) async {

@@ -28,17 +28,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _nameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _bioController = TextEditingController();
+  final _customInterestController = TextEditingController();
 
   bool _isLoading = false;
   XFile? _newAvatar;
   XFile? _newCover;
   bool _initialized = false;
+  List<String> _selectedInterests = [];
 
   @override
   void dispose() {
     _nameController.dispose();
     _usernameController.dispose();
     _bioController.dispose();
+    _customInterestController.dispose();
     super.dispose();
   }
 
@@ -53,6 +56,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           _nameController.text = profile.fullName ?? '';
           _usernameController.text = profile.username;
           _bioController.text = profile.bio ?? '';
+          _selectedInterests = List<String>.from(profile.interests);
           _initialized = true;
         }
 
@@ -331,22 +335,163 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                               ),
                               const SizedBox(height: 18),
                               AppTextField(
-                                label: 'Bio',
-                                hint: 'Giới thiệu về bản thân...',
-                                controller: _bioController,
-                                maxLines: 4,
-                                maxLength: 150,
-                                prefixIcon: CupertinoIcons.info,
-                                keyboardType: TextInputType.multiline,
-                                textInputAction: TextInputAction.newline,
+                                 label: 'Bio',
+                                 hint: 'Giới thiệu về bản thân...',
+                                 controller: _bioController,
+                                 maxLines: 4,
+                                 maxLength: 150,
+                                 prefixIcon: CupertinoIcons.info,
+                                 keyboardType: TextInputType.multiline,
+                                 textInputAction: TextInputAction.newline,
+                               ),
+                             ],
+                           ),
+                         ),
+                       ),
+                       
+                       // ── Interests Wrap section ────────────────────
+                       const SizedBox(height: 24),
+                       Row(
+                         children: [
+                           Icon(
+                             CupertinoIcons.heart_fill,
+                             color: Theme.of(context).colorScheme.primary,
+                             size: 18,
+                           ),
+                           const SizedBox(width: 8),
+                           Text(
+                             'SỞ THÍCH CỦA BẠN',
+                             style: TextStyle(
+                               color: Theme.of(context).colorScheme.primary,
+                               fontSize: 13,
+                               fontWeight: FontWeight.w800,
+                               letterSpacing: 1.2,
+                             ),
+                           ),
+                         ],
+                       ),
+                       const SizedBox(height: 12),
+                       Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Theme.of(context).dividerColor.withValues(alpha: 0.08),
+                              width: 1,
+                            ),
+                          ),
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Chọn từ sở thích phổ biến:',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).hintColor,
+                                ),
                               ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  'Công nghệ', 'Thể thao', 'Âm nhạc', 'Nghệ thuật', 'Du lịch',
+                                  'Ẩm thực', 'Thời trang', 'Gaming', 'Sách & Văn học', 'Phim ảnh',
+                                  'Chụp ảnh', 'Kinh doanh', 'Sức khỏe', 'Làm vườn', 'Thú cưng'
+                                ].map((interest) {
+                                  final isSelected = _selectedInterests.contains(interest);
+                                  return _ChoiceChipCustom(
+                                    label: interest,
+                                    isSelected: isSelected,
+                                    onSelected: (selected) {
+                                      setState(() {
+                                        if (selected) {
+                                          _selectedInterests.add(interest);
+                                        } else {
+                                          _selectedInterests.remove(interest);
+                                        }
+                                      });
+                                    },
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 24),
+                              AppTextField(
+                                controller: _customInterestController,
+                                hint: 'Thêm sở thích tự chọn khác...',
+                                prefixIcon: CupertinoIcons.plus,
+                                textInputAction: TextInputAction.done,
+                                onEditingComplete: () {
+                                  final text = _customInterestController.text.trim();
+                                  if (text.isNotEmpty && !_selectedInterests.contains(text)) {
+                                    setState(() {
+                                      _selectedInterests.add(text);
+                                      _customInterestController.clear();
+                                    });
+                                  }
+                                },
+                                suffix: CupertinoButton(
+                                  padding: EdgeInsets.zero,
+                                  onPressed: () {
+                                    final text = _customInterestController.text.trim();
+                                    if (text.isNotEmpty && !_selectedInterests.contains(text)) {
+                                      setState(() {
+                                        _selectedInterests.add(text);
+                                        _customInterestController.clear();
+                                      });
+                                    }
+                                  },
+                                  child: Icon(
+                                    CupertinoIcons.plus_circle_fill,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                              if (_selectedInterests.any((i) => ![
+                                'Công nghệ', 'Thể thao', 'Âm nhạc', 'Nghệ thuật', 'Du lịch',
+                                'Ẩm thực', 'Thời trang', 'Gaming', 'Sách & Văn học', 'Phim ảnh',
+                                'Chụp ảnh', 'Kinh doanh', 'Sức khỏe', 'Làm vườn', 'Thú cưng'
+                              ].contains(i))) ...[
+                                const SizedBox(height: 18),
+                                Text(
+                                  'Sở thích đã thêm:',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).hintColor,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _selectedInterests
+                                      .where((i) => ![
+                                            'Công nghệ', 'Thể thao', 'Âm nhạc', 'Nghệ thuật', 'Du lịch',
+                                            'Ẩm thực', 'Thời trang', 'Gaming', 'Sách & Văn học', 'Phim ảnh',
+                                            'Chụp ảnh', 'Kinh doanh', 'Sức khỏe', 'Làm vườn', 'Thú cưng'
+                                          ].contains(i))
+                                      .map((interest) {
+                                    return _CustomTagCustom(
+                                      label: interest,
+                                      onDelete: () {
+                                        setState(() {
+                                          _selectedInterests.remove(interest);
+                                        });
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
                             ],
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
+                       const SizedBox(height: 20),
+                     ],
+                   ),
+                 ),
               ],
             ),
           ),
@@ -396,6 +541,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         bio: _bioController.text.trim(),
         avatarUrl: newAvatarUrl,
         coverUrl: newCoverUrl,
+        interests: _selectedInterests,
       );
 
       ref.invalidate(profileProvider(userId));
@@ -422,5 +568,107 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+}
+
+class _ChoiceChipCustom extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final ValueChanged<bool> onSelected;
+
+  const _ChoiceChipCustom({
+    required this.label,
+    required this.isSelected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final borderColor = isSelected
+        ? theme.colorScheme.primary
+        : (isDark ? Colors.white24 : Colors.black12);
+
+    final textColor = isSelected
+        ? theme.colorScheme.primary
+        : (isDark ? Colors.white70 : Colors.black87);
+
+    final bgColor = isSelected
+        ? theme.colorScheme.primary.withValues(alpha: 0.08)
+        : Colors.transparent;
+
+    return GestureDetector(
+      onTap: () => onSelected(!isSelected),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderColor, width: 1.5),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: textColor,
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomTagCustom extends StatelessWidget {
+  final String label;
+  final VoidCallback onDelete;
+
+  const _CustomTagCustom({
+    required this.label,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final borderColor = theme.colorScheme.primary.withValues(alpha: 0.3);
+    final textColor = theme.colorScheme.primary;
+    final bgColor = theme.colorScheme.primary.withValues(alpha: 0.05);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 7, 8, 7),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1.2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: onDelete,
+            child: Icon(
+              CupertinoIcons.clear_circled_solid,
+              size: 15,
+              color: textColor.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

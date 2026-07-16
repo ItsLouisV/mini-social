@@ -1,17 +1,19 @@
 import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
-
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../social/providers/follow_provider.dart';
+import '../../../chat/presentation/widgets/full_screen_image_viewer.dart';
 import '../../domain/profile_model.dart';
 import '../../providers/profile_provider.dart';
 import '../widgets/profile_posts_grid.dart';
@@ -46,6 +48,10 @@ class ProfileScreen extends ConsumerWidget {
 
   Widget _buildBody(BuildContext context, WidgetRef ref, ProfileModel profile,
       bool isMine) {
+    final friendStatusAsync = ref.watch(friendStatusProvider(profile.id));
+    final isFriend = friendStatusAsync.valueOrNull == FriendStatus.accepted;
+    final isLocked = profile.isPrivateProfile && !isMine && !isFriend;
+
     return MediaQuery.removePadding(
       context: context,
       removeTop: true,
@@ -54,34 +60,61 @@ class ProfileScreen extends ConsumerWidget {
           SliverToBoxAdapter(
             child: _buildHeader(context, ref, profile, isMine),
           ),
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _SliverAppBarDelegate(
-            minHeight: 50.0,
-            maxHeight: 50.0,
-            child: Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                border: Border(
-                  bottom: BorderSide(
-                    color: Theme.of(context).dividerColor,
-                    width: 0.5,
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _SliverAppBarDelegate(
+              minHeight: 50.0,
+              maxHeight: 50.0,
+              child: Container(
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Theme.of(context).dividerColor,
+                      width: 0.5,
+                    ),
                   ),
                 ),
-              ),
-              child: const Text(
-                'Bài viết',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                child: const Text(
+                  'Bài viết',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
               ),
             ),
           ),
-        ),
-        ProfilePostsGrid(userId: profile.id),
-      ],
-    ),
-  );
-}
+          if (isLocked)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.lock_fill, size: 48, color: Theme.of(context).hintColor),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Tài khoản này là riêng tư',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Hãy kết bạn với ${profile.displayName} để xem hình ảnh và bài viết.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Theme.of(context).hintColor),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            ProfilePostsGrid(userId: profile.id),
+        ],
+      ),
+    );
+  }
 
   Widget _buildHeader(BuildContext context, WidgetRef ref, ProfileModel profile, bool isMine) {
     final theme = Theme.of(context);
@@ -94,25 +127,33 @@ class ProfileScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Cover Image
-            SizedBox(
-              height: 200,
-              width: double.infinity,
-              child: profile.coverUrl != null && profile.coverUrl!.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: profile.coverUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(color: theme.colorScheme.surfaceVariant),
-                      errorWidget: (_, __, ___) => Container(color: theme.colorScheme.surfaceVariant),
-                    )
-                  : Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+            GestureDetector(
+              onTap: profile.coverUrl != null && profile.coverUrl!.isNotEmpty
+                  ? () => FullScreenImageViewer.open(context, profile.coverUrl!)
+                  : null,
+              child: SizedBox(
+                height: 200,
+                width: double.infinity,
+                child: profile.coverUrl != null && profile.coverUrl!.isNotEmpty
+                    ? Hero(
+                        tag: 'cover_${profile.id}',
+                        child: CachedNetworkImage(
+                          imageUrl: profile.coverUrl!,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(color: theme.colorScheme.surfaceVariant),
+                          errorWidget: (_, __, ___) => Container(color: theme.colorScheme.surfaceVariant),
+                        ),
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
                         ),
                       ),
-                    ),
+              ),
             ),
             
             // Profile Info
@@ -151,7 +192,38 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   if (profile.bio?.isNotEmpty == true) ...[
                     const SizedBox(height: 12),
-                    Text(profile.bio!, style: theme.textTheme.bodyMedium),
+                    _ClickableBioText(
+                      text: profile.bio!,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                  if (profile.interests.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: profile.interests.map((interest) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            interest,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ],
                   const SizedBox(height: 16),
                   
@@ -188,12 +260,60 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   if (!isMine) ...[
                     const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        Expanded(child: _buildFriendButton(context, ref, profile)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _buildFollowButton(context, ref, profile)),
-                      ],
+                    Builder(
+                      builder: (context) {
+                        final isBlocked = ref.watch(isBlockedProvider(profile.id));
+                        if (isBlocked) {
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    try {
+                                      await ref.read(profileRepositoryProvider).unblockUser(profile.id);
+                                      ref.invalidate(blockedUsersProvider);
+                                      ref.invalidate(profileProvider(profile.id));
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Đã bỏ chặn ${profile.displayName}'),
+                                            backgroundColor: Colors.green,
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Lỗi: $e'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.redAccent,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                  ),
+                                  child: const Text('Bỏ chặn', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(child: _buildFriendButton(context, ref, profile)),
+                            const SizedBox(width: 12),
+                            Expanded(child: _buildFollowButton(context, ref, profile)),
+                          ],
+                        );
+                      }
                     ),
                   ],
                 ],
@@ -206,15 +326,23 @@ class ProfileScreen extends ConsumerWidget {
         Positioned(
           top: 200 - 46, // Cover height minus avatar radius
           left: 16,
-          child: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: theme.scaffoldBackgroundColor, width: 4),
-            ),
-            child: AppAvatar(
-              imageUrl: profile.avatarUrl,
-              name: profile.displayName,
-              radius: 46,
+          child: GestureDetector(
+            onTap: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
+                ? () => FullScreenImageViewer.open(context, profile.avatarUrl!)
+                : null,
+            child: Hero(
+              tag: 'avatar_${profile.id}',
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: theme.scaffoldBackgroundColor, width: 4),
+                ),
+                child: AppAvatar(
+                  imageUrl: profile.avatarUrl,
+                  name: profile.displayName,
+                  radius: 46,
+                ),
+              ),
             ),
           ),
         ),
@@ -236,7 +364,96 @@ class ProfileScreen extends ConsumerWidget {
               onPressed: () => context.pop(),
             ),
           ),
+
+        // Floating Profile Options/Actions Button
+        if (!isMine)
+          Positioned(
+            top: topPadding > 0 ? topPadding + 8 : 16,
+            right: 8,
+            child: IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Colors.black38,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(CupertinoIcons.ellipsis_vertical, size: 20, color: Colors.white),
+              ),
+              onPressed: () => _showProfileActions(context, ref, profile),
+            ),
+          ),
       ],
+    );
+  }
+
+  void _showProfileActions(BuildContext context, WidgetRef ref, ProfileModel profile) {
+    final isBlocked = ref.read(isBlockedProvider(profile.id));
+    
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text('Tùy chọn cho ${profile.displayName}'),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: !isBlocked,
+            onPressed: () async {
+              ctx.pop();
+              try {
+                if (isBlocked) {
+                  await ref.read(profileRepositoryProvider).unblockUser(profile.id);
+                  ref.invalidate(blockedUsersProvider);
+                  ref.invalidate(profileProvider(profile.id));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Đã bỏ chặn ${profile.displayName}'), backgroundColor: Colors.green),
+                    );
+                  }
+                } else {
+                  await ref.read(profileRepositoryProvider).blockUser(profile.id);
+                  ref.invalidate(blockedUsersProvider);
+                  ref.invalidate(profileProvider(profile.id));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Đã chặn ${profile.displayName}')),
+                    );
+                  }
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: Text(isBlocked ? 'Bỏ chặn người dùng này' : 'Chặn người dùng này'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () async {
+              ctx.pop();
+              try {
+                await ref.read(profileRepositoryProvider).muteUser(profile.id);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Đã ẩn bài viết của ${profile.displayName}')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Lỗi ẩn bài: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Ẩn bài viết của người này'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => ctx.pop(),
+          child: const Text('Hủy'),
+        ),
+      ),
     );
   }
 
@@ -408,5 +625,75 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     return maxHeight != oldDelegate.maxHeight ||
         minHeight != oldDelegate.minHeight ||
         child != oldDelegate.child;
+  }
+}
+
+class _ClickableBioText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+
+  const _ClickableBioText({
+    required this.text,
+    this.style,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final linkStyle = TextStyle(
+      color: theme.colorScheme.primary,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+    );
+
+    final regex = RegExp(
+      r'(https?:\/\/[^\s]+)',
+      caseSensitive: false,
+    );
+
+    final matches = regex.allMatches(text);
+    if (matches.isEmpty) {
+      return Text(text, style: style);
+    }
+
+    final List<InlineSpan> spans = [];
+    int start = 0;
+
+    for (final match in matches) {
+      if (match.start > start) {
+        spans.add(TextSpan(
+          text: text.substring(start, match.start),
+          style: style,
+        ));
+      }
+
+      final url = match.group(0)!;
+      spans.add(TextSpan(
+        text: url,
+        style: linkStyle,
+        recognizer: TapGestureRecognizer()
+          ..onTap = () async {
+            final uri = Uri.tryParse(url);
+            if (uri != null) {
+              try {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              } catch (_) {}
+            }
+          },
+      ));
+
+      start = match.end;
+    }
+
+    if (start < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(start),
+        style: style,
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(children: spans),
+    );
   }
 }

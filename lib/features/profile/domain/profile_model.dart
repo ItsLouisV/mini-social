@@ -9,6 +9,8 @@ class ProfileModel {
   final int postsCount;
   final int followersCount;
   final int followingCount;
+  final List<String> interests;
+  final bool isPrivateProfile;
 
   const ProfileModel({
     required this.id,
@@ -21,6 +23,8 @@ class ProfileModel {
     this.postsCount = 0,
     this.followersCount = 0,
     this.followingCount = 0,
+    this.interests = const [],
+    this.isPrivateProfile = false,
   });
 
   String get displayName => fullName?.isNotEmpty == true ? fullName! : username;
@@ -37,6 +41,8 @@ class ProfileModel {
       postsCount: json['posts_count'] as int? ?? 0,
       followersCount: json['followers_count'] as int? ?? 0,
       followingCount: json['following_count'] as int? ?? 0,
+      interests: (json['interests'] as List?)?.map((e) => e as String).toList() ?? const [],
+      isPrivateProfile: json['is_private_profile'] as bool? ?? false,
     );
   }
 
@@ -48,6 +54,8 @@ class ProfileModel {
         'avatar_url': avatarUrl,
         'cover_url': coverUrl,
         'created_at': createdAt.toIso8601String(),
+        'interests': interests,
+        'is_private_profile': isPrivateProfile,
       };
 
   ProfileModel copyWith({
@@ -59,6 +67,8 @@ class ProfileModel {
     int? postsCount,
     int? followersCount,
     int? followingCount,
+    List<String>? interests,
+    bool? isPrivateProfile,
   }) {
     return ProfileModel(
       id: id,
@@ -71,6 +81,8 @@ class ProfileModel {
       postsCount: postsCount ?? this.postsCount,
       followersCount: followersCount ?? this.followersCount,
       followingCount: followingCount ?? this.followingCount,
+      interests: interests ?? this.interests,
+      isPrivateProfile: isPrivateProfile ?? this.isPrivateProfile,
     );
   }
 }
