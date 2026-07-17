@@ -102,21 +102,21 @@ void main() {
       expect(query['eq_value'], equals('user_123'));
     });
 
-    test('blockUser inserts into blocks table', () async {
+    test('blockUser inserts into chat_blocks table', () async {
       await profileRepository.blockUser('target_user');
 
       final query = fakeService.fakeClient.lastQuery;
-      expect(query['table'], equals('blocks'));
+      expect(query['table'], equals('chat_blocks'));
       expect(query['action'], equals('insert'));
       expect(query['values']['blocker_id'], equals('user_123'));
       expect(query['values']['blocked_id'], equals('target_user'));
     });
 
-    test('unblockUser deletes from blocks table', () async {
+    test('unblockUser deletes from chat_blocks table', () async {
       await profileRepository.unblockUser('target_user');
 
       final query = fakeService.fakeClient.lastQuery;
-      expect(query['table'], equals('blocks'));
+      expect(query['table'], equals('chat_blocks'));
       expect(query['action'], equals('delete'));
       expect(query['eq_column'], equals('blocked_id'));
       expect(query['eq_value'], equals('target_user'));

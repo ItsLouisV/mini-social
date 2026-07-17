@@ -55,3 +55,50 @@ final likeNotifierProvider =
   final repo = ref.watch(postRepositoryProvider);
   return LikeNotifier(repo, postId);
 });
+
+// ── Local Post Visibility & Report States ──
+
+enum PostLocalStatus {
+  none,
+  hidden,
+  snoozed,
+  reported,
+  trashed,
+  dismissed,
+}
+
+class PostLocalStatesNotifier extends StateNotifier<Map<String, PostLocalStatus>> {
+  PostLocalStatesNotifier() : super({});
+
+  void hidePost(String postId) {
+    state = {...state, postId: PostLocalStatus.hidden};
+  }
+
+  void snoozePost(String postId) {
+    state = {...state, postId: PostLocalStatus.snoozed};
+  }
+
+  void reportPost(String postId) {
+    state = {...state, postId: PostLocalStatus.reported};
+  }
+
+  void trashPost(String postId) {
+    state = {...state, postId: PostLocalStatus.trashed};
+  }
+
+  void dismissPost(String postId) {
+    state = {...state, postId: PostLocalStatus.dismissed};
+  }
+
+  void undo(String postId) {
+    final newState = Map<String, PostLocalStatus>.from(state);
+    newState.remove(postId);
+    state = newState;
+  }
+}
+
+final postLocalStatesProvider =
+    StateNotifierProvider<PostLocalStatesNotifier, Map<String, PostLocalStatus>>((ref) {
+  return PostLocalStatesNotifier();
+});
+

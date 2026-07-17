@@ -260,60 +260,12 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   if (!isMine) ...[
                     const SizedBox(height: 18),
-                    Builder(
-                      builder: (context) {
-                        final isBlocked = ref.watch(isBlockedProvider(profile.id));
-                        if (isBlocked) {
-                          return Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    try {
-                                      await ref.read(profileRepositoryProvider).unblockUser(profile.id);
-                                      ref.invalidate(blockedUsersProvider);
-                                      ref.invalidate(profileProvider(profile.id));
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Đã bỏ chặn ${profile.displayName}'),
-                                            backgroundColor: Colors.green,
-                                          ),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Lỗi: $e'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.redAccent,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                  ),
-                                  child: const Text('Bỏ chặn', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ),
-                              ),
-                            ],
-                          );
-                        }
-                        return Row(
-                          children: [
-                            Expanded(child: _buildFriendButton(context, ref, profile)),
-                            const SizedBox(width: 12),
-                            Expanded(child: _buildFollowButton(context, ref, profile)),
-                          ],
-                        );
-                      }
+                    Row(
+                      children: [
+                        Expanded(child: _buildFriendButton(context, ref, profile)),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildFollowButton(context, ref, profile)),
+                      ],
                     ),
                   ],
                 ],
@@ -346,121 +298,12 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
         ),
-        
-        // Floating Back Button
-        if (context.canPop())
-          Positioned(
-            top: topPadding > 0 ? topPadding + 8 : 16, // Adjust for safe area
-            left: 8,
-            child: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Colors.black38,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(CupertinoIcons.chevron_back, size: 20, color: Colors.white),
-              ),
-              onPressed: () => context.pop(),
-            ),
-          ),
-
-        // Floating Profile Options/Actions Button
-        if (!isMine)
-          Positioned(
-            top: topPadding > 0 ? topPadding + 8 : 16,
-            right: 8,
-            child: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Colors.black38,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(CupertinoIcons.ellipsis_vertical, size: 20, color: Colors.white),
-              ),
-              onPressed: () => _showProfileActions(context, ref, profile),
-            ),
-          ),
       ],
     );
   }
 
-  void _showProfileActions(BuildContext context, WidgetRef ref, ProfileModel profile) {
-    final isBlocked = ref.read(isBlockedProvider(profile.id));
-    
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text('Tùy chọn cho ${profile.displayName}'),
-        actions: [
-          CupertinoActionSheetAction(
-            isDestructiveAction: !isBlocked,
-            onPressed: () async {
-              ctx.pop();
-              try {
-                if (isBlocked) {
-                  await ref.read(profileRepositoryProvider).unblockUser(profile.id);
-                  ref.invalidate(blockedUsersProvider);
-                  ref.invalidate(profileProvider(profile.id));
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Đã bỏ chặn ${profile.displayName}'), backgroundColor: Colors.green),
-                    );
-                  }
-                } else {
-                  await ref.read(profileRepositoryProvider).blockUser(profile.id);
-                  ref.invalidate(blockedUsersProvider);
-                  ref.invalidate(profileProvider(profile.id));
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Đã chặn ${profile.displayName}')),
-                    );
-                  }
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
-            child: Text(isBlocked ? 'Bỏ chặn người dùng này' : 'Chặn người dùng này'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () async {
-              ctx.pop();
-              try {
-                await ref.read(profileRepositoryProvider).muteUser(profile.id);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Đã ẩn bài viết của ${profile.displayName}')),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Lỗi ẩn bài: $e'), backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
-            child: const Text('Ẩn bài viết của người này'),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => ctx.pop(),
-          child: const Text('Hủy'),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFollowButton(
-      BuildContext context, WidgetRef ref, ProfileModel profile) {
-    final isFollowingAsync = ref.watch(isFollowingProvider(profile.id));
-    return isFollowingAsync.when(
+  Widget _buildFollowButton(BuildContext context, WidgetRef ref, ProfileModel profile) {
+    return ref.watch(isFollowingProvider(profile.id)).when(
       data: (isFollowing) => ElevatedButton(
         onPressed: () {
           ref.read(isFollowingProvider(profile.id).notifier).toggleFollow();

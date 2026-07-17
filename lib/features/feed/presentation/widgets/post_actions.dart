@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-
 import '../../../../core/constants/app_text_styles.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
@@ -19,6 +18,8 @@ class PostActions extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
     final likeState = ref.watch(likeNotifierProvider(post.id));
     final isLiked = likeState.value ?? post.isLiked;
     int likesCount = post.likesCount;
@@ -30,75 +31,164 @@ class PostActions extends ConsumerWidget {
     final commentsAsync = ref.watch(commentsProvider(post.id));
     final commentCount = commentsAsync.value?.length ?? post.commentsCount;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-      child: Row(
-        children: [
-          // Like button with live count
-          _ActionButton(
-            icon: isLiked
-                ? CupertinoIcons.heart_fill
-                : CupertinoIcons.heart,
-            color: isLiked ? Colors.red : Theme.of(context).hintColor,
-            label: '$likesCount',
-            onTap: () =>
-                ref.read(likeNotifierProvider(post.id).notifier).toggle(isLiked),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Likes & Comments Count Row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              if (likesCount > 0) ...[
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.blue,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.hand_thumbsup_fill,
+                    size: 10,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '$likesCount',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
+                    fontSize: 12,
+                  ),
+                ),
+              ] else ...[
+                Text(
+                  'Hãy là người đầu tiên thích',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor.withValues(alpha: 0.7),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const Spacer(),
+              if (commentCount > 0)
+                Text(
+                  '$commentCount bình luận',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
+                    fontSize: 12,
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(width: 4),
-
-          // Comment button with live count
-          _ActionButton(
-            icon: CupertinoIcons.chat_bubble,
-            color: Theme.of(context).hintColor,
-            label: '$commentCount',
-            onTap: onCommentTap,
-          ),
-
-          const Spacer(),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String label;
-  final VoidCallback? onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.color,
-    required this.label,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 1, end: 1),
-              duration: const Duration(milliseconds: 150),
-              builder: (_, scale, child) =>
-                  Transform.scale(scale: scale, child: child),
-              child: Icon(icon, size: 22, color: color),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: AppTextStyles.labelMedium.copyWith(color: color),
-            ),
-          ],
         ),
-      ),
+        
+        // Divider
+        Divider(
+          height: 1,
+          thickness: 0.5,
+          color: theme.dividerColor.withValues(alpha: 0.3),
+        ),
+
+        // Actions Row: Thích, Bình luận, Chia sẻ
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Like Button
+              Expanded(
+                child: InkWell(
+                  onTap: () => ref.read(likeNotifierProvider(post.id).notifier).toggle(isLiked),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isLiked ? CupertinoIcons.hand_thumbsup_fill : CupertinoIcons.hand_thumbsup,
+                          size: 20,
+                          color: isLiked ? Colors.blue : theme.hintColor,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Thích',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: isLiked ? Colors.blue : theme.hintColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Comment Button
+              Expanded(
+                child: InkWell(
+                  onTap: onCommentTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          CupertinoIcons.chat_bubble,
+                          size: 20,
+                          color: theme.hintColor,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Bình luận',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: theme.hintColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Share Button
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Đã sao chép liên kết chia sẻ bài viết!')),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          CupertinoIcons.arrowshape_turn_up_right,
+                          size: 20,
+                          color: theme.hintColor,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Chia sẻ',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: theme.hintColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -62,24 +62,13 @@ class ProfileRepository {
         .eq('id', userId);
   }
 
-  // ── BLOCKING METHODS ───────────────────────────────────────────────────────
+  // ── BLOCKING METHODS (Tất cả hướng về chat_blocks để chặn tin nhắn) ────────────────
   Future<void> blockUser(String targetUserId) async {
-    final currentId = currentUserId;
-    if (currentId == null) throw Exception('Not authenticated');
-    await _client.from('blocks').insert({
-      'blocker_id': currentId,
-      'blocked_id': targetUserId,
-    });
+    await chatBlockUser(targetUserId);
   }
 
   Future<void> unblockUser(String targetUserId) async {
-    final currentId = currentUserId;
-    if (currentId == null) throw Exception('Not authenticated');
-    await _client
-        .from('blocks')
-        .delete()
-        .eq('blocker_id', currentId)
-        .eq('blocked_id', targetUserId);
+    await chatUnblockUser(targetUserId);
   }
 
   Future<List<ProfileModel>> getBlockedUsers() async {
@@ -87,8 +76,8 @@ class ProfileRepository {
     if (currentId == null) return [];
     
     final response = await _client
-        .from('blocks')
-        .select('blocked:profiles!blocks_blocked_id_fkey(*)')
+        .from('chat_blocks')
+        .select('blocked:profiles!chat_blocks_blocked_id_fkey(*)')
         .eq('blocker_id', currentId);
         
     final list = response as List;

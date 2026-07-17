@@ -438,4 +438,47 @@ class PostRepository {
         .eq('comment_id', commentId)
         .eq('user_id', currentUserId!);
   }
+
+  // ── Reports ──
+  Future<void> reportPost({required String postId, required String reason}) async {
+    final currentId = currentUserId;
+    if (currentId == null) throw Exception('Not authenticated');
+    await _client.from('reports').insert({
+      'reporter_id': currentId,
+      'post_id': postId,
+      'reason': reason,
+    });
+  }
+
+  Future<void> cancelReportPost(String postId) async {
+    final currentId = currentUserId;
+    if (currentId == null) throw Exception('Not authenticated');
+    await _client
+        .from('reports')
+        .delete()
+        .eq('reporter_id', currentId)
+        .eq('post_id', postId);
+  }
+
+  // ── Trash & Edit Operations ──
+  Future<void> moveToTrash(String postId) async {
+    await _client
+        .from(SupabaseConstants.postsTable)
+        .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('id', postId);
+  }
+
+  Future<void> restoreFromTrash(String postId) async {
+    await _client
+        .from(SupabaseConstants.postsTable)
+        .update({'deleted_at': null})
+        .eq('id', postId);
+  }
+
+  Future<void> updatePostCaption(String postId, String newCaption) async {
+    await _client
+        .from(SupabaseConstants.postsTable)
+        .update({'caption': newCaption})
+        .eq('id', postId);
+  }
 }

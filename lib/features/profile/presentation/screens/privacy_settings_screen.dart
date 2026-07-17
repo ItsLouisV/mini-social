@@ -196,7 +196,7 @@ class _BlockedUsersPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tài khoản đã chặn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        title: const Text('Danh sách chặn tin nhắn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(CupertinoIcons.chevron_left),
@@ -208,7 +208,7 @@ class _BlockedUsersPage extends ConsumerWidget {
           if (users.isEmpty) {
             return Center(
               child: Text(
-                'Chưa chặn ai.',
+                'Chưa chặn tin nhắn ai.',
                 style: TextStyle(color: theme.hintColor),
               ),
             );
@@ -246,10 +246,11 @@ class _BlockedUsersPage extends ConsumerWidget {
     try {
       await ref.read(profileRepositoryProvider).unblockUser(user.id);
       ref.invalidate(blockedUsersProvider);
+      ref.invalidate(chatBlockedUserIdsProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đã bỏ chặn ${user.displayName}'),
+            content: Text('Đã bỏ chặn tin nhắn từ ${user.displayName}'),
             backgroundColor: Colors.green,
           ),
         );
