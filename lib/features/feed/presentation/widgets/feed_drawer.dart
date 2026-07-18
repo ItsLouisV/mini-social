@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
+import '../../../../core/localization/app_translations.dart';
+import '../../../../core/localization/locale_provider.dart';
 
 class FeedDrawer extends ConsumerWidget {
   const FeedDrawer({super.key});
@@ -111,7 +113,6 @@ class FeedDrawer extends ConsumerWidget {
             title: const Text('Đã lưu'),
             onTap: () {
               context.pop();
-              // context.push('/saved');
             },
           ),
           ListTile(
@@ -119,11 +120,37 @@ class FeedDrawer extends ConsumerWidget {
             title: const Text('Đã thích'),
             onTap: () {
               context.pop();
-              // context.push('/liked');
+            },
+          ),
+          ListTile(
+            leading: const Icon(CupertinoIcons.trash, color: Colors.orangeAccent),
+            title: Text(AppTranslations.tr(ref, 'trash')),
+            onTap: () {
+              context.pop();
+              context.push('/trash');
+            },
+          ),
+          ListTile(
+            leading: const Icon(CupertinoIcons.globe, color: Colors.purpleAccent),
+            title: Text(AppTranslations.tr(ref, 'language')),
+            trailing: Text(
+              ref.watch(appLanguageProvider).flag,
+              style: const TextStyle(fontSize: 18),
+            ),
+            onTap: () {
+              context.pop();
+              context.push('/settings/language');
             },
           ),
           const Divider(),
-          
+          ListTile(
+            leading: const Icon(CupertinoIcons.settings),
+            title: const Text('Cài đặt tài khoản'),
+            onTap: () {
+              context.pop();
+              context.push('/settings/account');
+            },
+          ),
           const Spacer(),
           Padding(
             padding: const EdgeInsets.all(16.0),

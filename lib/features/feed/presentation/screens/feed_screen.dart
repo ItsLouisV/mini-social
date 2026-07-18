@@ -99,7 +99,10 @@ class FeedScreen extends ConsumerWidget {
             }
 
             return RefreshIndicator.adaptive(
-              onRefresh: () async => ref.invalidate(feedPostsProvider),
+              onRefresh: () async {
+                ref.read(postLocalStatesProvider.notifier).clearAll();
+                ref.invalidate(feedPostsProvider);
+              },
               child: ListView.builder(
                 padding: EdgeInsets.zero,
                 itemCount: posts.length,
@@ -113,7 +116,10 @@ class FeedScreen extends ConsumerWidget {
           loading: () => _buildShimmer(context),
           error: (e, _) => AppErrorWidget(
             message: e.toString(),
-            onRetry: () => ref.invalidate(feedPostsProvider),
+            onRetry: () {
+              ref.read(postLocalStatesProvider.notifier).clearAll();
+              ref.invalidate(feedPostsProvider);
+            },
           ),
         ),
       ),

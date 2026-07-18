@@ -22,11 +22,13 @@ import '../../features/feed/presentation/widgets/feed_drawer.dart';
 import '../../features/feed/presentation/screens/create_post_screen.dart';
 import '../../features/feed/presentation/screens/feed_screen.dart';
 import '../../features/feed/presentation/screens/post_detail_screen.dart';
+import '../../features/feed/presentation/screens/trash_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/account_settings_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
 import '../../features/profile/presentation/screens/privacy_settings_screen.dart';
+import '../../features/profile/presentation/screens/language_settings_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/social/presentation/screens/follow_list_screen.dart';
 import '../../features/social/presentation/screens/friends_list_screen.dart';
@@ -99,6 +101,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // ── Global routes (pushed over everything) ───────────────────────
       GoRoute(
+        path: '/trash',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) => const CupertinoPage(child: TrashScreen()),
+      ),
+      GoRoute(
         path: '/search',
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, __) => const CupertinoPage(child: SearchScreen()),
@@ -128,6 +135,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, __) =>
             const CupertinoPage(child: PrivacySettingsScreen()),
+      ),
+      GoRoute(
+        path: '/settings/language',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: LanguageSettingsScreen()),
       ),
       GoRoute(
         path: '/create',

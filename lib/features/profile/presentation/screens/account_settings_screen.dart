@@ -65,139 +65,146 @@ class AccountSettingsScreen extends ConsumerWidget {
         type: MaterialType.transparency,
         child: SafeArea(
           child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          children: [
-            // ── Avatar + tên + email ─────────────────────────────
-            profileAsync.when(
-              data: (profile) => Column(
-                children: [
-                  const SizedBox(height: 12),
-                  AppAvatar(
-                    imageUrl: profile.avatarUrl,
-                    name: profile.displayName,
-                    radius: 44,
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    profile.displayName,
-                    style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    email,
-                    style:
-                        TextStyle(fontSize: 14, color: labelColor),
-                  ),
-                  const SizedBox(height: 28),
-                ],
-              ),
-              loading: () => const SizedBox(
-                  height: 180,
-                  child:
-                      Center(child: CupertinoActivityIndicator())),
-              error: (_, __) => const SizedBox(height: 60),
-            ),
-
-            // ── Thông tin cá nhân ────────────────────────────────
-            _SectionLabel(
-                label: 'THÔNG TIN CÁ NHÂN', color: labelColor),
-            _SectionCard(
-              bg: cardBg,
-              child: Column(
-                children: [
-                  _IosRow(
-                    icon: CupertinoIcons.person_fill,
-                    iconBg: Colors.blue,
-                    title: 'Chỉnh sửa hồ sơ',
-                    onTap: () => context.push('/profile/edit'),
-                  ),
-                  _RowDivider(color: theme.dividerColor),
-                  _IosRow(
-                    icon: CupertinoIcons.at,
-                    iconBg: const Color(0xFF30B0C7),
-                    title: 'Tên người dùng',
-                    showChevron: false,
-                    trailing: _ValueLabel(
-                      text: profileAsync
-                              .whenData((p) => '@${p.username}')
-                              .valueOrNull ??
-                          '',
-                      color: labelColor,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            children: [
+              // ── Avatar + tên + email ─────────────────────────────
+              profileAsync.when(
+                data: (profile) => Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    AppAvatar(
+                      imageUrl: profile.avatarUrl,
+                      name: profile.displayName,
+                      radius: 44,
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Đăng nhập & Bảo mật ─────────────────────────────
-            _SectionLabel(
-                label: 'ĐĂNG NHẬP & BẢO MẬT', color: labelColor),
-            _SectionCard(
-              bg: cardBg,
-              child: Column(
-                children: [
-                  _IosRow(
-                    icon: CupertinoIcons.mail_solid,
-                    iconBg: Colors.redAccent,
-                    title: 'Email',
-                    showChevron: false,
-                    trailing: _ValueLabel(
-                      text: email.isNotEmpty ? email : 'Chưa có',
-                      color: labelColor,
+                    const SizedBox(height: 14),
+                    Text(
+                      profile.displayName,
+                      style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.w600),
                     ),
-                  ),
-                  _RowDivider(color: theme.dividerColor),
-                  _IosRow(
-                    icon: CupertinoIcons.lock_fill,
-                    iconBg: Colors.orange,
-                    title: 'Đổi mật khẩu',
-                    onTap: () {},
-                  ),
-                  _RowDivider(color: theme.dividerColor),
-                  _IosRow(
-                    icon: CupertinoIcons.lock_shield_fill,
-                    iconBg: Colors.green,
-                    title: 'Xác thực 2 bước',
-                    onTap: () {},
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      email,
+                      style:
+                          TextStyle(fontSize: 14, color: labelColor),
+                    ),
+                    const SizedBox(height: 28),
+                  ],
+                ),
+                loading: () => const SizedBox(
+                    height: 180,
+                    child:
+                        Center(child: CupertinoActivityIndicator())),
+                error: (_, __) => const SizedBox(height: 60),
               ),
-            ),
 
-            // ── Dữ liệu & Bộ nhớ ────────────────────────────────
-            _SectionLabel(
-                label: 'DỮ LIỆU & BỘ NHỚ', color: labelColor),
-            _SectionCard(
-              bg: cardBg,
-              child: Column(
-                children: [
-                  _IosRow(
-                    icon: CupertinoIcons.cloud_fill,
-                    iconBg: Colors.blue.shade600,
-                    title: 'Sao lưu dữ liệu',
-                    onTap: () {},
-                  ),
-                  _RowDivider(color: theme.dividerColor),
-                  _IosRow(
-                    icon: CupertinoIcons.trash_fill,
-                    iconBg: Colors.red.shade700,
-                    title: 'Xóa tài khoản',
-                    titleColor: Colors.red,
-                    showChevron: false,
-                    onTap: () {},
-                  ),
-                ],
+              // ── Thông tin cá nhân ────────────────────────────────
+              _SectionLabel(
+                  label: 'THÔNG TIN CÁ NHÂN', color: labelColor),
+              _SectionCard(
+                bg: cardBg,
+                child: Column(
+                  children: [
+                    _IosRow(
+                      icon: CupertinoIcons.person_fill,
+                      iconBg: Colors.blue,
+                      title: 'Chỉnh sửa hồ sơ',
+                      onTap: () => context.push('/profile/edit'),
+                    ),
+                    _RowDivider(color: theme.dividerColor),
+                    _IosRow(
+                      icon: CupertinoIcons.at,
+                      iconBg: const Color(0xFF30B0C7),
+                      title: 'Tên người dùng',
+                      showChevron: false,
+                      trailing: _ValueLabel(
+                        text: profileAsync
+                                .whenData((p) => '@${p.username}')
+                                .valueOrNull ??
+                            '',
+                        color: labelColor,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 40),
-          ],
+              // ── Đăng nhập & Bảo mật ─────────────────────────────
+              _SectionLabel(
+                  label: 'ĐĂNG NHẬP & BẢO MẬT', color: labelColor),
+              _SectionCard(
+                bg: cardBg,
+                child: Column(
+                  children: [
+                    _IosRow(
+                      icon: CupertinoIcons.mail_solid,
+                      iconBg: Colors.redAccent,
+                      title: 'Email',
+                      showChevron: false,
+                      trailing: _ValueLabel(
+                        text: email.isNotEmpty ? email : 'Chưa có',
+                        color: labelColor,
+                      ),
+                    ),
+                    _RowDivider(color: theme.dividerColor),
+                    _IosRow(
+                      icon: CupertinoIcons.lock_fill,
+                      iconBg: Colors.orange,
+                      title: 'Đổi mật khẩu',
+                      onTap: () {},
+                    ),
+                    _RowDivider(color: theme.dividerColor),
+                    _IosRow(
+                      icon: CupertinoIcons.lock_shield_fill,
+                      iconBg: Colors.green,
+                      title: 'Xác thực 2 bước',
+                      onTap: () {},
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Dữ liệu & Bộ nhớ ────────────────────────────────
+              _SectionLabel(
+                  label: 'DỮ LIỆU & BỘ NHỚ', color: labelColor),
+              _SectionCard(
+                bg: cardBg,
+                child: Column(
+                  children: [
+                    _IosRow(
+                      icon: CupertinoIcons.trash,
+                      iconBg: Colors.orange,
+                      title: 'Thùng rác bài viết',
+                      onTap: () => context.push('/trash'),
+                    ),
+                    _RowDivider(color: theme.dividerColor),
+                    _IosRow(
+                      icon: CupertinoIcons.cloud_fill,
+                      iconBg: Colors.blue.shade600,
+                      title: 'Sao lưu dữ liệu',
+                      onTap: () {},
+                    ),
+                    _RowDivider(color: theme.dividerColor),
+                    _IosRow(
+                      icon: CupertinoIcons.trash_fill,
+                      iconBg: Colors.red.shade700,
+                      title: 'Xóa tài khoản',
+                      titleColor: Colors.red,
+                      showChevron: false,
+                      onTap: () {},
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

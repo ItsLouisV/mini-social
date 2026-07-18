@@ -33,15 +33,52 @@ class ProfileScreen extends ConsumerWidget {
     final profileAsync = ref.watch(profileProvider(userId));
     final currentUserId = ref.watch(currentUserIdProvider);
     final isMine = isMe || currentUserId == userId;
+    final canPop = context.canPop();
 
     return Scaffold(
-      body: profileAsync.when(
-        data: (profile) => _buildBody(context, ref, profile, isMine),
-        loading: () => _buildShimmer(context),
-        error: (e, _) => AppErrorWidget(
-          message: e.toString(),
-          onRetry: () => ref.invalidate(profileProvider(userId)),
-        ),
+      body: Stack(
+        children: [
+          profileAsync.when(
+            data: (profile) => _buildBody(context, ref, profile, isMine),
+            loading: () => _buildShimmer(context),
+            error: (e, _) => AppErrorWidget(
+              message: e.toString(),
+              onRetry: () => ref.invalidate(profileProvider(userId)),
+            ),
+          ),
+          if (canPop)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 12,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => context.pop(),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.chevron_back,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

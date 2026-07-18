@@ -171,7 +171,9 @@ class ChatMessagesNotifier
       await local.deleteMessage(messageId);
     }
     final repo = ref.read(chatRepositoryProvider);
-    await repo.deleteMessage(messageId).catchError((err) {
+    await repo.deleteMessage(messageId).then((_) {
+      ref.invalidate(conversationsProvider);
+    }).catchError((err) {
       print("Failed to delete message on Supabase: $err");
     });
   }
@@ -192,9 +194,11 @@ class ChatMessagesNotifier
       state = AsyncData(current.copyWith(messages: updated));
     }
 
-    // ② Sync ngầm với database (fire-and-forget)
+    // ② Sync ngầm với database
     final repo = ref.read(chatRepositoryProvider);
-    repo.recallMessage(messageId).catchError((_) {
+    repo.recallMessage(messageId).then((_) {
+      ref.invalidate(conversationsProvider);
+    }).catchError((_) {
       // Nếu lỗi, rollback về state cũ
       if (current != null) {
         state = AsyncData(current);
@@ -896,36 +900,28 @@ class ChatWallpaperNotifier extends StateNotifier<Map<String, String>> {
     final uid = _userId;
     if (uid != null && path.isNotEmpty) {
       try {
-        final targetUserIds = [uid];
-        if (otherUserId != null && otherUserId.isNotEmpty) {
-          targetUserIds.add(otherUserId);
+        final existing = await _client
+            .from('conversation_settings')
+            .select('wallpaper_history')
+            .eq('user_id', uid)
+            .eq('conversation_id', conversationId)
+            .maybeSingle();
+
+        List<String> historyList = [];
+        if (existing != null) {
+          final raw = existing['wallpaper_history'];
+          if (raw is List) historyList = List<String>.from(raw);
+        }
+        if (!historyList.contains(path)) {
+          historyList.add(path);
         }
 
-        for (final targetUid in targetUserIds) {
-          // Also update history in Supabase
-          final existing = await _client
-              .from('conversation_settings')
-              .select('wallpaper_history')
-              .eq('user_id', targetUid)
-              .eq('conversation_id', conversationId)
-              .maybeSingle();
-
-          List<String> historyList = [];
-          if (existing != null) {
-            final raw = existing['wallpaper_history'];
-            if (raw is List) historyList = List<String>.from(raw);
-          }
-          if (!historyList.contains(path)) {
-            historyList.add(path);
-          }
-
-          await _client.from('conversation_settings').upsert({
-            'user_id': targetUid,
-            'conversation_id': conversationId,
-            'wallpaper': path,
-            'wallpaper_history': historyList,
-          }, onConflict: 'user_id,conversation_id');
-        }
+        await _client.from('conversation_settings').upsert({
+          'user_id': uid,
+          'conversation_id': conversationId,
+          'wallpaper': path,
+          'wallpaper_history': historyList,
+        }, onConflict: 'user_id,conversation_id');
 
         // Sync history state reactively
         ref
@@ -952,17 +948,11 @@ class ChatWallpaperNotifier extends StateNotifier<Map<String, String>> {
     } else if (uid != null && path.isEmpty) {
       // Clear wallpaper but keep history
       try {
-        final targetUserIds = [uid];
-        if (otherUserId != null && otherUserId.isNotEmpty) {
-          targetUserIds.add(otherUserId);
-        }
-        for (final targetUid in targetUserIds) {
-          await _client.from('conversation_settings').upsert({
-            'user_id': targetUid,
-            'conversation_id': conversationId,
-            'wallpaper': '',
-          }, onConflict: 'user_id,conversation_id');
-        }
+        await _client.from('conversation_settings').upsert({
+          'user_id': uid,
+          'conversation_id': conversationId,
+          'wallpaper': '',
+        }, onConflict: 'user_id,conversation_id');
       } catch (e) {
         print('Error clearing wallpaper from Supabase: $e');
       }

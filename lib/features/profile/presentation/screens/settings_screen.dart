@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/theme_provider.dart';
+import '../../../../core/localization/app_translations.dart';
+import '../../../../core/localization/locale_provider.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../providers/profile_provider.dart';
@@ -134,21 +136,21 @@ class SettingsScreen extends ConsumerWidget {
                       _IosRow(
                         iconBg: Colors.purple,
                         icon: CupertinoIcons.globe,
-                        title: 'Ngôn ngữ',
+                        title: AppTranslations.tr(ref, 'language'),
                         showChevron: false,
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Tiếng Việt',
-                              style: TextStyle(color: labelColor, fontSize: 15),
+                              '${ref.watch(appLanguageProvider).flag} ${ref.watch(appLanguageProvider).displayName}',
+                              style: TextStyle(color: labelColor, fontSize: 14),
                             ),
                             const SizedBox(width: 6),
                             Icon(CupertinoIcons.chevron_forward,
                                 size: 16, color: labelColor),
                           ],
                         ),
-                        onTap: () {},
+                        onTap: () => context.push('/settings/language'),
                       ),
                     ],
                   ),

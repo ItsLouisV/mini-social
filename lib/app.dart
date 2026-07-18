@@ -8,6 +8,7 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/dark_theme.dart';
 import 'core/theme/theme_provider.dart';
+import 'core/localization/locale_provider.dart';
 import 'features/call/domain/call_model.dart';
 import 'features/call/providers/call_provider.dart';
 import 'features/profile/providers/profile_provider.dart';
@@ -109,6 +110,7 @@ class _MiniSocialAppState extends ConsumerState<MiniSocialApp> {
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final locale = ref.watch(localeProvider);
 
     return MaterialApp.router(
       title: 'MiniSocial',
@@ -116,6 +118,7 @@ class _MiniSocialAppState extends ConsumerState<MiniSocialApp> {
       theme: AppTheme.light,
       darkTheme: AppDarkTheme.dark,
       themeMode: themeMode,
+      locale: locale,
       routerConfig: router,
       scrollBehavior: MyCustomScrollBehavior(),
       builder: (context, child) {

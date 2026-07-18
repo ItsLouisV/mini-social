@@ -26,6 +26,7 @@ class PostRepository {
     final data = await _client
         .from(SupabaseConstants.postsTable)
         .select('*, profiles(*), post_media(*)')
+        .filter('deleted_at', 'is', null)
         .order('created_at', ascending: false);
 
     final postsList = data as List;
@@ -465,14 +466,16 @@ class PostRepository {
     await _client
         .from(SupabaseConstants.postsTable)
         .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
-        .eq('id', postId);
+        .eq('id', postId)
+        .select();
   }
 
   Future<void> restoreFromTrash(String postId) async {
     await _client
         .from(SupabaseConstants.postsTable)
         .update({'deleted_at': null})
-        .eq('id', postId);
+        .eq('id', postId)
+        .select();
   }
 
   Future<void> updatePostCaption(String postId, String newCaption) async {
@@ -480,5 +483,24 @@ class PostRepository {
         .from(SupabaseConstants.postsTable)
         .update({'caption': newCaption})
         .eq('id', postId);
+  }
+  Future<List<PostModel>> getTrashedPosts() async {
+    final userId = currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final data = await _client
+          .from(SupabaseConstants.postsTable)
+          .select('*, profiles(*), post_media(*)')
+          .eq('user_id', userId)
+          .filter('deleted_at', 'is', 'not_null')
+          .order('deleted_at', ascending: false);
+
+      final list = (data as List).map((e) => PostModel.fromJson(e)).toList();
+      return list;
+    } catch (e) {
+      print('Error fetching trashed posts: $e');
+      return [];
+    }
   }
 }

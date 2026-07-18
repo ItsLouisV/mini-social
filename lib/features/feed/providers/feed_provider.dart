@@ -95,6 +95,10 @@ class PostLocalStatesNotifier extends StateNotifier<Map<String, PostLocalStatus>
     newState.remove(postId);
     state = newState;
   }
+
+  void clearAll() {
+    state = {};
+  }
 }
 
 final postLocalStatesProvider =
@@ -102,3 +106,7 @@ final postLocalStatesProvider =
   return PostLocalStatesNotifier();
 });
 
+/// Stream/Future provider lấy danh sách bài viết trong thùng rác
+final trashedPostsProvider = FutureProvider<List<PostModel>>((ref) async {
+  return ref.watch(postRepositoryProvider).getTrashedPosts();
+});

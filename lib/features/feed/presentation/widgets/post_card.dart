@@ -44,6 +44,7 @@ class PostCard extends ConsumerWidget {
           try {
             await ref.read(profileRepositoryProvider).unmuteUser(post.userId);
             ref.read(postLocalStatesProvider.notifier).undo(post.id);
+            ref.invalidate(feedPostsProvider);
           } catch (e) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -65,6 +66,7 @@ class PostCard extends ConsumerWidget {
           try {
             await ref.read(postRepositoryProvider).cancelReportPost(post.id);
             ref.read(postLocalStatesProvider.notifier).undo(post.id);
+            ref.invalidate(feedPostsProvider);
           } catch (e) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -86,6 +88,8 @@ class PostCard extends ConsumerWidget {
           try {
             await ref.read(postRepositoryProvider).restoreFromTrash(post.id);
             ref.read(postLocalStatesProvider.notifier).undo(post.id);
+            ref.invalidate(feedPostsProvider);
+            ref.invalidate(trashedPostsProvider);
           } catch (e) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -265,6 +269,7 @@ class PostCard extends ConsumerWidget {
                 await ref
                     .read(postRepositoryProvider)
                     .deletePost(post.id);
+                ref.invalidate(feedPostsProvider);
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -566,6 +571,7 @@ void _showEditCaptionDialog(BuildContext context, WidgetRef ref, PostModel post)
               Navigator.pop(context);
               try {
                 await ref.read(postRepositoryProvider).updatePostCaption(post.id, newCaption);
+                ref.invalidate(feedPostsProvider);
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -601,6 +607,18 @@ void _confirmMoveToTrash(BuildContext context, WidgetRef ref, PostModel post) {
             try {
               await ref.read(postRepositoryProvider).moveToTrash(post.id);
               ref.read(postLocalStatesProvider.notifier).trashPost(post.id);
+              ref.invalidate(trashedPostsProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Đã chuyển bài viết vào thùng rác.'),
+                    action: SnackBarAction(
+                      label: 'Xem Thùng rác',
+                      onPressed: () => context.push('/trash'),
+                    ),
+                  ),
+                );
+              }
             } catch (e) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -761,9 +779,12 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
   void dispose() {
     final ref = widget.ref;
     final postId = widget.post.id;
-    Future.microtask(() {
-      ref.read(postLocalStatesProvider.notifier).dismissPost(postId);
-    });
+    final currentState = ref.read(postLocalStatesProvider)[postId];
+    if (currentState != null && currentState != PostLocalStatus.none) {
+      Future.microtask(() {
+        ref.read(postLocalStatesProvider.notifier).dismissPost(postId);
+      });
+    }
     super.dispose();
   }
 
