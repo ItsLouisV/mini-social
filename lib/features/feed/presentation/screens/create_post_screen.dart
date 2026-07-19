@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/localization/app_translations.dart';
@@ -658,7 +658,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(LucideIcons.layoutDashboard, size: 16, color: AppColors.primary),
+                                const Icon(Icons.dashboard_outlined, size: 16, color: AppColors.primary),
                                 const SizedBox(width: 8),
                                 Text(
                                   AppTranslations.tr(ref, 'select_layout'),
@@ -676,13 +676,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                               scrollDirection: Axis.horizontal,
                               child: Row(
                                 children: [
-                                  _buildLayoutOptionPill('panel-top', 'Panel Top', LucideIcons.layoutPanelTop, isDark),
+                                  _buildLayoutOptionPill('panel-top', 'Panel Top', Icons.view_agenda_outlined, isDark),
                                   const SizedBox(width: 8),
-                                  _buildLayoutOptionPill('dashboard', 'Dashboard', LucideIcons.layoutDashboard, isDark),
+                                  _buildLayoutOptionPill('dashboard', 'Dashboard', Icons.dashboard_outlined, isDark),
                                   const SizedBox(width: 8),
-                                  _buildLayoutOptionPill('columns', 'Columns-3', LucideIcons.columns, isDark),
+                                  _buildLayoutOptionPill('columns', 'Columns-3', Icons.view_week_outlined, isDark),
                                   const SizedBox(width: 8),
-                                  _buildLayoutOptionPill('panel-left', 'Panel Left', LucideIcons.layoutPanelLeft, isDark),
+                                  _buildLayoutOptionPill('panel-left', 'Panel Left', Icons.view_sidebar_outlined, isDark),
                                 ],
                               ),
                             ),

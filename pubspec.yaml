@@ -38,7 +38,6 @@ dependencies:
   infinite_scroll_pagination: ^4.0.0
   shimmer: ^3.0.0
   cupertino_icons: ^1.0.8
-  lucide_icons_flutter: ^1.1.0
   photo_view: ^0.15.0
   video_player: ^2.11.1
   async: ^2.13.1
