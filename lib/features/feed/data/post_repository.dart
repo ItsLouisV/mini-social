@@ -192,17 +192,32 @@ class PostRepository {
     required String caption,
     required List<XFile> media,
     String privacy = 'public',
+    String layoutType = 'grid',
   }) async {
     final userId = currentUserId!;
     final postId = _uuid.v4();
 
+    final finalCaption = media.length >= 3
+        ? (caption != null && caption.trim().isNotEmpty
+            ? '${caption.trim()}\n[layout:$layoutType]'
+            : '[layout:$layoutType]')
+        : caption;
+
     // 1. Insert post first
-    await _client.from(SupabaseConstants.postsTable).insert({
+    final insertData = <String, dynamic>{
       'id': postId,
       'user_id': userId,
-      'caption': caption,
+      'caption': finalCaption,
       'privacy': privacy,
-    });
+    };
+
+    try {
+      insertData['layout_type'] = layoutType;
+      await _client.from(SupabaseConstants.postsTable).insert(insertData);
+    } catch (_) {
+      insertData.remove('layout_type');
+      await _client.from(SupabaseConstants.postsTable).insert(insertData);
+    }
 
     // 2. Upload media and insert media records
     for (int i = 0; i < media.length; i++) {

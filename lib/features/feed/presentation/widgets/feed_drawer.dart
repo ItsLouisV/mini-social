@@ -102,7 +102,7 @@ class FeedDrawer extends ConsumerWidget {
             buildFallback(),
           ListTile(
             leading: const Icon(CupertinoIcons.person),
-            title: const Text('Trang cá nhân'),
+            title: Text(AppTranslations.tr(ref, 'profile')),
             onTap: () {
               context.pop();
               context.push('/profile/me');
@@ -110,14 +110,14 @@ class FeedDrawer extends ConsumerWidget {
           ),
           ListTile(
             leading: const Icon(CupertinoIcons.bookmark),
-            title: const Text('Đã lưu'),
+            title: Text(AppTranslations.tr(ref, 'saved')),
             onTap: () {
               context.pop();
             },
           ),
           ListTile(
             leading: const Icon(CupertinoIcons.heart),
-            title: const Text('Đã thích'),
+            title: Text(AppTranslations.tr(ref, 'liked_posts')),
             onTap: () {
               context.pop();
             },
@@ -145,7 +145,7 @@ class FeedDrawer extends ConsumerWidget {
           const Divider(),
           ListTile(
             leading: const Icon(CupertinoIcons.settings),
-            title: const Text('Cài đặt tài khoản'),
+            title: Text(AppTranslations.tr(ref, 'account_settings')),
             onTap: () {
               context.pop();
               context.push('/settings/account');
@@ -156,7 +156,7 @@ class FeedDrawer extends ConsumerWidget {
             padding: const EdgeInsets.all(16.0),
             child: ListTile(
               leading: Icon(CupertinoIcons.square_arrow_left, color: Theme.of(context).colorScheme.error),
-              title: Text('Đăng xuất', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              title: Text(AppTranslations.tr(ref, 'logout'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
               onTap: () async {
                 context.pop();
                 await ref.read(authRepositoryProvider).signOut();

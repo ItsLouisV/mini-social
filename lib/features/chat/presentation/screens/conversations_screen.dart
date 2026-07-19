@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:flutter_slidable/flutter_slidable.dart';
+import '../../../../core/localization/app_translations.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
@@ -51,7 +52,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
         centerTitle: false,
         titleSpacing: 16,
         title: Text(
-          'Tin nhắn',
+          AppTranslations.tr(ref, 'messages'),
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.bold,
             letterSpacing: -0.5,
@@ -167,7 +168,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: CupertinoSearchTextField(
                   controller: _searchController,
-                  placeholder: 'Tìm kiếm',
+                  placeholder: AppTranslations.tr(ref, 'search'),
                   style:
                       TextStyle(color: theme.textTheme.bodyLarge?.color),
                   placeholderStyle: TextStyle(color: theme.hintColor),
@@ -305,7 +306,7 @@ class _ConversationTile extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        conv.isPinned(currentUserId ?? '') ? 'Bỏ ghim' : 'Ghim',
+                        conv.isPinned(currentUserId ?? '') ? AppTranslations.tr(ref, 'unpin') : AppTranslations.tr(ref, 'pin'),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
@@ -345,7 +346,7 @@ class _ConversationTile extends ConsumerWidget {
                 ref.read(chatRepositoryProvider).toggleHide(conv);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Đã chuyển vào cuộc trò chuyện bị ẩn')),
+                    const SnackBar(content: Text('OK')),
                   );
                 }
               }
@@ -370,14 +371,14 @@ class _ConversationTile extends ConsumerWidget {
                   if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
                     return const SizedBox.shrink();
                   }
-                  return const Column(
+                  return Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(CupertinoIcons.eye_slash_fill, color: Colors.white, size: 20),
-                      SizedBox(height: 4),
+                      const Icon(CupertinoIcons.eye_slash_fill, color: Colors.white, size: 20),
+                      const SizedBox(height: 4),
                       Text(
-                        'Ẩn',
-                        style: TextStyle(
+                        AppTranslations.tr(ref, 'hide_conversation'),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -395,11 +396,11 @@ class _ConversationTile extends ConsumerWidget {
               showCupertinoDialog(
                 context: context,
                 builder: (ctx) => CupertinoAlertDialog(
-                  title: const Text('Xoá cuộc trò chuyện?'),
-                  content: const Text('Thao tác này sẽ xoá toàn bộ tin nhắn ở cả 2 phía. Bạn có chắc chắn không?'),
+                  title: Text(AppTranslations.tr(ref, 'delete_chat')),
+                  content: const Text('...'),
                   actions: [
                     CupertinoDialogAction(
-                      child: const Text('Huỷ'),
+                      child: Text(AppTranslations.tr(ref, 'cancel')),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                     CupertinoDialogAction(
@@ -409,7 +410,7 @@ class _ConversationTile extends ConsumerWidget {
                         Navigator.pop(ctx);
                         ref.read(chatRepositoryProvider).deleteConversation(conv.id);
                       },
-                      child: const Text('Xoá'),
+                      child: Text(AppTranslations.tr(ref, 'delete_chat')),
                     ),
                   ],
                 ),
@@ -435,14 +436,14 @@ class _ConversationTile extends ConsumerWidget {
                   if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
                     return const SizedBox.shrink();
                   }
-                  return const Column(
+                  return Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(CupertinoIcons.trash_fill, color: Colors.white, size: 20),
-                      SizedBox(height: 4),
+                      const Icon(CupertinoIcons.trash_fill, color: Colors.white, size: 20),
+                      const SizedBox(height: 4),
                       Text(
-                        'Xoá',
-                        style: TextStyle(
+                        AppTranslations.tr(ref, 'delete_chat'),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,

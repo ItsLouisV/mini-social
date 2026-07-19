@@ -1,3 +1,5 @@
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -8,8 +10,13 @@ import '../../../../core/constants/app_colors.dart';
 
 class ImageCarousel extends StatefulWidget {
   final List<PostMedia> media;
+  final String layoutType;
 
-  const ImageCarousel({super.key, required this.media});
+  const ImageCarousel({
+    super.key,
+    required this.media,
+    this.layoutType = 'dashboard',
+  });
 
   @override
   State<ImageCarousel> createState() => _ImageCarouselState();
@@ -33,21 +40,32 @@ class _ImageCarouselState extends State<ImageCarousel> {
       return _buildTwoMedia(context);
     }
 
-    // ── 3. BỘ 3 (3 MỤC MEDIA) ──
-    if (count == 3) {
-      return _buildThreeMedia(context);
-    }
+    // ── 3+ MỤC MEDIA (Tự chọn Layout theo 4 bản vẽ) ──
+    switch (widget.layoutType) {
+      case 'columns':
+      case 'columns-3':
+      case 'vertical':
+        return _buildColumnsLayout(context);
 
-    // ── 4. BỘ 4 (ĐÚNG 4 MỤC MEDIA) ──
-    if (count == 4) {
-      return _buildFourMedia(context);
-    }
+      case 'panel-left':
+      case 'layout-panel-left':
+      case 'hero':
+        return _buildPanelLeftLayout(context);
 
-    // ── 5. BỘ 5+ (TỪ 5 MỤC MEDIA TRỞ LÊN) ──
-    return _buildFiveOrMoreMedia(context);
+      case 'panel-top':
+      case 'layout-panel-top':
+      case 'horizontal':
+        return _buildPanelTopLayout(context);
+
+      case 'dashboard':
+      case 'layout-dashboard':
+      case 'grid':
+      default:
+        return _buildDashboardLayout(context);
+    }
   }
 
-  // ── 1 ảnh/video: Khung hình co giãn tự nhiên (tối đa 520px) ──
+  // ── 1 ảnh/video ──
   Widget _buildSingleMedia(BuildContext context) {
     return ConstrainedBox(
       constraints: const BoxConstraints(
@@ -61,7 +79,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
     );
   }
 
-  // ── 2 ảnh/video: Chia đôi 2 cột bằng nhau chuẩn Facebook ──
+  // ── 2 ảnh/video ──
   Widget _buildTwoMedia(BuildContext context) {
     return AspectRatio(
       aspectRatio: 3 / 2,
@@ -76,211 +94,213 @@ class _ImageCarouselState extends State<ImageCarousel> {
     );
   }
 
-  // ── 3 ảnh/video: Layout 1 lớn bên trái + 2 nhỏ chồng bên phải ──
-  Widget _buildThreeMedia(BuildContext context) {
-    final useLeftHero = widget.media.hashCode % 2 == 0;
+  // ── 1. BẢN VẼ 1: Dashboard (`layout-dashboard`) ──
+  // - 3 ảnh: Cột trái (2 ảnh nhỏ vuông/chữ nhật chồng) + Cột phải (1 ảnh cao full)
+  // - >= 4 ảnh: Cột trái (1 ảnh cao top + 1 ảnh nhỏ bottom) + Cột phải (1 ảnh nhỏ top + 1 ảnh dưới kèm +N)
+  Widget _buildDashboardLayout(BuildContext context) {
+    final count = widget.media.length;
 
-    if (useLeftHero) {
-      // 1 ảnh lớn trái, 2 ảnh phải
+    if (count == 3) {
       return AspectRatio(
         aspectRatio: 4 / 3,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              flex: 2,
-              child: _buildMediaItem(context, 0),
-            ),
-            const SizedBox(width: 2),
+            // Cột trái: 2 ảnh nhỏ chồng lên nhau
             Expanded(
               flex: 1,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: _buildMediaItem(context, 1)),
+                  Expanded(child: _buildMediaItem(context, 0)),
                   const SizedBox(height: 2),
-                  Expanded(child: _buildMediaItem(context, 2)),
+                  Expanded(child: _buildMediaItem(context, 1)),
                 ],
               ),
             ),
-          ],
-        ),
-      );
-    } else {
-      // 1 ảnh lớn trên, 2 ảnh dưới
-      return AspectRatio(
-        aspectRatio: 1.0,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 2,
-              child: _buildMediaItem(context, 0),
-            ),
-            const SizedBox(height: 2),
+            const SizedBox(width: 2),
+            // Cột phải: 1 ảnh cao full
             Expanded(
               flex: 1,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _buildMediaItem(context, 1)),
-                  const SizedBox(width: 2),
-                  Expanded(child: _buildMediaItem(context, 2)),
-                ],
-              ),
+              child: _buildMediaItem(context, 2),
             ),
           ],
         ),
       );
     }
+
+    // >= 4 ảnh
+    final remainingCount = count - 4;
+    return AspectRatio(
+      aspectRatio: 1.0,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Cột trái: Image 0 (cao flex 2) + Image 2 (vuông flex 1)
+          Expanded(
+            flex: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(flex: 2, child: _buildMediaItem(context, 0)),
+                const SizedBox(height: 2),
+                Expanded(flex: 1, child: _buildMediaItem(context, 2)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 2),
+          // Cột phải: Image 1 (vuông flex 1) + Image 3 (cao flex 2 kèm +N)
+          Expanded(
+            flex: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(flex: 1, child: _buildMediaItem(context, 1)),
+                const SizedBox(height: 2),
+                Expanded(
+                  flex: 2,
+                  child: _buildMediaItem(
+                    context,
+                    3,
+                    overlayText: remainingCount > 0 ? '+$remainingCount' : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  // ── 4 ảnh: Thay đổi linh hoạt giữa Lưới 2x2 hoặc 1 Trên + 3 Dưới ──
-  Widget _buildFourMedia(BuildContext context) {
-    final isGridMode = widget.media.hashCode % 2 == 0;
+  // ── 2. BẢN VẼ 2: Columns (`columns-3`) ──
+  // - 3 ảnh: 3 cột đứng song song
+  // - 4 ảnh: 4 cột đứng song song
+  // - > 4 ảnh: 4 cột đứng song song với cột thứ 4 có "+ số ảnh còn lại"
+  // ── 2. BẢN VẼ 2: Columns (`columns-3`) (Nhô cao & nhô xuống rõ nét) ──
+  Widget _buildColumnsLayout(BuildContext context) {
+    final count = widget.media.length;
+    final showCount = count >= 4 ? 4 : (count == 3 ? 3 : count);
+    final remainingCount = count - 4;
 
-    if (isGridMode) {
-      // Lưới 2x2 vuông vắn
-      return AspectRatio(
-        aspectRatio: 1.0,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+    return AspectRatio(
+      aspectRatio: 4 / 3,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (int i = 0; i < showCount; i++) ...[
+            if (i > 0) const SizedBox(width: 3),
             Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _buildMediaItem(context, 0)),
-                  const SizedBox(width: 2),
-                  Expanded(child: _buildMediaItem(context, 1)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 2),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _buildMediaItem(context, 2)),
-                  const SizedBox(width: 2),
-                  Expanded(child: _buildMediaItem(context, 3)),
-                ],
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: i % 2 == 1 ? 32.0 : 0.0,
+                  bottom: i % 2 == 0 ? 32.0 : 0.0,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: _buildMediaItem(
+                    context,
+                    i,
+                    overlayText: (i == 3 && remainingCount > 0) ? '+$remainingCount' : null,
+                  ),
+                ),
               ),
             ),
           ],
-        ),
-      );
-    } else {
-      // 1 ảnh lớn trên + 3 ảnh dưới
-      return AspectRatio(
-        aspectRatio: 1.0,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 2,
-              child: _buildMediaItem(context, 0),
-            ),
-            const SizedBox(height: 2),
-            Expanded(
-              flex: 1,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _buildMediaItem(context, 1)),
-                  const SizedBox(width: 2),
-                  Expanded(child: _buildMediaItem(context, 2)),
-                  const SizedBox(width: 2),
-                  Expanded(child: _buildMediaItem(context, 3)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+        ],
+      ),
+    );
   }
 
-  // ── 5+ ảnh: Tùy biến linh hoạt layout kèm ô hiển thị "+X" ──
-  Widget _buildFiveOrMoreMedia(BuildContext context) {
-    final isTopThreeMode = widget.media.hashCode % 2 == 0;
+  // ── 3. BẢN VẼ 3: Panel Left (`layout-panel-left`) ──
+  // - Bên trái: 1 ảnh/video lớn (Hero) (~60% chiều rộng)
+  // - Bên phải: 
+  //   + 3 ảnh: 2 ảnh nhỏ xếp dọc
+  //   + 4 ảnh: 3 ảnh nhỏ xếp dọc (không +)
+  //   + > 4 ảnh: 3 ảnh nhỏ xếp dọc (ảnh thứ 3 có + số ảnh còn lại)
+  Widget _buildPanelLeftLayout(BuildContext context) {
+    final count = widget.media.length;
+    final rightCount = count >= 4 ? 3 : 2;
+    final remainingCount = count - 4;
 
-    if (isTopThreeMode) {
-      // Layout A: 1 Trên (2/3 height) + 3 Dưới (1/3 height) với ô thứ 4 hiện "+X"
-      final remainingCount = widget.media.length - 4;
-      return AspectRatio(
-        aspectRatio: 1.0,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 2,
-              child: _buildMediaItem(context, 0),
-            ),
-            const SizedBox(height: 2),
-            Expanded(
-              flex: 1,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _buildMediaItem(context, 1)),
-                  const SizedBox(width: 2),
-                  Expanded(child: _buildMediaItem(context, 2)),
-                  const SizedBox(width: 2),
+    return AspectRatio(
+      aspectRatio: 1.0,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Bên trái: Ảnh Hero lớn
+          Expanded(
+            flex: 6,
+            child: _buildMediaItem(context, 0),
+          ),
+          const SizedBox(width: 2),
+          // Bên phải: Các ảnh nhỏ xếp dọc
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 1; i <= rightCount; i++) ...[
+                  if (i > 1) const SizedBox(height: 2),
                   Expanded(
                     child: _buildMediaItem(
                       context,
-                      3,
-                      overlayText: '+$remainingCount',
+                      i,
+                      overlayText: (i == 3 && remainingCount > 0) ? '+$remainingCount' : null,
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
-          ],
-        ),
-      );
-    } else {
-      // Layout B: 2 Trên + 3 Dưới với ô thứ 5 hiện "+X"
-      final remainingCount = widget.media.length - 5;
-      return AspectRatio(
-        aspectRatio: 1.0,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _buildMediaItem(context, 0)),
-                  const SizedBox(width: 2),
-                  Expanded(child: _buildMediaItem(context, 1)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 2),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: _buildMediaItem(context, 2)),
-                  const SizedBox(width: 2),
-                  Expanded(child: _buildMediaItem(context, 3)),
-                  const SizedBox(width: 2),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 4. BẢN VẼ 4: Panel Top (`layout-panel-top`) ──
+  // - Phía trên: 1 ảnh/video banner lớn (Hero) (~60% chiều cao)
+  // - Phía dưới:
+  //   + 3 ảnh: 2 ảnh nhỏ xếp ngang
+  //   + >= 4 ảnh: 3 ảnh nhỏ xếp ngang (ảnh thứ 3 có + số ảnh còn lại nếu > 4)
+  Widget _buildPanelTopLayout(BuildContext context) {
+    final count = widget.media.length;
+    final bottomCount = count >= 4 ? 3 : 2;
+    final remainingCount = count - 4;
+
+    return AspectRatio(
+      aspectRatio: 1.0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Phía trên: Banner Hero lớn
+          Expanded(
+            flex: 6,
+            child: _buildMediaItem(context, 0),
+          ),
+          const SizedBox(height: 2),
+          // Phía dưới: Hàng các ảnh nhỏ xếp ngang
+          Expanded(
+            flex: 4,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 1; i <= bottomCount; i++) ...[
+                  if (i > 1) const SizedBox(width: 2),
                   Expanded(
                     child: _buildMediaItem(
                       context,
-                      4,
-                      overlayText: '+$remainingCount',
+                      i,
+                      overlayText: (i == 3 && remainingCount > 0) ? '+$remainingCount' : null,
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
-          ],
-        ),
-      );
-    }
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Widget hiển thị từng ảnh/video ──
@@ -294,22 +314,42 @@ class _ImageCarouselState extends State<ImageCarousel> {
     final imagesOnly = widget.media.where((m) => m.type == 'image').toList();
     final imageIndex = imagesOnly.indexOf(item);
 
-    Widget mediaWidget = isVideo
-        ? AppVideoPlayer(url: item.url)
-        : CachedNetworkImage(
-            imageUrl: item.url,
-            fit: BoxFit.cover,
-            placeholder: (_, __) => Container(
-              color: AppColors.shimmerBase,
+    final isNetwork = item.url.startsWith('http://') || item.url.startsWith('https://');
+
+    Widget mediaWidget;
+    if (isVideo) {
+      if (isNetwork) {
+        mediaWidget = AppVideoPlayer(url: item.url);
+      } else {
+        mediaWidget = Container(
+          color: Colors.black87,
+          child: const Center(
+            child: Icon(CupertinoIcons.play_circle_fill, size: 44, color: Colors.white),
+          ),
+        );
+      }
+    } else {
+      if (isNetwork) {
+        mediaWidget = CachedNetworkImage(
+          imageUrl: item.url,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => Container(
+            color: AppColors.shimmerBase,
+          ),
+          errorWidget: (_, __, ___) => Container(
+            color: AppColors.surfaceVariant,
+            child: const Icon(
+              CupertinoIcons.photo,
+              color: AppColors.textHint,
             ),
-            errorWidget: (_, __, ___) => Container(
-              color: AppColors.surfaceVariant,
-              child: const Icon(
-                CupertinoIcons.photo,
-                color: AppColors.textHint,
-              ),
-            ),
-          );
+          ),
+        );
+      } else {
+        mediaWidget = kIsWeb
+            ? Image.network(item.url, fit: BoxFit.cover)
+            : Image.file(io.File(item.url), fit: BoxFit.cover);
+      }
+    }
 
     if (overlayText != null) {
       mediaWidget = Stack(
@@ -323,7 +363,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
               overlayText,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 24,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
               ),
             ),

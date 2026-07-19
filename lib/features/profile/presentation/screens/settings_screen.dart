@@ -34,9 +34,9 @@ class SettingsScreen extends ConsumerWidget {
           // ── Large-title iOS nav bar ──────────────────────────────────
           CupertinoSliverNavigationBar(
             transitionBetweenRoutes: false,
-            largeTitle: const Text(
-              'Cài đặt',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            largeTitle: Text(
+              AppTranslations.tr(ref, 'settings'),
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             backgroundColor: groupedBg.withValues(alpha: 0.92),
             border: Border(
@@ -99,7 +99,7 @@ class SettingsScreen extends ConsumerWidget {
                       _IosRow(
                         iconBg: Colors.green,
                         icon: CupertinoIcons.shield_lefthalf_fill,
-                        title: 'Quyền riêng tư',
+                        title: AppTranslations.tr(ref, 'privacy_settings'),
                         onTap: () => context.push('/settings/privacy'),
                       ),
                     ],
@@ -107,7 +107,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
 
                 // ── TÙY CHỈNH ───────────────────────────────────────────
-                _SectionLabel(label: 'TÙY CHỈNH', color: labelColor),
+                _SectionLabel(label: AppTranslations.tr(ref, 'general').toUpperCase(), color: labelColor),
                 _SectionCard(
                   bg: cardBg,
                   child: Column(
@@ -115,7 +115,7 @@ class SettingsScreen extends ConsumerWidget {
                       _IosRow(
                         iconBg: Colors.indigo,
                         icon: CupertinoIcons.moon_fill,
-                        title: 'Chế độ tối',
+                        title: AppTranslations.tr(ref, 'dark_mode'),
                         showChevron: false,
                         trailing: CupertinoSwitch(
                           value: themeMode == ThemeMode.dark,
@@ -129,7 +129,7 @@ class SettingsScreen extends ConsumerWidget {
                       _IosRow(
                         iconBg: Colors.redAccent,
                         icon: CupertinoIcons.bell_fill,
-                        title: 'Thông báo',
+                        title: AppTranslations.tr(ref, 'notifications'),
                         onTap: () {},
                       ),
                       _Divider(color: theme.dividerColor),
@@ -157,7 +157,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
 
                 // ── HỖ TRỢ ──────────────────────────────────────────────
-                _SectionLabel(label: 'HỖ TRỢ', color: labelColor),
+                _SectionLabel(label: AppTranslations.tr(ref, 'settings').toUpperCase(), color: labelColor),
                 _SectionCard(
                   bg: cardBg,
                   child: Column(
@@ -165,14 +165,14 @@ class SettingsScreen extends ConsumerWidget {
                       _IosRow(
                         iconBg: Colors.lightBlue,
                         icon: CupertinoIcons.question_circle_fill,
-                        title: 'Trợ giúp & Hỗ trợ',
+                        title: AppTranslations.tr(ref, 'settings'),
                         onTap: () {},
                       ),
                       _Divider(color: theme.dividerColor),
                       _IosRow(
                         iconBg: Colors.teal,
                         icon: CupertinoIcons.info_circle_fill,
-                        title: 'Về MiniSocial',
+                        title: 'MiniSocial',
                         onTap: () {},
                       ),
                     ],
@@ -188,7 +188,7 @@ class SettingsScreen extends ConsumerWidget {
                     onPressed: () => _showLogoutDialog(context, ref),
                     child: Center(
                       child: Text(
-                        'Đăng xuất',
+                        AppTranslations.tr(ref, 'logout'),
                         style: TextStyle(
                           color: theme.colorScheme.error,
                           fontSize: 17,

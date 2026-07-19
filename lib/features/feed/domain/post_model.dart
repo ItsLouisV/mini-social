@@ -49,6 +49,7 @@ class PostModel {
   final ProfileModel? author;
   final bool isLiked;
   final String privacy;
+  final String layoutType;
 
   const PostModel({
     required this.id,
@@ -61,13 +62,27 @@ class PostModel {
     this.author,
     this.isLiked = false,
     this.privacy = 'public',
+    this.layoutType = 'grid',
   });
 
   factory PostModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
+    String? rawCaption = json['caption'] as String?;
+    String extractedLayout = json['layout_type'] as String? ?? 'grid';
+
+    if (rawCaption != null && rawCaption.contains('[layout:')) {
+      final regExp = RegExp(r'\[layout:(dashboard|columns|panel-left|panel-top|grid|vertical|hero|horizontal)\]');
+      final match = regExp.firstMatch(rawCaption);
+      if (match != null) {
+        extractedLayout = match.group(1) ?? extractedLayout;
+        rawCaption = rawCaption.replaceAll(regExp, '').trim();
+        if (rawCaption.isEmpty) rawCaption = null;
+      }
+    }
+
     return PostModel(
       id: json['id'] as String,
       userId: json['user_id'] as String,
-      caption: json['caption'] as String?,
+      caption: rawCaption,
       media: (json['post_media'] as List?)
               ?.map((e) => PostMedia.fromJson(Map<String, dynamic>.from(e)))
               .toList() ??
@@ -81,6 +96,7 @@ class PostModel {
           : null,
       isLiked: isLiked,
       privacy: json['privacy'] as String? ?? 'public',
+      layoutType: extractedLayout,
     );
   }
 
@@ -92,12 +108,14 @@ class PostModel {
         'comments_count': commentsCount,
         'created_at': createdAt.toIso8601String(),
         'privacy': privacy,
+        'layout_type': layoutType,
       };
 
   PostModel copyWith({
     int? likesCount,
     int? commentsCount,
     bool? isLiked,
+    String? layoutType,
   }) {
     return PostModel(
       id: id,
@@ -110,6 +128,7 @@ class PostModel {
       author: author,
       isLiked: isLiked ?? this.isLiked,
       privacy: privacy,
+      layoutType: layoutType ?? this.layoutType,
     );
   }
 }

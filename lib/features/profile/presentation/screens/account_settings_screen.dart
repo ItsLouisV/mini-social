@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/localization/app_translations.dart';
 import '../../../../core/services/supabase_service.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
@@ -47,7 +48,7 @@ class AccountSettingsScreen extends ConsumerWidget {
                   color: theme.colorScheme.primary, size: 18),
               const SizedBox(width: 4),
               Text(
-                'Cài đặt',
+                AppTranslations.tr(ref, 'settings'),
                 style: TextStyle(
                   color: theme.colorScheme.primary,
                   fontSize: 16,
@@ -56,9 +57,9 @@ class AccountSettingsScreen extends ConsumerWidget {
             ],
           ),
         ),
-        middle: const Text(
-          'Tài khoản',
-          style: TextStyle(fontWeight: FontWeight.w600),
+        middle: Text(
+          AppTranslations.tr(ref, 'account_settings'),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       child: Material(

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/localization/app_translations.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
@@ -24,7 +25,7 @@ class NotificationScreen extends ConsumerWidget {
           SliverAppBar(
             pinned: true,
             centerTitle: false,
-            title: const Text('Thông báo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+            title: Text(AppTranslations.tr(ref, 'notifications'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
             backgroundColor: theme.scaffoldBackgroundColor,
             surfaceTintColor: Colors.transparent,
             actions: [

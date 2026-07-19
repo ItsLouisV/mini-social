@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/localization/app_translations.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
@@ -53,9 +54,9 @@ class TrashScreen extends ConsumerWidget {
             ],
           ),
         ),
-        middle: const Text(
-          'Thùng rác bài viết',
-          style: TextStyle(fontWeight: FontWeight.w600),
+        middle: Text(
+          AppTranslations.tr(ref, 'trash'),
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       child: Material(
@@ -64,10 +65,10 @@ class TrashScreen extends ConsumerWidget {
           child: trashedAsync.when(
             data: (posts) {
               if (posts.isEmpty) {
-                return const EmptyStateWidget(
+                return EmptyStateWidget(
                   icon: CupertinoIcons.trash,
-                  title: 'Thùng rác trống',
-                  subtitle: 'Các bài viết bạn chuyển vào thùng rác sẽ xuất hiện tại đây',
+                  title: AppTranslations.tr(ref, 'empty_trash'),
+                  subtitle: AppTranslations.tr(ref, 'trash_notice'),
                 );
               }
 
@@ -83,7 +84,7 @@ class TrashScreen extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Các mục trong thùng rác sẽ tự động bị xóa vĩnh viễn sau 30 ngày.',
+                            AppTranslations.tr(ref, 'trash_notice'),
                             style: TextStyle(
                               fontSize: 12,
                               color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
@@ -213,7 +214,7 @@ class TrashScreen extends ConsumerWidget {
             children: [
               OutlinedButton.icon(
                 icon: const Icon(CupertinoIcons.arrow_counterclockwise, size: 14),
-                label: const Text('Khôi phục', style: TextStyle(fontSize: 12)),
+                label: Text(AppTranslations.tr(ref, 'restore'), style: const TextStyle(fontSize: 12)),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   minimumSize: Size.zero,
@@ -227,13 +228,13 @@ class TrashScreen extends ConsumerWidget {
                     ref.invalidate(feedPostsProvider);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Đã khôi phục bài viết về bảng tin.')),
+                        const SnackBar(content: Text('OK')),
                       );
                     }
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Lỗi khôi phục: $e')),
+                        SnackBar(content: Text('Error: $e')),
                       );
                     }
                   }
@@ -242,7 +243,7 @@ class TrashScreen extends ConsumerWidget {
               const SizedBox(width: 8),
               ElevatedButton.icon(
                 icon: const Icon(CupertinoIcons.trash, size: 14, color: Colors.white),
-                label: const Text('Xóa vĩnh viễn', style: TextStyle(fontSize: 12, color: Colors.white)),
+                label: Text(AppTranslations.tr(ref, 'delete_permanently'), style: const TextStyle(fontSize: 12, color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

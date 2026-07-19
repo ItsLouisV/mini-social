@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/localization/app_translations.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
@@ -219,6 +221,7 @@ class PostCard extends ConsumerWidget {
           if (post.media.isNotEmpty)
             ImageCarousel(
               media: post.media,
+              layoutType: post.layoutType,
             ),
 
           // PostActions (Facebook layout)
@@ -658,8 +661,17 @@ void _showWhySeeThisPostDialog(BuildContext context, PostModel post) {
 
 // ── Dialog Báo cáo bài viết toàn cục ──
 void _showGlobalReportDialog(BuildContext context, WidgetRef ref, PostModel post) {
-  String selectedReason = 'Spam';
+  final Set<String> selectedReasons = {};
   final customReasonController = TextEditingController();
+
+  final options = [
+    'Spam',
+    'Bạo lực hoặc nội dung phản cảm',
+    'Quấy rối',
+    'Ngôn từ gây thù ghét',
+    'Tin giả/Sai sự thật',
+    'Khác...',
+  ];
 
   showDialog(
     context: context,
@@ -667,85 +679,200 @@ void _showGlobalReportDialog(BuildContext context, WidgetRef ref, PostModel post
       return StatefulBuilder(
         builder: (context, setState) {
           final theme = Theme.of(context);
+          final isDark = theme.brightness == Brightness.dark;
+
+          final hasCustomText = selectedReasons.contains('Khác...') &&
+              customReasonController.text.trim().isNotEmpty;
+
+          final canSubmit = selectedReasons.isNotEmpty &&
+              (!selectedReasons.contains('Khác...') || hasCustomText || selectedReasons.length > 1);
+
           return AlertDialog(
-            title: const Text('Báo cáo bài viết', style: TextStyle(fontWeight: FontWeight.bold)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            backgroundColor: theme.dialogBackgroundColor,
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            title: Row(
+              children: [
+                Icon(
+                  CupertinoIcons.flag_fill,
+                  color: theme.colorScheme.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Báo cáo bài viết',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ...['Spam', 'Bạo lực hoặc nội dung phản cảm', 'Quấy rối', 'Ngôn từ gây thù ghét', 'Tin giả/Sai sự thật'].map((reason) {
-                    return RadioListTile<String>(
-                      title: Text(reason, style: const TextStyle(fontSize: 14)),
-                      value: reason,
-                      groupValue: selectedReason,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => selectedReason = val);
-                        }
+                  Text(
+                    'Hãy chọn một hoặc nhiều lý do bạn muốn báo cáo:',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.hintColor,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...options.map((reason) {
+                    final isChecked = selectedReasons.contains(reason);
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          if (isChecked) {
+                            selectedReasons.remove(reason);
+                          } else {
+                            selectedReasons.add(reason);
+                          }
+                        });
                       },
-                      contentPadding: EdgeInsets.zero,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isChecked
+                              ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.08)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isChecked
+                                ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                                : theme.dividerColor.withValues(alpha: 0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isChecked
+                                  ? CupertinoIcons.checkmark_square_fill
+                                  : CupertinoIcons.square,
+                              color: isChecked
+                                  ? theme.colorScheme.primary
+                                  : theme.hintColor,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                reason,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: isChecked ? FontWeight.w600 : FontWeight.normal,
+                                  color: isChecked
+                                      ? theme.colorScheme.primary
+                                      : theme.textTheme.bodyMedium?.color,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                   }),
-                  RadioListTile<String>(
-                    title: const Text('Khác...', style: TextStyle(fontSize: 14)),
-                    value: 'Khác...',
-                    groupValue: selectedReason,
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => selectedReason = val);
-                      }
-                    },
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  if (selectedReason == 'Khác...')
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
+                  if (selectedReasons.contains('Khác...')) ...[
+                    const SizedBox(height: 12),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : theme.colorScheme.surfaceVariant.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withValues(alpha: 0.4),
+                          width: 1.2,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       child: TextField(
                         controller: customReasonController,
-                        decoration: const InputDecoration(
-                          hintText: 'Nhập lý do báo cáo...',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        ),
-                        maxLines: 2,
+                        onChanged: (_) => setState(() {}),
+                        maxLines: 3,
+                        minLines: 2,
                         style: const TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'Nhập chi tiết lý do của bạn...',
+                          hintStyle: TextStyle(fontSize: 13, color: theme.hintColor),
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.hintColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
                 child: const Text('Hủy'),
               ),
-              ElevatedButton(
-                onPressed: () async {
-                  String finalReason = selectedReason;
-                  if (selectedReason == 'Khác...') {
-                    finalReason = customReasonController.text.trim();
-                    if (finalReason.isEmpty) {
-                      finalReason = 'Lý do khác';
+              if (canSubmit)
+                ElevatedButton(
+                  onPressed: () async {
+                    final List<String> resultReasons = [];
+                    for (final r in options) {
+                      if (selectedReasons.contains(r)) {
+                        if (r == 'Khác...') {
+                          final customText = customReasonController.text.trim();
+                          if (customText.isNotEmpty) {
+                            resultReasons.add('Khác: $customText');
+                          } else if (selectedReasons.length == 1) {
+                            resultReasons.add('Lý do khác');
+                          }
+                        } else {
+                          resultReasons.add(r);
+                        }
+                      }
                     }
-                  }
-                  Navigator.pop(context);
-                  
-                  try {
-                    await ref.read(postRepositoryProvider).reportPost(
-                          postId: post.id,
-                          reason: finalReason,
+
+                    final finalReasonStr = resultReasons.join(', ');
+                    Navigator.pop(context);
+
+                    try {
+                      await ref.read(postRepositoryProvider).reportPost(
+                            postId: post.id,
+                            reason: finalReasonStr,
+                          );
+                      ref.read(postLocalStatesProvider.notifier).reportPost(post.id);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Lỗi gửi báo cáo: $e')),
                         );
-                    ref.read(postLocalStatesProvider.notifier).reportPost(post.id);
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Lỗi gửi báo cáo: $e')),
-                      );
+                      }
                     }
-                  }
-                },
-                child: const Text('Gửi báo cáo'),
-              ),
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  ),
+                  child: const Text(
+                    'Gửi',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                  ),
+                ),
             ],
           );
         },
@@ -775,6 +902,9 @@ class _HiddenPostBanner extends StatefulWidget {
 }
 
 class _HiddenPostBannerState extends State<_HiddenPostBanner> {
+  final Set<String> _selectedFeedbackReasons = {};
+  bool _isSubmitting = false;
+
   @override
   void dispose() {
     final ref = widget.ref;
@@ -814,9 +944,9 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
               children: [
                 const Icon(CupertinoIcons.eye_slash_fill, size: 16, color: Colors.blue),
                 const SizedBox(width: 8),
-                const Text(
-                  'Đã tạm ẩn',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                Text(
+                  AppTranslations.tr(widget.ref, 'hidden_post'),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const Spacer(),
                 TextButton(
@@ -826,9 +956,9 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
                     backgroundColor: isDark ? Colors.white10 : Colors.black12,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text(
-                    'Hoàn tác',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  child: Text(
+                    AppTranslations.tr(widget.ref, 'undo'),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
               ],
@@ -846,9 +976,9 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 8),
-              const Text(
-                'Tại sao bạn không quan tâm?',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              Text(
+                AppTranslations.tr(widget.ref, 'why_not_interested'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -860,9 +990,63 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
                   _buildFeedbackPill('Tình dục'),
                   _buildFeedbackPill('Gây phiền toái'),
                   _buildFeedbackPill('Tôi không thích người sáng tạo nội dung này'),
-                  _buildFeedbackPill('Khác', isOther: true),
+                  _buildFeedbackPill(AppTranslations.tr(widget.ref, 'other'), isOther: true),
                 ],
               ),
+              if (_selectedFeedbackReasons.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: _isSubmitting
+                        ? null
+                        : () async {
+                            setState(() => _isSubmitting = true);
+                            try {
+                              final finalReasonStr = _selectedFeedbackReasons.join(', ');
+                              await widget.ref.read(postRepositoryProvider).reportPost(
+                                    postId: widget.post.id,
+                                    reason: finalReasonStr,
+                                  );
+                              widget.ref
+                                  .read(postLocalStatesProvider.notifier)
+                                  .reportPost(widget.post.id);
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Lỗi gửi báo cáo: $e')),
+                                );
+                              }
+                            } finally {
+                              if (mounted) setState(() => _isSubmitting = false);
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            AppTranslations.tr(widget.ref, 'send'),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                          ),
+                  ),
+                ),
+              ],
             ],
           ],
         ),
@@ -873,35 +1057,47 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
   Widget _buildFeedbackPill(String text, {bool isOther = false}) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final isSelected = _selectedFeedbackReasons.contains(text);
 
     return InkWell(
       onTap: () async {
         if (isOther) {
           _showGlobalReportDialog(context, widget.ref, widget.post);
         } else {
-          try {
-            await widget.ref.read(postRepositoryProvider).reportPost(
-                  postId: widget.post.id,
-                  reason: text,
-                );
-            widget.ref.read(postLocalStatesProvider.notifier).reportPost(widget.post.id);
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Lỗi gửi báo cáo: $e')),
-            );
-          }
+          setState(() {
+            if (isSelected) {
+              _selectedFeedbackReasons.remove(text);
+            } else {
+              _selectedFeedbackReasons.add(text);
+            }
+          });
         }
       },
       borderRadius: BorderRadius.circular(20),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+          color: isSelected
+              ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.22 : 0.12)
+              : (isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? theme.colorScheme.primary
+                : Colors.transparent,
+            width: 1.2,
+          ),
         ),
         child: Text(
           text,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected
+                ? theme.colorScheme.primary
+                : theme.textTheme.bodyMedium?.color,
+          ),
         ),
       ),
     );

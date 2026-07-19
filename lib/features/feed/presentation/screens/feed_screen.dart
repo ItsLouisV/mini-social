@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../../../../core/utils/notifications.dart';
+import '../../../../core/localization/app_translations.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../../shared/widgets/app_avatar.dart';
+import '../../../profile/providers/profile_provider.dart';
 import '../../providers/feed_provider.dart';
 import '../widgets/post_card.dart';
 
@@ -105,11 +108,16 @@ class FeedScreen extends ConsumerWidget {
               },
               child: ListView.builder(
                 padding: EdgeInsets.zero,
-                itemCount: posts.length,
-                itemBuilder: (context, index) => PostCard(
-                  post: posts[index],
-                  currentUserId: currentUserId ?? '',
-                ),
+                itemCount: posts.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _buildCreatePostHeaderBar(context, ref);
+                  }
+                  return PostCard(
+                    post: posts[index - 1],
+                    currentUserId: currentUserId ?? '',
+                  );
+                },
               ),
             );
           },
@@ -140,6 +148,63 @@ class FeedScreen extends ConsumerWidget {
             borderRadius: BorderRadius.circular(16),
           ),
         ),
+      ),
+    );
+  }
+  Widget _buildCreatePostHeaderBar(BuildContext context, WidgetRef ref) {
+    final currentUserId = ref.watch(currentUserIdProvider);
+    final profileAsync = ref.watch(profileProvider(currentUserId ?? ''));
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Row(
+        children: [
+          profileAsync.when(
+            data: (profile) => AppAvatar(
+              imageUrl: profile.avatarUrl,
+              name: profile.displayName,
+              radius: 20,
+            ),
+            loading: () => const CircleAvatar(radius: 20, backgroundColor: Colors.transparent),
+            error: (_, __) => const CircleAvatar(radius: 20, backgroundColor: Colors.grey),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: InkWell(
+              onTap: () => context.push('/create'),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF3A3B3C) : const Color(0xFFF0F2F5),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  AppTranslations.tr(ref, 'whats_on_your_mind'),
+                  style: TextStyle(
+                    color: theme.hintColor,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(CupertinoIcons.photo_on_rectangle, color: Colors.green, size: 22),
+            onPressed: () => context.push('/create'),
+          ),
+        ],
       ),
     );
   }

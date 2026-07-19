@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/localization/app_translations.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
@@ -111,7 +112,7 @@ class PostActions extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Thích',
+                          AppTranslations.tr(ref, 'like'),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -140,7 +141,7 @@ class PostActions extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Bình luận',
+                          AppTranslations.tr(ref, 'comment'),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -173,7 +174,7 @@ class PostActions extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Chia sẻ',
+                          AppTranslations.tr(ref, 'share'),
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,

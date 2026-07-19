@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 import '../widgets/full_screen_image_viewer.dart';
 
+import '../../../../core/localization/app_translations.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
@@ -60,9 +61,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text(
-          'Tùy chọn cuộc trò chuyện',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: -0.2),
+        title: Text(
+          AppTranslations.tr(ref, 'conversation_info'),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: -0.2),
         ),
         centerTitle: true,
         leading: IconButton(
