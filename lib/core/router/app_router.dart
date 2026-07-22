@@ -108,7 +108,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/search',
         parentNavigatorKey: _rootNavigatorKey,
-        pageBuilder: (_, __) => const CupertinoPage(child: SearchScreen()),
+        pageBuilder: (context, state) {
+          final query = state.uri.queryParameters['q'];
+          return CupertinoPage(child: SearchScreen(initialQuery: query));
+        },
       ),
       GoRoute(
         path: '/profile/edit',

@@ -7,6 +7,7 @@ import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../social/providers/follow_provider.dart';
+import '../../../auth/providers/auth_provider.dart';
 
 class NotificationScreen extends ConsumerWidget {
   const NotificationScreen({super.key});
@@ -225,10 +226,15 @@ class _NotificationTile extends ConsumerWidget {
               }
               break;
             case 'follow':
-            case 'friend_request':
             case 'friend_accept':
               if (senderId != null) {
                 context.push('/profile/$senderId');
+              }
+              break;
+            case 'friend_request':
+              final myId = ref.read(currentUserIdProvider);
+              if (myId != null) {
+                context.push('/profile/$myId/friends?tab=pending');
               }
               break;
           }

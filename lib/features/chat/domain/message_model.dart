@@ -87,6 +87,7 @@ class MessageModel {
 
   bool get isText => messageType == 'text' || messageType.startsWith('vanish_text');
   bool get isImage => messageType == 'image' || messageType.startsWith('vanish_image');
+  bool get isVoice => messageType == 'voice' || messageType.startsWith('vanish_voice');
   bool get isCall => messageType == 'call_log';
   bool get isRecalled => messageType == 'recalled';
   bool get isVanish => messageType.startsWith('vanish_');

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
+import '../../../../shared/widgets/parsed_caption_text.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../domain/comment_model.dart';
@@ -186,7 +187,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         if (post.caption?.isNotEmpty == true)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Text(post.caption!, style: AppTextStyles.bodyMedium),
+            child: ParsedCaptionText(text: post.caption!, style: AppTextStyles.bodyMedium),
           ),
 
         if (post.media.isNotEmpty)
@@ -491,7 +492,7 @@ class _CommentTileState extends State<_CommentTile> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(comment.content, style: AppTextStyles.bodyMedium),
+                      ParsedCaptionText(text: comment.content, style: AppTextStyles.bodyMedium),
                     ],
                   ),
                 ),

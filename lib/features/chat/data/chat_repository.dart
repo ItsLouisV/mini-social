@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -366,6 +367,57 @@ class ChatRepository {
 
     await _client.from(SupabaseConstants.conversationsTable).update({
       'last_message': 'Hình ảnh',
+      'last_message_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', conversationId);
+
+    return MessageModel.fromJson(data);
+  }
+
+  Future<MessageModel> sendVoiceMessage(
+    String conversationId,
+    List<int> audioBytes, {
+    int? durationSeconds,
+    String? replyToMessageId,
+    String messageType = 'voice',
+  }) async {
+    final fileName = '$currentUserId/${_uuid.v4()}.m4a';
+
+    try {
+      await _client.storage
+          .from(SupabaseConstants.messagesBucket)
+          .uploadBinary(
+            fileName,
+            Uint8List.fromList(audioBytes),
+            fileOptions: const FileOptions(contentType: 'audio/m4a'),
+          );
+    } catch (e) {
+      print('Voice upload binary fallback: $e');
+    }
+
+    final url = _client.storage
+        .from(SupabaseConstants.messagesBucket)
+        .getPublicUrl(fileName);
+
+    final dur = durationSeconds ?? 0;
+    final durLabel =
+        '${(dur ~/ 60).toString().padLeft(2, '0')}:${(dur % 60).toString().padLeft(2, '0')}';
+
+    final data = await _client
+        .from(SupabaseConstants.messagesTable)
+        .insert({
+          'conversation_id': conversationId,
+          'sender_id': currentUserId,
+          'content': 'Tin nhắn thoại ($durLabel)',
+          'media_url': url,
+          'message_type': messageType,
+          if (replyToMessageId != null)
+            'reply_to_message_id': replyToMessageId,
+        })
+        .select()
+        .single();
+
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      'last_message': 'Tin nhắn thoại ($durLabel)',
       'last_message_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 

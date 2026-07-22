@@ -21,6 +21,8 @@ import '../../domain/message_model.dart';
 import '../../domain/pinned_message_model.dart';
 import '../../providers/chat_provider.dart';
 import '../widgets/full_screen_image_viewer.dart';
+import '../widgets/voice_message_bubble.dart';
+import '../widgets/voice_recorder_bar.dart';
 import '../widgets/elastic_scroll_to_bottom_button.dart';
 import '../../presentation/widgets/message_popup_menu_content.dart';
 import '../../presentation/widgets/message_context_menu_route.dart';
@@ -172,6 +174,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   // Vanish gesture tracking (works on Web too)
   double? _vanishDragStartDy;
   bool _isAtBottom = true; // true when index-0 item is visible
+  bool _isRecordingVoice = false;
 
   void _deleteExpiredMessage(String messageId) {
     Future.microtask(() async {
@@ -445,6 +448,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // Load thêm khi scroll lên đỉnh (tin cũ hơn)
     _itemPositionsListener.itemPositions.addListener(_onPositionChange);
+
+    _focusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   void _onPositionChange() {
@@ -1848,6 +1855,46 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final themeName = themeState[widget.conversationId] ?? 'blue';
     final chatThemeColor = getChatThemePrimaryColor(themeName);
 
+    if (_isRecordingVoice) {
+      return VoiceRecorderBar(
+        themeColor: isVanishMode ? Colors.purpleAccent : chatThemeColor,
+        onCancel: () {
+          setState(() {
+            _isRecordingVoice = false;
+          });
+        },
+        onSend: (bytes, durationSeconds) async {
+          setState(() {
+            _isRecordingVoice = false;
+          });
+          final replyId = _replyingToMessage?.id;
+          final selfDestructState = ref.read(chatSelfDestructProvider);
+          final selfDestructSecs = selfDestructState[widget.conversationId] ?? 0;
+          final vanishDuration = selfDestructSecs > 0 ? selfDestructSecs : 86400;
+          final msgType = isVanishMode ? 'vanish_voice:$vanishDuration' : 'voice';
+
+          try {
+            await ref.read(chatRepositoryProvider).sendVoiceMessage(
+                  widget.conversationId,
+                  bytes,
+                  durationSeconds: durationSeconds,
+                  replyToMessageId: replyId,
+                  messageType: msgType,
+                );
+            if (mounted) {
+              setState(() {
+                _replyingToMessage = null;
+              });
+              ref.invalidate(realtimeMessagesProvider(widget.conversationId));
+              ref.invalidate(conversationsProvider);
+            }
+          } catch (e) {
+            debugPrint('Error sending voice message: $e');
+          }
+        },
+      );
+    }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1872,21 +1919,78 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              IconButton(
-                onPressed: _sending ? null : _pickImage,
-                icon: Icon(
-                  CupertinoIcons.photo,
-                  color: hasPendingImage
-                      ? chatThemeColor
-                      : (isDark ? Colors.white60 : Colors.black45),
-                  size: 24,
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      axis: Axis.horizontal,
+                      sizeFactor: animation,
+                      child: child,
+                    ),
+                  ),
+                  child: (!_focusNode.hasFocus && _messageController.text.isEmpty && !hasPendingImage)
+                      ? Row(
+                          key: const ValueKey('icons'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              onPressed: _sending ? null : _pickImage,
+                              icon: Icon(
+                                CupertinoIcons.photo,
+                                color: hasPendingImage
+                                    ? chatThemeColor
+                                    : (isDark ? Colors.white60 : Colors.black45),
+                                size: 22,
+                              ),
+                              padding: const EdgeInsets.all(6),
+                              constraints: const BoxConstraints(),
+                            ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              onPressed: _sending ? null : () => setState(() => _isRecordingVoice = true),
+                              icon: Icon(
+                                CupertinoIcons.mic_fill,
+                                color: isDark ? Colors.white60 : Colors.black45,
+                                size: 22,
+                              ),
+                              padding: const EdgeInsets.all(6),
+                              constraints: const BoxConstraints(),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                        )
+                      : (_focusNode.hasFocus && _messageController.text.isEmpty && !hasPendingImage)
+                          ? Row(
+                              key: const ValueKey('chevron'),
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTapDown: (_) {
+                                    Future.microtask(() {
+                                      FocusScope.of(context).unfocus();
+                                    });
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: Icon(
+                                      CupertinoIcons.chevron_right,
+                                      color: isDark ? Colors.white60 : Colors.black45,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                            )
+                          : const SizedBox.shrink(key: ValueKey('empty')),
                 ),
-                padding: const EdgeInsets.all(8),
-                constraints: const BoxConstraints(),
               ),
-              const SizedBox(width: 4),
               Expanded(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 120),
@@ -2206,6 +2310,7 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             if (message.replyToMessage != null)
               Container(
@@ -2778,6 +2883,13 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                 )
               else if (message.isCall)
                 _CallLogBubble(message: message, isMine: isMine)
+              else if (message.isVoice && message.mediaUrl != null)
+                VoiceMessageBubble(
+                  audioUrl: message.mediaUrl!,
+                  isMe: isMine,
+                  themeColor: getChatThemePrimaryColor(themeName),
+                  contentLabel: message.content,
+                )
               else
                 Padding(
                   padding: const EdgeInsets.symmetric(

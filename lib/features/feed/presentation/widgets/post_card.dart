@@ -8,6 +8,7 @@ import '../../../../core/localization/app_translations.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
+import '../../../../shared/widgets/parsed_caption_text.dart';
 import '../../../profile/providers/profile_provider.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
@@ -202,12 +203,12 @@ class PostCard extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
 
-          // Caption Text
+          // Caption Text (Tự động highlight #hashtag & @username)
           if (post.caption?.isNotEmpty == true) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                post.caption!,
+              child: ParsedCaptionText(
+                text: post.caption!,
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: Theme.of(context).textTheme.bodyMedium?.color,
                   height: 1.3,
