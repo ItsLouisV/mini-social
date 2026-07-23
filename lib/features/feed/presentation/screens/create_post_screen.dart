@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
@@ -16,6 +17,7 @@ import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
+import '../../../social/data/ai_repository.dart';
 import '../widgets/image_carousel.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
@@ -31,6 +33,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   bool _isPosting = false;
   String _privacy = 'friends'; // Mặc định Bạn bè giống ảnh FB
   String _selectedLayout = 'panel-top'; // Mặc định cố định panel-top khi >= 3 ảnh/video
+
+  bool _isGeneratingAICaption = false;
+  bool _isCheckingModeration = false;
 
   // Extra status items
   String? _selectedMusic;
@@ -108,11 +113,28 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
     String finalCaption = caption;
     if (extraDetails.isNotEmpty) {
-      finalSuffix: finalCaption += (finalCaption.isNotEmpty ? '\n' : '') + extraDetails.join(' ');
+      finalCaption += (finalCaption.isNotEmpty ? '\n' : '') + extraDetails.join(' ');
     }
 
+    // AI Content Moderation trước khi đăng bài
     setState(() => _isPosting = true);
     try {
+      if (finalCaption.isNotEmpty) {
+        final mod = await ref.read(aiRepositoryProvider).moderateContent(finalCaption);
+        if (!mod.isSafe) {
+          if (mounted) {
+            setState(() => _isPosting = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Nội dung vi phạm tiêu chuẩn: ${mod.reason}'),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       await ref.read(postRepositoryProvider).createPost(
             caption: finalCaption,
             media: _media,
@@ -131,6 +153,41 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } finally {
       if (mounted) setState(() => _isPosting = false);
+    }
+  }
+
+  Future<void> _generateAICaption() async {
+    setState(() => _isGeneratingAICaption = true);
+    try {
+      final prompt = _captionController.text.trim();
+      String? imageBase64;
+      String? mimeType;
+
+      if (_media.isNotEmpty) {
+        final firstFile = _media.first;
+        if (!_isVideo(firstFile)) {
+          final bytes = await firstFile.readAsBytes();
+          imageBase64 = base64Encode(bytes);
+          final ext = firstFile.name.split('.').last.toLowerCase();
+          mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
+        }
+      }
+
+      final aiCaption = await ref.read(aiRepositoryProvider).generateCaption(
+            textPrompt: prompt.isNotEmpty ? prompt : null,
+            imageBase64: imageBase64,
+            imageMimeType: mimeType,
+          );
+
+      if (mounted) {
+        setState(() {
+          _captionController.text = aiCaption;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error generating AI caption: $e');
+    } finally {
+      if (mounted) setState(() => _isGeneratingAICaption = false);
     }
   }
 
@@ -697,13 +754,22 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               ),
             ),
 
-            // ── Attachment Option Cards (Thư viện, GIF, Cột mốc, Trực tiếp) ──
+            // ── Attachment Option Cards (Thư viện, GIF, Gợi ý AI, Trực tiếp) ──
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              color: isDark ? const Color(0xFF18191A) : Colors.grey.shade50,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
+                    _buildOptionCard(
+                      icon: CupertinoIcons.sparkles,
+                      label: _isGeneratingAICaption ? 'Đang tạo AI...' : 'AI gợi ý ✨',
+                      bgColor: Colors.purple.withValues(alpha: 0.15),
+                      textColor: Colors.purpleAccent,
+                      onTap: _isGeneratingAICaption ? null : () => _generateAICaption(),
+                    ),
+                    const SizedBox(width: 8),
                     _buildOptionCard(
                       icon: CupertinoIcons.photo_on_rectangle,
                       label: AppTranslations.tr(ref, 'gallery'),
@@ -948,7 +1014,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     String? badgeText,
     required Color bgColor,
     required Color textColor,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
   }) {
     return InkWell(
       onTap: onTap,

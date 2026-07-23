@@ -17,6 +17,8 @@ class MessagePopupMenuContent extends StatelessWidget {
   final Function(String emoji) onReact;
   final bool hasMyReaction;
   final VoidCallback? onClearAllReactions;
+  final VoidCallback? onTranslate;
+  final bool isTranslationShown;
 
   const MessagePopupMenuContent({
     super.key,
@@ -34,6 +36,8 @@ class MessagePopupMenuContent extends StatelessWidget {
     required this.onReact,
     this.hasMyReaction = false,
     this.onClearAllReactions,
+    this.onTranslate,
+    this.isTranslationShown = false,
   });
 
   @override
@@ -63,6 +67,13 @@ class MessagePopupMenuContent extends StatelessWidget {
           label: 'Sao chép',
           onTap: onCopy,
           iconColor: Colors.teal,
+        ),
+      if (isText && onTranslate != null)
+        _GridActionItem(
+          icon: isTranslationShown ? CupertinoIcons.eye_slash : CupertinoIcons.globe,
+          label: isTranslationShown ? 'Ẩn dịch' : 'Dịch',
+          onTap: onTranslate!,
+          iconColor: Colors.blue.shade600,
         ),
       _GridActionItem(
         icon: isPinned ? CupertinoIcons.pin_slash : CupertinoIcons.pin,

@@ -26,6 +26,7 @@ import '../widgets/voice_recorder_bar.dart';
 import '../widgets/elastic_scroll_to_bottom_button.dart';
 import '../../presentation/widgets/message_popup_menu_content.dart';
 import '../../presentation/widgets/message_context_menu_route.dart';
+import '../../../social/data/ai_repository.dart';
 
 // ── Helper data class ─────────────────────────────────────────────────────────
 
@@ -2254,6 +2255,45 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
   bool _tapped = false;
   final GlobalKey _bubbleKey = GlobalKey();
 
+  // Translation state
+  String? _translatedText;
+  bool _isTranslating = false;
+  bool _showTranslation = false;
+
+  Future<void> _translateMessage() async {
+    final content = widget.message.content;
+    if (content == null || content.trim().isEmpty) return;
+
+    // Toggle ẩn/hiện nếu đã có bản dịch
+    if (_translatedText != null) {
+      setState(() => _showTranslation = !_showTranslation);
+      return;
+    }
+
+    setState(() => _isTranslating = true);
+    try {
+      final aiRepo = ref.read(aiRepositoryProvider);
+      final result = await aiRepo.translateText(content, targetLanguage: 'tiếng Anh nếu văn bản tiếng Việt, hoặc tiếng Việt nếu văn bản tiếng nước ngoài');
+      if (mounted) {
+        setState(() {
+          _translatedText = result;
+          _showTranslation = true;
+          _isTranslating = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isTranslating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể dịch tin nhắn này'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   void _showCustomContextMenu(BuildContext context) {
     HapticFeedback.mediumImpact();
     final renderBox = _bubbleKey.currentContext?.findRenderObject() as RenderBox?;
@@ -2582,6 +2622,17 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                 .read(realtimeMessagesProvider(message.conversationId).notifier)
                 .toggleReaction(message.id, emoji);
           },
+          onTranslate: message.isText
+              ? () {
+                  Navigator.pop(context);
+                  if (_showTranslation) {
+                    setState(() => _showTranslation = false);
+                  } else {
+                    _translateMessage();
+                  }
+                }
+              : null,
+          isTranslationShown: _showTranslation,
         ),
       ),
     );
@@ -2894,13 +2945,85 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
-                  child: Text(
-                    message.content ?? '',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: isMine ? myTextColor : theirTextColor,
-                      height: 1.35,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        message.content ?? '',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: isMine ? myTextColor : theirTextColor,
+                          height: 1.35,
+                        ),
+                      ),
+                      // Bản dịch AI (bên trong bubble, giống STT của voice)
+                      if (_isTranslating || _showTranslation) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isMine
+                                ? Colors.white.withValues(alpha: 0.16)
+                                : getChatThemePrimaryColor(themeName).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: _isTranslating
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 11,
+                                      height: 11,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1.5,
+                                        color: isMine
+                                            ? Colors.white.withValues(alpha: 0.7)
+                                            : getChatThemePrimaryColor(themeName),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 7),
+                                    Text(
+                                      'Đang dịch...',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontStyle: FontStyle.italic,
+                                        color: isMine
+                                            ? Colors.white.withValues(alpha: 0.75)
+                                            : theme.hintColor,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      CupertinoIcons.globe,
+                                      size: 13,
+                                      color: (isMine
+                                              ? Colors.white
+                                              : getChatThemePrimaryColor(themeName))
+                                          .withValues(alpha: 0.8),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        _translatedText ?? '',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isMine ? myTextColor : theirTextColor,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
             ],

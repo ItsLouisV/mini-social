@@ -8,6 +8,7 @@ import '../domain/pinned_message_model.dart';
 import '../../profile/domain/profile_model.dart';
 import '../../../core/constants/supabase_constants.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/image_compressor.dart';
 
 class ChatRepository {
   final SupabaseService _service;
@@ -334,7 +335,9 @@ class ChatRepository {
         ? image.name.split('.').last.toLowerCase()
         : 'jpg';
     final fileName = '$currentUserId/${_uuid.v4()}.$ext';
-    final bytes = await image.readAsBytes();
+    
+    // Tự động nén ảnh tin nhắn chat
+    final compressedBytes = await ImageCompressor.compressXFile(image);
     final contentType = ext == 'png'
         ? 'image/png'
         : (ext == 'gif' ? 'image/gif' : 'image/jpeg');
@@ -343,8 +346,11 @@ class ChatRepository {
         .from(SupabaseConstants.messagesBucket)
         .uploadBinary(
           fileName,
-          bytes,
-          fileOptions: FileOptions(contentType: contentType),
+          compressedBytes,
+          fileOptions: FileOptions(
+            contentType: contentType,
+            cacheControl: '31536000', // 1 năm caching trên CDN
+          ),
         );
 
     final url = _client.storage
