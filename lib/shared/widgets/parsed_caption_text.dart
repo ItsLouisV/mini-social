@@ -61,12 +61,10 @@ class _ParsedCaptionTextState extends ConsumerState<ParsedCaptionText> {
         ? _translatedText!
         : widget.text;
 
-    final defaultStyle = widget.style ??
-        TextStyle(
-          fontSize: 14,
-          height: 1.3,
-          color: Theme.of(context).textTheme.bodyMedium?.color,
-        );
+    final themeColor = Theme.of(context).textTheme.bodyMedium?.color;
+    final defaultStyle = (widget.style ?? const TextStyle(fontSize: 14, height: 1.3)).copyWith(
+      color: widget.style?.color ?? themeColor,
+    );
 
     final highlightStyle = defaultStyle.copyWith(
       color: AppColors.primary,

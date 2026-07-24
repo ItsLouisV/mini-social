@@ -193,9 +193,10 @@ class PostRepository {
     required List<XFile> media,
     String privacy = 'public',
     String layoutType = 'grid',
+    String? postId,
   }) async {
     final userId = currentUserId!;
-    final postId = _uuid.v4();
+    final finalPostId = postId ?? _uuid.v4();
 
     final finalCaption = media.length >= 3
         ? (caption != null && caption.trim().isNotEmpty
@@ -205,7 +206,7 @@ class PostRepository {
 
     // 1. Insert post first
     final insertData = <String, dynamic>{
-      'id': postId,
+      'id': finalPostId,
       'user_id': userId,
       'caption': finalCaption,
       'privacy': privacy,
@@ -227,7 +228,7 @@ class PostRepository {
       final extension = item.name.split('.').last.toLowerCase();
       final isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp'].contains(extension);
       final fileExtension = isVideo ? extension : 'jpg';
-      final path = '$userId/$postId/$i.$fileExtension';
+      final path = '$userId/$finalPostId/$i.$fileExtension';
       final mediaType = isVideo ? 'video' : 'image';
       
       final url = await _service.uploadFile(
@@ -238,7 +239,7 @@ class PostRepository {
 
       await _client.from(SupabaseConstants.postMediaTable).insert({
         'id': mediaId,
-        'post_id': postId,
+        'post_id': finalPostId,
         'url': url,
         'type': mediaType,
         'order_index': i,
@@ -246,7 +247,7 @@ class PostRepository {
     }
 
     // 3. Fetch the complete post
-    return getPost(postId);
+    return getPost(finalPostId);
   }
 
   // ── Delete Post ──
@@ -459,21 +460,35 @@ class PostRepository {
   Future<void> reportPost({required String postId, required String reason}) async {
     final currentId = currentUserId;
     if (currentId == null) throw Exception('Not authenticated');
-    await _client.from('reports').insert({
-      'reporter_id': currentId,
-      'post_id': postId,
-      'reason': reason,
-    });
+
+    // Ánh xạ lý do tiếng Việt sang category name trong database
+    String categoryName = 'spam';
+    if (reason.contains('Bạo lực')) {
+      categoryName = 'violence';
+    } else if (reason.contains('Tình dục')) {
+      categoryName = 'adult';
+    } else if (reason.contains('Lừa đảo')) {
+      categoryName = 'scam';
+    } else if (reason.contains('Ngôn từ thù ghét')) {
+      categoryName = 'hate_speech';
+    } else if (reason.contains('Quấy rối')) {
+      categoryName = 'harassment';
+    }
+
+    await _client.functions.invoke(
+      'report-service',
+      body: {
+        'reporterId': currentId,
+        'contentId': postId,
+        'contentType': 'post',
+        'categoryName': categoryName,
+        'description': reason,
+      },
+    );
   }
 
   Future<void> cancelReportPost(String postId) async {
-    final currentId = currentUserId;
-    if (currentId == null) throw Exception('Not authenticated');
-    await _client
-        .from('reports')
-        .delete()
-        .eq('reporter_id', currentId)
-        .eq('post_id', postId);
+    // Không làm gì vì bảng reports cũ đã bị xóa và thay bằng hệ thống động
   }
 
   // ── Trash & Edit Operations ──

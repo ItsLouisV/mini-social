@@ -329,8 +329,9 @@ class _ImageCarouselState extends State<ImageCarousel> {
         );
       }
     } else {
+      Widget imageWidget;
       if (isNetwork) {
-        mediaWidget = CachedNetworkImage(
+        imageWidget = CachedNetworkImage(
           imageUrl: item.url,
           fit: BoxFit.cover,
           placeholder: (_, __) => Container(
@@ -345,10 +346,15 @@ class _ImageCarouselState extends State<ImageCarousel> {
           ),
         );
       } else {
-        mediaWidget = kIsWeb
+        imageWidget = kIsWeb
             ? Image.network(item.url, fit: BoxFit.cover)
             : Image.file(io.File(item.url), fit: BoxFit.cover);
       }
+      mediaWidget = Hero(
+        tag: item.url,
+        createRectTween: (begin, end) => RectTween(begin: begin, end: end),
+        child: imageWidget,
+      );
     }
 
     if (overlayText != null) {
@@ -377,13 +383,10 @@ class _ImageCarouselState extends State<ImageCarousel> {
           ? null
           : () {
               if (imageIndex != -1) {
-                Navigator.of(context, rootNavigator: true).push(
-                  MaterialPageRoute(
-                    builder: (_) => GalleryScreen(
-                      imageUrls: imagesOnly.map((m) => m.url).toList(),
-                      initialIndex: imageIndex,
-                    ),
-                  ),
+                GalleryScreen.open(
+                  context,
+                  imageUrls: imagesOnly.map((m) => m.url).toList(),
+                  initialIndex: imageIndex,
                 );
               }
             },

@@ -14,6 +14,10 @@ import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
 import '../widgets/image_carousel.dart';
 import '../widgets/post_actions.dart';
+import '../../../social/data/ai_repository.dart';
+import 'package:flutter/services.dart';
+import '../../../chat/presentation/widgets/message_context_menu_route.dart';
+import '../../../../shared/widgets/report_bottom_sheet.dart';
 
 class CommentNode {
   final CommentModel comment;
@@ -361,7 +365,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   }
 }
 
-class _CommentTile extends StatefulWidget {
+class _CommentTile extends ConsumerStatefulWidget {
   final CommentNode node;
   final String? currentUserId;
   final VoidCallback onDelete;
@@ -377,13 +381,14 @@ class _CommentTile extends StatefulWidget {
   });
 
   @override
-  State<_CommentTile> createState() => _CommentTileState();
+  ConsumerState<_CommentTile> createState() => _CommentTileState();
 }
 
-class _CommentTileState extends State<_CommentTile> {
+class _CommentTileState extends ConsumerState<_CommentTile> {
   late bool _isLiked;
   late int _likesCount;
   bool _isLoading = false;
+  final GlobalKey _commentBubbleKey = GlobalKey();
 
   @override
   void initState() {
@@ -433,10 +438,97 @@ class _CommentTileState extends State<_CommentTile> {
     }
   }
 
+  void _showCommentReportDialog(BuildContext context, CommentModel comment) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ReportBottomSheet(
+        contentId: comment.id,
+        contentType: 'comment',
+        reporterId: widget.currentUserId ?? '',
+      ),
+    ).then((_) {
+      ref.invalidate(commentsProvider(comment.postId));
+    });
+  }
+
+  void _showCommentContextMenu(BuildContext context) {
+    HapticFeedback.mediumImpact();
+    final renderBox = _commentBubbleKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final size = renderBox.size;
+    final position = renderBox.localToGlobal(Offset.zero);
+    final comment = widget.node.comment;
+    final isOwner = comment.userId == widget.currentUserId;
+
+    // Bản sao giao diện bình luận để hiển thị nảy lên trong overlay
+    final overlayBubbleWidget = Container(
+      width: size.width,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(comment.author?.displayName ?? '',
+                  style: AppTextStyles.titleSmall),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Text('•', style: TextStyle(fontSize: 10, color: Colors.grey)),
+              ),
+              Text(comment.createdAt.timeAgo,
+                  style: AppTextStyles.caption.copyWith(fontSize: 11)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ParsedCaptionText(text: comment.content, style: AppTextStyles.bodyMedium, enableTranslate: false),
+        ],
+      ),
+    );
+
+    Navigator.push(
+      context,
+      MessageContextMenuRoute(
+        messagePosition: position,
+        messageSize: size,
+        messageWidget: overlayBubbleWidget,
+        isMine: isOwner,
+        menuContentWidget: CommentPopupMenuContent(
+          isMine: isOwner,
+          onReply: () {
+            Navigator.pop(context);
+            widget.onReply();
+          },
+          onCopy: () {
+            Navigator.pop(context);
+            Clipboard.setData(ClipboardData(text: comment.content));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Đã sao chép bình luận vào bộ nhớ tạm'),
+              duration: Duration(seconds: 1),
+            ));
+          },
+          onDelete: () {
+            Navigator.pop(context);
+            widget.onDelete();
+          },
+          onReport: () {
+            Navigator.pop(context);
+            _showCommentReportDialog(context, comment);
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final comment = widget.node.comment;
-    final isOwner = comment.userId == widget.currentUserId;
     
     // Level 1: marginLeft = 0, radius = 18
     // Level 2: marginLeft = 40, radius = 14
@@ -463,37 +555,34 @@ class _CommentTileState extends State<_CommentTile> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(comment.author?.displayName ?? '',
-                              style: AppTextStyles.titleSmall),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 4),
-                            child: Text('•', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                          ),
-                          Text(comment.createdAt.timeAgo,
-                              style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                          const Spacer(),
-                          if (isOwner)
-                            GestureDetector(
-                              onTap: widget.onDelete,
-                              child: Icon(CupertinoIcons.trash,
-                                  size: 14, color: Theme.of(context).hintColor),
+                GestureDetector(
+                  key: _commentBubbleKey,
+                  onLongPress: () => _showCommentContextMenu(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(comment.author?.displayName ?? '',
+                                style: AppTextStyles.titleSmall),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4),
+                              child: Text('•', style: TextStyle(fontSize: 10, color: Colors.grey)),
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      ParsedCaptionText(text: comment.content, style: AppTextStyles.bodyMedium),
-                    ],
+                            Text(comment.createdAt.timeAgo,
+                                style: AppTextStyles.caption.copyWith(fontSize: 11)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        ParsedCaptionText(text: comment.content, style: AppTextStyles.bodyMedium),
+                      ],
+                    ),
                   ),
                 ),
                 // Actions (Reply, Like)
@@ -549,4 +638,135 @@ class _CommentTileState extends State<_CommentTile> {
       ),
     );
   }
+}
+
+class CommentPopupMenuContent extends StatelessWidget {
+  final bool isMine;
+  final VoidCallback onReply;
+  final VoidCallback onCopy;
+  final VoidCallback onDelete;
+  final VoidCallback onReport;
+
+  const CommentPopupMenuContent({
+    super.key,
+    required this.isMine,
+    required this.onReply,
+    required this.onCopy,
+    required this.onDelete,
+    required this.onReport,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final containerColor = isDark ? const Color(0xFF1E1E2C) : Colors.white;
+
+    final List<_GridActionItem> actionItems = [
+      _GridActionItem(
+        icon: CupertinoIcons.reply,
+        label: 'Trả lời',
+        onTap: onReply,
+        iconColor: Colors.blue,
+      ),
+      _GridActionItem(
+        icon: CupertinoIcons.doc_on_doc,
+        label: 'Sao chép',
+        onTap: onCopy,
+        iconColor: Colors.teal,
+      ),
+      if (isMine)
+        _GridActionItem(
+          icon: CupertinoIcons.trash,
+          label: 'Xóa',
+          onTap: onDelete,
+          iconColor: Colors.red,
+          isDestructive: true,
+        ),
+      if (!isMine)
+        _GridActionItem(
+          icon: CupertinoIcons.flag,
+          label: 'Báo cáo',
+          onTap: onReport,
+          iconColor: Colors.redAccent,
+        ),
+    ];
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 260,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+        decoration: BoxDecoration(
+          color: containerColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 12,
+              spreadRadius: 1,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 14,
+          alignment: WrapAlignment.start,
+          children: actionItems.map((item) {
+            return SizedBox(
+              width: 56,
+              child: GestureDetector(
+                onTap: item.onTap,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: item.isDestructive
+                            ? Colors.red.withValues(alpha: 0.1)
+                            : theme.colorScheme.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        item.icon,
+                        color: item.isDestructive ? Colors.red : item.iconColor,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.label,
+                      style: const TextStyle(fontSize: 11),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _GridActionItem {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color iconColor;
+  final bool isDestructive;
+
+  const _GridActionItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.iconColor,
+    this.isDestructive = false,
+  });
 }

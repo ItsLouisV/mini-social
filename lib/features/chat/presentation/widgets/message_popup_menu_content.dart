@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class MessagePopupMenuContent extends StatelessWidget {
   final bool isMine;
@@ -19,6 +20,7 @@ class MessagePopupMenuContent extends StatelessWidget {
   final VoidCallback? onClearAllReactions;
   final VoidCallback? onTranslate;
   final bool isTranslationShown;
+  final VoidCallback? onReport;
 
   const MessagePopupMenuContent({
     super.key,
@@ -38,6 +40,7 @@ class MessagePopupMenuContent extends StatelessWidget {
     this.onClearAllReactions,
     this.onTranslate,
     this.isTranslationShown = false,
+    this.onReport,
   });
 
   @override
@@ -70,10 +73,11 @@ class MessagePopupMenuContent extends StatelessWidget {
         ),
       if (isText && onTranslate != null)
         _GridActionItem(
-          icon: isTranslationShown ? CupertinoIcons.eye_slash : CupertinoIcons.globe,
+          icon: FontAwesomeIcons.language,
           label: isTranslationShown ? 'Ẩn dịch' : 'Dịch',
           onTap: onTranslate!,
           iconColor: Colors.blue.shade600,
+          isFontAwesome: true,
         ),
       _GridActionItem(
         icon: isPinned ? CupertinoIcons.pin_slash : CupertinoIcons.pin,
@@ -101,6 +105,13 @@ class MessagePopupMenuContent extends StatelessWidget {
         iconColor: Colors.red,
         isDestructive: true,
       ),
+      if (!isMine && onReport != null)
+        _GridActionItem(
+          icon: CupertinoIcons.flag,
+          label: 'Báo cáo',
+          onTap: onReport!,
+          iconColor: Colors.redAccent,
+        ),
     ];
 
     return Material(
@@ -200,10 +211,18 @@ class MessagePopupMenuContent extends StatelessWidget {
                                 : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.08)),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(
-                            item.icon,
-                            size: 20,
-                            color: item.iconColor,
+                          child: Center(
+                            child: item.isFontAwesome
+                                ? FaIcon(
+                                    item.icon,
+                                    size: 20,
+                                    color: item.iconColor,
+                                  )
+                                : Icon(
+                                    item.icon as IconData?,
+                                    size: 20,
+                                    color: item.iconColor,
+                                  ),
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -233,11 +252,12 @@ class MessagePopupMenuContent extends StatelessWidget {
 }
 
 class _GridActionItem {
-  final IconData icon;
+  final dynamic icon;
   final String label;
   final VoidCallback onTap;
   final Color iconColor;
   final bool isDestructive;
+  final bool isFontAwesome;
 
   const _GridActionItem({
     required this.icon,
@@ -245,6 +265,7 @@ class _GridActionItem {
     required this.onTap,
     required this.iconColor,
     this.isDestructive = false,
+    this.isFontAwesome = false,
   });
 }
 

@@ -7,11 +7,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/localization/app_translations.dart';
 import '../../../../core/utils/image_utils.dart';
+import '../../../../core/utils/image_compressor.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
@@ -116,22 +118,66 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       finalCaption += (finalCaption.isNotEmpty ? '\n' : '') + extraDetails.join(' ');
     }
 
-    // AI Content Moderation trước khi đăng bài
+    // AI Content Moderation trước khi đăng bài (Kiểm duyệt cả Chữ VÀ Ảnh khiêu dâm/nhạy cảm)
     setState(() => _isPosting = true);
     try {
-      if (finalCaption.isNotEmpty) {
-        final mod = await ref.read(aiRepositoryProvider).moderateContent(finalCaption);
-        if (!mod.isSafe) {
-          if (mounted) {
-            setState(() => _isPosting = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Nội dung vi phạm tiêu chuẩn: ${mod.reason}'),
-                backgroundColor: Colors.redAccent,
-              ),
-            );
-          }
-          return;
+      final postId = const Uuid().v4();
+      final currentUserId = ref.read(currentUserIdProvider);
+      
+      String? mediaBase64;
+      String? mimeType;
+      String mediaType = 'image';
+
+      if (_media.isNotEmpty) {
+        final firstFile = _media.first;
+        final isVid = _isVideo(firstFile);
+        mediaType = isVid ? 'video' : 'image';
+
+        if (isVid) {
+          final bytes = await firstFile.readAsBytes();
+          mediaBase64 = base64Encode(bytes);
+          final ext = firstFile.name.split('.').last.toLowerCase();
+          mimeType = ext == 'mov' ? 'video/quicktime' : 'video/mp4';
+        } else {
+          final bytes = await ImageCompressor.compressXFile(firstFile);
+          mediaBase64 = base64Encode(bytes);
+          final ext = firstFile.name.split('.').last.toLowerCase();
+          mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
+        }
+      }
+
+      final mod = await ref.read(aiRepositoryProvider).moderateContent(
+            text: finalCaption.isNotEmpty ? finalCaption : null,
+            imageBase64: mediaBase64,
+            imageMimeType: mimeType,
+            contentId: postId,
+            contentType: 'post',
+            userId: currentUserId,
+          );
+
+      if (mod.decision == 'REJECT' || !mod.isSafe) {
+        if (mounted) {
+          setState(() => _isPosting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🛑 Từ chối bài viết: ${mod.reason}'),
+              backgroundColor: Colors.redAccent,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (mod.decision == 'HUMAN_REVIEW') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⏳ Bài viết của bạn cần kiểm duyệt thủ công: ${mod.reason}'),
+              backgroundColor: Colors.orangeAccent,
+              duration: const Duration(seconds: 4),
+            ),
+          );
         }
       }
 
@@ -140,6 +186,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             media: _media,
             privacy: _privacy,
             layoutType: _selectedLayout,
+            postId: postId,
           );
       if (mounted) context.pop();
     } catch (e) {
@@ -166,7 +213,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       if (_media.isNotEmpty) {
         final firstFile = _media.first;
         if (!_isVideo(firstFile)) {
-          final bytes = await firstFile.readAsBytes();
+          final bytes = await ImageCompressor.compressXFile(firstFile);
           imageBase64 = base64Encode(bytes);
           final ext = firstFile.name.split('.').last.toLowerCase();
           mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';

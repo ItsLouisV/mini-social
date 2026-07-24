@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -17,6 +18,7 @@ import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
+import '../../../../shared/widgets/report_bottom_sheet.dart';
 import '../../domain/message_model.dart';
 import '../../domain/pinned_message_model.dart';
 import '../../providers/chat_provider.dart';
@@ -2294,6 +2296,19 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
     }
   }
 
+  void _showMessageReportDialog(MessageModel message) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ReportBottomSheet(
+        contentId: message.id,
+        contentType: 'message',
+        reporterId: widget.currentUserId,
+      ),
+    );
+  }
+
   void _showCustomContextMenu(BuildContext context) {
     HapticFeedback.mediumImpact();
     final renderBox = _bubbleKey.currentContext?.findRenderObject() as RenderBox?;
@@ -2633,6 +2648,10 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                 }
               : null,
           isTranslationShown: _showTranslation,
+          onReport: () {
+            Navigator.pop(context);
+            _showMessageReportDialog(message);
+          },
         ),
       ),
     );
@@ -3000,8 +3019,8 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                               : Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Icon(
-                                      CupertinoIcons.globe,
+                                    FaIcon(
+                                      FontAwesomeIcons.language,
                                       size: 13,
                                       color: (isMine
                                               ? Colors.white

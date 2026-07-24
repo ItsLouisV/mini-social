@@ -14,6 +14,8 @@ import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
 import '../widgets/image_carousel.dart';
 import '../widgets/post_actions.dart';
+import '../../../auth/providers/auth_provider.dart';
+import '../../../../shared/widgets/report_bottom_sheet.dart';
 
 class PostCard extends ConsumerWidget {
   final PostModel post;
@@ -662,224 +664,19 @@ void _showWhySeeThisPostDialog(BuildContext context, PostModel post) {
 
 // ── Dialog Báo cáo bài viết toàn cục ──
 void _showGlobalReportDialog(BuildContext context, WidgetRef ref, PostModel post) {
-  final Set<String> selectedReasons = {};
-  final customReasonController = TextEditingController();
-
-  final options = [
-    'Spam',
-    'Bạo lực hoặc nội dung phản cảm',
-    'Quấy rối',
-    'Ngôn từ gây thù ghét',
-    'Tin giả/Sai sự thật',
-    'Khác...',
-  ];
-
-  showDialog(
+  final currentUserId = ref.read(currentUserIdProvider) ?? '';
+  showModalBottomSheet(
     context: context,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          final theme = Theme.of(context);
-          final isDark = theme.brightness == Brightness.dark;
-
-          final hasCustomText = selectedReasons.contains('Khác...') &&
-              customReasonController.text.trim().isNotEmpty;
-
-          final canSubmit = selectedReasons.isNotEmpty &&
-              (!selectedReasons.contains('Khác...') || hasCustomText || selectedReasons.length > 1);
-
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            backgroundColor: theme.dialogBackgroundColor,
-            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-            contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            title: Row(
-              children: [
-                Icon(
-                  CupertinoIcons.flag_fill,
-                  color: theme.colorScheme.primary,
-                  size: 22,
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Báo cáo bài viết',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                ),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Hãy chọn một hoặc nhiều lý do bạn muốn báo cáo:',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.hintColor,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  ...options.map((reason) {
-                    final isChecked = selectedReasons.contains(reason);
-                    return InkWell(
-                      onTap: () {
-                        setState(() {
-                          if (isChecked) {
-                            selectedReasons.remove(reason);
-                          } else {
-                            selectedReasons.add(reason);
-                          }
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 3),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isChecked
-                              ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.08)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isChecked
-                                ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                                : theme.dividerColor.withValues(alpha: 0.2),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isChecked
-                                  ? CupertinoIcons.checkmark_square_fill
-                                  : CupertinoIcons.square,
-                              color: isChecked
-                                  ? theme.colorScheme.primary
-                                  : theme.hintColor,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                reason,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: isChecked ? FontWeight.w600 : FontWeight.normal,
-                                  color: isChecked
-                                      ? theme.colorScheme.primary
-                                      : theme.textTheme.bodyMedium?.color,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                  if (selectedReasons.contains('Khác...')) ...[
-                    const SizedBox(height: 12),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.05)
-                            : theme.colorScheme.surfaceVariant.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.4),
-                          width: 1.2,
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: TextField(
-                        controller: customReasonController,
-                        onChanged: (_) => setState(() {}),
-                        maxLines: 3,
-                        minLines: 2,
-                        style: const TextStyle(fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'Nhập chi tiết lý do của bạn...',
-                          hintStyle: TextStyle(fontSize: 13, color: theme.hintColor),
-                          border: InputBorder.none,
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                style: TextButton.styleFrom(
-                  foregroundColor: theme.hintColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                ),
-                child: const Text('Hủy'),
-              ),
-              if (canSubmit)
-                ElevatedButton(
-                  onPressed: () async {
-                    final List<String> resultReasons = [];
-                    for (final r in options) {
-                      if (selectedReasons.contains(r)) {
-                        if (r == 'Khác...') {
-                          final customText = customReasonController.text.trim();
-                          if (customText.isNotEmpty) {
-                            resultReasons.add('Khác: $customText');
-                          } else if (selectedReasons.length == 1) {
-                            resultReasons.add('Lý do khác');
-                          }
-                        } else {
-                          resultReasons.add(r);
-                        }
-                      }
-                    }
-
-                    final finalReasonStr = resultReasons.join(', ');
-                    Navigator.pop(context);
-
-                    try {
-                      await ref.read(postRepositoryProvider).reportPost(
-                            postId: post.id,
-                            reason: finalReasonStr,
-                          );
-                      ref.read(postLocalStatesProvider.notifier).reportPost(post.id);
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Lỗi gửi báo cáo: $e')),
-                        );
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  ),
-                  child: const Text(
-                    'Gửi',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
-                  ),
-                ),
-            ],
-          );
-        },
-      );
-    },
-  );
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => ReportBottomSheet(
+      contentId: post.id,
+      contentType: 'post',
+      reporterId: currentUserId,
+    ),
+  ).then((_) {
+    ref.invalidate(feedPostsProvider);
+  });
 }
 
 // ── Banner Ẩn / Báo cáo / Thùng rác bài viết ──
