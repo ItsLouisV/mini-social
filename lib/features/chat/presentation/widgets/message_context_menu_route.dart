@@ -8,6 +8,7 @@ class MessageContextMenuRoute extends PageRouteBuilder {
   final Widget messageWidget;
   final Widget menuContentWidget;
   final bool isMine;
+  final double estimatedMenuHeight;
 
   MessageContextMenuRoute({
     required this.messagePosition,
@@ -15,6 +16,7 @@ class MessageContextMenuRoute extends PageRouteBuilder {
     required this.messageWidget,
     required this.menuContentWidget,
     required this.isMine,
+    this.estimatedMenuHeight = 246.0,
   }) : super(
           opaque: false,
           barrierDismissible: true,
@@ -29,6 +31,7 @@ class MessageContextMenuRoute extends PageRouteBuilder {
               menuContentWidget: menuContentWidget,
               isMine: isMine,
               animation: animation,
+              menuHeight: estimatedMenuHeight,
             );
           },
         );
@@ -41,6 +44,7 @@ class _MessageContextMenuOverlay extends StatelessWidget {
   final Widget menuContentWidget;
   final bool isMine;
   final Animation<double> animation;
+  final double menuHeight;
 
   const _MessageContextMenuOverlay({
     required this.messagePosition,
@@ -49,6 +53,7 @@ class _MessageContextMenuOverlay extends StatelessWidget {
     required this.menuContentWidget,
     required this.isMine,
     required this.animation,
+    required this.menuHeight,
   });
 
   @override
@@ -57,14 +62,9 @@ class _MessageContextMenuOverlay extends StatelessWidget {
     final screenHeight = MediaQuery.of(context).size.height;
     const menuWidth = 290.0;
     
-    // Estimate heights
-    const emojiBarHeight = 50.0;
-    const actionsMenuHeight = 160.0;
-    const totalMenuHeight = emojiBarHeight + actionsMenuHeight + 36.0; // reactions + grid + margins
-
     // Decide whether to place menu above or below the bubble
     final spaceBelow = screenHeight - (messagePosition.dy + messageSize.height);
-    final placeMenuAbove = spaceBelow < totalMenuHeight && messagePosition.dy > totalMenuHeight;
+    final placeMenuAbove = spaceBelow < menuHeight && messagePosition.dy > menuHeight;
 
     // Vector to center of screen
     final bubbleCenterX = messagePosition.dx + messageSize.width / 2;
@@ -139,14 +139,14 @@ class _MessageContextMenuOverlay extends StatelessWidget {
               }
               menuLeft = menuLeft.clamp(12.0, screenWidth - menuWidth - 12.0);
 
-              // Vertical positioning for menu (with increased spacing 16.0 instead of 10.0)
+              // Vertical positioning for menu
               double menuTop;
               if (placeMenuAbove) {
-                menuTop = animatedBubbleTop - totalMenuHeight - 13.0;
-                menuTop = menuTop.clamp(20.0, screenHeight - totalMenuHeight - 20.0);
+                menuTop = animatedBubbleTop - menuHeight - 13.0;
+                menuTop = menuTop.clamp(20.0, screenHeight - menuHeight - 20.0);
               } else {
                 menuTop = animatedBubbleTop + messageSize.height + 13.0;
-                menuTop = menuTop.clamp(20.0, screenHeight - totalMenuHeight - 20.0);
+                menuTop = menuTop.clamp(20.0, screenHeight - menuHeight - 20.0);
               }
 
               return Stack(

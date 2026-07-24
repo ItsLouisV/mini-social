@@ -3,13 +3,24 @@ import '../data/post_repository.dart';
 import '../domain/comment_model.dart';
 import '../domain/post_model.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../social/data/recommendation_repository.dart';
 
 final postRepositoryProvider = Provider<PostRepository>((ref) {
   return PostRepository(ref.watch(supabaseServiceProvider));
 });
 
-final feedPostsProvider = StreamProvider<List<PostModel>>((ref) {
-  return ref.watch(postRepositoryProvider).watchPosts();
+final feedPostsProvider = StreamProvider<List<PostModel>>((ref) async* {
+  final currentUserId = ref.watch(supabaseServiceProvider).currentUserId;
+  if (currentUserId != null && currentUserId.isNotEmpty) {
+    try {
+      final recommended = await ref.watch(recommendationRepositoryProvider).getRecommendedFeed(userId: currentUserId);
+      if (recommended.isNotEmpty) {
+        yield recommended;
+        return;
+      }
+    } catch (_) {}
+  }
+  yield* ref.watch(postRepositoryProvider).watchPosts();
 });
 
 // Single post
@@ -109,4 +120,16 @@ final postLocalStatesProvider =
 /// Stream/Future provider lấy danh sách bài viết trong thùng rác
 final trashedPostsProvider = FutureProvider<List<PostModel>>((ref) async {
   return ref.watch(postRepositoryProvider).getTrashedPosts();
+});
+
+/// Provider danh sách người quen gợi ý (People You May Know)
+final pymkProvider = FutureProvider.family<List<PymkCandidate>, String>((ref, userId) async {
+  if (userId.isEmpty) return [];
+  return ref.watch(recommendationRepositoryProvider).getPeopleYouMayKnow(userId: userId);
+});
+
+/// Provider bài viết đề xuất xếp hạng cá nhân hóa
+final recommendedFeedProvider = FutureProvider.family<List<PostModel>, String>((ref, userId) async {
+  if (userId.isEmpty) return [];
+  return ref.watch(recommendationRepositoryProvider).getRecommendedFeed(userId: userId);
 });

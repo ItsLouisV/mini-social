@@ -4,27 +4,51 @@ class PostMedia {
   final String id;
   final String postId;
   final String url;
+  final String? path;
   final String type; // 'image' | 'video'
   final int orderIndex;
   final DateTime createdAt;
+  final int? width;
+  final int? height;
+  final double? aspectRatio;
+  final String? thumbnailUrl;
 
   const PostMedia({
     required this.id,
     required this.postId,
     required this.url,
+    this.path,
     this.type = 'image',
     this.orderIndex = 0,
     required this.createdAt,
+    this.width,
+    this.height,
+    this.aspectRatio,
+    this.thumbnailUrl,
   });
 
   factory PostMedia.fromJson(Map<String, dynamic> json) {
+    final w = (json['width'] as num?)?.toInt();
+    final h = (json['height'] as num?)?.toInt();
+    final ar = (json['aspect_ratio'] ?? json['aspectRatio'] as num?)?.toDouble() ??
+        (w != null && h != null && h > 0 ? w / h : null);
+
     return PostMedia(
-      id: json['id'] as String,
-      postId: json['post_id'] as String,
-      url: json['url'] as String,
-      type: json['type'] as String? ?? 'image',
-      orderIndex: json['order_index'] as int? ?? 0,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      id: (json['id'] ?? '') as String,
+      postId: (json['post_id'] ?? json['postId'] ?? '') as String,
+      url: (json['url'] ?? '') as String,
+      path: json['path'] as String?,
+      type: (json['type'] ?? 'image') as String,
+      orderIndex: (json['order_index'] ?? json['orderIndex'] ?? 0) as int,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : json['createdAt'] != null
+              ? DateTime.parse(json['createdAt'] as String)
+              : DateTime.now(),
+      width: w,
+      height: h,
+      aspectRatio: ar,
+      thumbnailUrl: json['thumbnail_url'] as String? ?? json['thumbnailUrl'] as String?,
     );
   }
 
@@ -32,9 +56,14 @@ class PostMedia {
         'id': id,
         'post_id': postId,
         'url': url,
+        'path': path,
         'type': type,
         'order_index': orderIndex,
         'created_at': createdAt.toIso8601String(),
+        'width': width,
+        'height': height,
+        'aspect_ratio': aspectRatio,
+        'thumbnail_url': thumbnailUrl,
       };
 }
 

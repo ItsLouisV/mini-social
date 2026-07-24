@@ -17,7 +17,9 @@ import '../widgets/post_actions.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../shared/widgets/report_bottom_sheet.dart';
 
-class PostCard extends ConsumerWidget {
+import '../../../social/data/recommendation_repository.dart';
+
+class PostCard extends ConsumerStatefulWidget {
   final PostModel post;
   final String currentUserId;
 
@@ -28,7 +30,38 @@ class PostCard extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends ConsumerState<PostCard> {
+  late DateTime _viewStartTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewStartTime = DateTime.now();
+  }
+
+  @override
+  void dispose() {
+    final durationMs = DateTime.now().difference(_viewStartTime).inMilliseconds;
+    if (durationMs >= 1200 && widget.currentUserId.isNotEmpty) {
+      try {
+        ref.read(recommendationRepositoryProvider).trackInteraction(
+          userId: widget.currentUserId,
+          postId: widget.post.id,
+          interactionType: 'view_dwell',
+          durationMs: durationMs,
+        );
+      } catch (_) {}
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final post = widget.post;
+    final currentUserId = widget.currentUserId;
     final isOwner = post.userId == currentUserId;
     final localStates = ref.watch(postLocalStatesProvider);
     final status = localStates[post.id] ?? PostLocalStatus.none;
@@ -240,11 +273,12 @@ class PostCard extends ConsumerWidget {
   void _showMoreOptions(BuildContext context, WidgetRef ref, bool isOwner) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return _FacebookOptionsBottomSheet(
-          post: post,
+          post: widget.post,
           ref: ref,
           isOwner: isOwner,
         );
@@ -253,7 +287,7 @@ class PostCard extends ConsumerWidget {
   }
 
   void _showReportDialog(BuildContext context, WidgetRef ref) {
-    _showGlobalReportDialog(context, ref, post);
+    _showGlobalReportDialog(context, ref, widget.post);
   }
 
   void _confirmDelete(BuildContext context, WidgetRef ref) {
@@ -274,7 +308,7 @@ class PostCard extends ConsumerWidget {
               try {
                 await ref
                     .read(postRepositoryProvider)
-                    .deletePost(post.id);
+                    .deletePost(widget.post.id);
                 ref.invalidate(feedPostsProvider);
               } catch (e) {
                 if (context.mounted) {
@@ -667,6 +701,7 @@ void _showGlobalReportDialog(BuildContext context, WidgetRef ref, PostModel post
   final currentUserId = ref.read(currentUserIdProvider) ?? '';
   showModalBottomSheet(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) => ReportBottomSheet(

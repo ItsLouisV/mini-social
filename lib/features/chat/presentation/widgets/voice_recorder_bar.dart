@@ -43,7 +43,7 @@ class _VoiceRecorderBarState extends State<VoiceRecorderBar>
   StreamSubscription? _previewStateSub;
 
   static const List<double> _liveWaveBase = [
-    0.7, 0.3, 0.9, 0.4, 1.2, 1.0, 0.5, 0.8, 0.3, 1.2, 0.9, 0.4, 0.7, 0.3, 0.8, 0.9, 0.6, 0.5
+    0.4, 0.7, 0.2, 0.9, 1.2, 1.0, 0.5, 0.8, 0.3, 1.2, 0.9, 0.4, 0.7, 0.3, 0.1, 0.9, 0.6, 0.5
   ];
 
   @override
@@ -75,7 +75,7 @@ class _VoiceRecorderBarState extends State<VoiceRecorderBar>
         final RecordConfig config = const RecordConfig(
           encoder: AudioEncoder.aacLc,
           bitRate: 128000,
-          sampleRate: 44100,
+          sampleRate: 48000,
         );
 
         String? path;

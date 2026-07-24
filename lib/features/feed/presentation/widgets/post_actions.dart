@@ -3,9 +3,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/localization/app_translations.dart';
-import '../../../../core/constants/app_text_styles.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
+import '../../../auth/providers/auth_provider.dart';
+import '../../../social/data/recommendation_repository.dart';
 
 class PostActions extends ConsumerWidget {
   final PostModel post;
@@ -99,7 +100,17 @@ class PostActions extends ConsumerWidget {
               // Like Button
               Expanded(
                 child: InkWell(
-                  onTap: () => ref.read(likeNotifierProvider(post.id).notifier).toggle(isLiked),
+                  onTap: () {
+                    final uid = ref.read(currentUserIdProvider) ?? '';
+                    if (uid.isNotEmpty && !isLiked) {
+                      ref.read(recommendationRepositoryProvider).trackInteraction(
+                        userId: uid,
+                        postId: post.id,
+                        interactionType: 'like',
+                      );
+                    }
+                    ref.read(likeNotifierProvider(post.id).notifier).toggle(isLiked);
+                  },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
                     child: Row(
@@ -158,6 +169,14 @@ class PostActions extends ConsumerWidget {
               Expanded(
                 child: InkWell(
                   onTap: () {
+                    final uid = ref.read(currentUserIdProvider) ?? '';
+                    if (uid.isNotEmpty) {
+                      ref.read(recommendationRepositoryProvider).trackInteraction(
+                        userId: uid,
+                        postId: post.id,
+                        interactionType: 'share',
+                      );
+                    }
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Đã sao chép liên kết chia sẻ bài viết!')),
                     );

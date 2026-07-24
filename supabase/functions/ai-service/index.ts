@@ -370,15 +370,17 @@ Về phong cách viết: Hãy đọc kỹ nội dung/ảnh và tự phán đoán
 - Nếu bối cảnh trung lập hoặc không rõ ràng: ưu tiên phong cách tươi tắn, tự nhiên, không cố gắng thêm vào gì.
 `.trim();
 
+      const hashtagRule = "QUAN TRỌNG: Hashtag PHẢI viết không dấu, không khoảng trắng, và chỉ dùng chữ cái Latin hoặc số (ví dụ đúng: #CafeSang, #HoiAn, #OiGioi, #CuocSong — ví dụ SAI: #CàPhéSáng, #HộiAn, #ÔiGiời).";
+
       let prompt = "";
       if (imageBase64 && text) {
-        prompt = `Hãy đóng vai một nhà sáng tạo nội dung mạng xã hội. Nhìn vào bức ảnh này và kết hợp với ý tưởng: "${text}". Viết một caption hấp dẫn, tối đa 10 câu kèm 2-4 hashtag. ${vibeInstruction} ${outputInstruction}`;
+        prompt = `Hãy đóng vai một nhà sáng tạo nội dung mạng xã hội. Nhìn vào bức ảnh này và kết hợp với ý tưởng: "${text}". Viết một caption hấp dẫn, tối đa 10 câu kèm 2-4 hashtag. ${vibeInstruction} ${hashtagRule} ${outputInstruction}`;
       } else if (imageBase64) {
-        prompt = `Hãy đóng vai một nhà sáng tạo nội dung mạng xã hội. Phân tích bối cảnh, đối tượng và cảm xúc trong bức ảnh này, sau đó viết một caption sinh động, tối đa 10 câu kèm 2-4 hashtag. ${vibeInstruction} ${outputInstruction}`;
+        prompt = `Hãy đóng vai một nhà sáng tạo nội dung mạng xã hội. Phân tích bối cảnh, đối tượng và cảm xúc trong bức ảnh này, sau đó viết một caption sinh động, tối đa 10 câu kèm 2-4 hashtag. ${vibeInstruction} ${hashtagRule} ${outputInstruction}`;
       } else if (text) {
-        prompt = `Hãy đóng vai một nhà sáng tạo nội dung mạng xã hội. Dựa trên ý tưởng: "${text}", viết một caption ấn tượng, tối đa 10 câu kèm 2-4 hashtag. ${vibeInstruction} ${outputInstruction}`;
+        prompt = `Hãy đóng vai một nhà sáng tạo nội dung mạng xã hội. Dựa trên ý tưởng: "${text}", viết một caption ấn tượng, tối đa 10 câu kèm 2-4 hashtag. ${vibeInstruction} ${hashtagRule} ${outputInstruction}`;
       } else {
-        prompt = `Hãy đóng vai một nhà sáng tạo nội dung mạng xã hội. Viết một caption tươi vui, chill và đáng yêu về một khoảnh khắc trong ngày, tối đa 10 câu kèm 2-4 hashtag. ${vibeInstruction} ${outputInstruction}`;
+        prompt = `Hãy đóng vai một nhà sáng tạo nội dung mạng xã hội. Viết một caption tươi vui, chill và đáng yêu về một khoảnh khắc trong ngày, tối đa 10 câu kèm 2-4 hashtag. ${vibeInstruction} ${hashtagRule} ${outputInstruction}`;
       }
 
       const response = await fetchFromGemini({

@@ -274,6 +274,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -363,6 +364,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final songs = ['Việt Nam Ơi', 'Lạc Trôi - Sơn Tùng M-TP', 'Chạy Ngay Đi', 'Ánh Nắng Của Anh', 'Nơi Này Có Anh'];
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         return Container(
@@ -392,6 +394,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final locations = ['Hà Nội', 'TP. Hồ Chí Minh', 'Đà Nẵng', 'Nha Trang', 'Đà Lạt', 'Phú Quốc'];
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         return Container(
@@ -428,6 +431,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     ];
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         return Container(
@@ -461,6 +465,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final friends = ['Phương Linh', 'Văn Nam', 'Hoàng Minh', 'Thu Hà', 'Đức Anh'];
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         return StatefulBuilder(
@@ -516,6 +521,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final chipTextColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: isDark ? const Color(0xFF18191A) : Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -811,7 +817,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   children: [
                     _buildOptionCard(
                       icon: CupertinoIcons.sparkles,
-                      label: _isGeneratingAICaption ? 'Đang tạo AI...' : 'AI gợi ý ✨',
+                      label: _isGeneratingAICaption ? 'Đang tạo...' : 'AI gợi ý ✨',
                       bgColor: Colors.purple.withValues(alpha: 0.15),
                       textColor: Colors.purpleAccent,
                       onTap: _isGeneratingAICaption ? null : () => _generateAICaption(),

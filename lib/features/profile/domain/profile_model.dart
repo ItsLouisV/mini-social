@@ -30,19 +30,22 @@ class ProfileModel {
   String get displayName => fullName?.isNotEmpty == true ? fullName! : username;
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
+    final createdAtRaw = json['created_at'] ?? json['createdAt'];
     return ProfileModel(
-      id: json['id'] as String,
-      username: json['username'] as String? ?? '',
-      fullName: json['full_name'] as String?,
+      id: (json['id'] ?? '') as String,
+      username: (json['username'] ?? '') as String,
+      fullName: (json['full_name'] ?? json['fullName']) as String?,
       bio: json['bio'] as String?,
-      avatarUrl: json['avatar_url'] as String?,
-      coverUrl: json['cover_url'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      postsCount: json['posts_count'] as int? ?? 0,
-      followersCount: json['followers_count'] as int? ?? 0,
-      followingCount: json['following_count'] as int? ?? 0,
-      interests: (json['interests'] as List?)?.map((e) => e as String).toList() ?? const [],
-      isPrivateProfile: json['is_private_profile'] as bool? ?? false,
+      avatarUrl: (json['avatar_url'] ?? json['avatarUrl']) as String?,
+      coverUrl: (json['cover_url'] ?? json['coverUrl']) as String?,
+      createdAt: createdAtRaw != null
+          ? DateTime.parse(createdAtRaw.toString())
+          : DateTime.now(),
+      postsCount: (json['posts_count'] ?? json['postsCount'] ?? 0) as int,
+      followersCount: (json['followers_count'] ?? json['followersCount'] ?? 0) as int,
+      followingCount: (json['following_count'] ?? json['followingCount'] ?? 0) as int,
+      interests: (json['interests'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      isPrivateProfile: (json['is_private_profile'] ?? json['isPrivateProfile'] ?? false) as bool,
     );
   }
 

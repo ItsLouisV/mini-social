@@ -441,6 +441,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
   void _showCommentReportDialog(BuildContext context, CommentModel comment) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => ReportBottomSheet(
@@ -499,6 +500,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
         messageSize: size,
         messageWidget: overlayBubbleWidget,
         isMine: isOwner,
+        estimatedMenuHeight: 90.0,
         menuContentWidget: CommentPopupMenuContent(
           isMine: isOwner,
           onReply: () {

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/gallery_screen.dart';
 import '../../domain/post_model.dart';
 import '../../../../shared/widgets/app_video_player.dart';
@@ -67,11 +68,15 @@ class _ImageCarouselState extends State<ImageCarousel> {
 
   // ── 1 ảnh/video ──
   Widget _buildSingleMedia(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(
-        maxHeight: 620,
-        minHeight: 200,
-      ),
+    final item = widget.media.first;
+    // Ưu tiên lấy aspect_ratio thực tế từ metadata database
+    // Giới hạn trong khoảng [0.75, 1.91] (chuẩn Instagram/Facebook) để không bị chiếm hết màn hình
+    double targetRatio = item.aspectRatio ?? (4 / 5);
+    if (targetRatio < 0.75) targetRatio = 0.75;
+    if (targetRatio > 1.91) targetRatio = 1.91;
+
+    return AspectRatio(
+      aspectRatio: targetRatio,
       child: SizedBox(
         width: double.infinity,
         child: _buildMediaItem(context, 0),
@@ -334,6 +339,8 @@ class _ImageCarouselState extends State<ImageCarousel> {
         imageWidget = CachedNetworkImage(
           imageUrl: item.url,
           fit: BoxFit.cover,
+          fadeInDuration: const Duration(milliseconds: 200),
+          fadeOutDuration: const Duration(milliseconds: 200),
           placeholder: (_, __) => Container(
             color: AppColors.shimmerBase,
           ),
@@ -383,6 +390,18 @@ class _ImageCarouselState extends State<ImageCarousel> {
           ? null
           : () {
               if (imageIndex != -1) {
+                final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+                final postId = widget.media.isNotEmpty ? widget.media.first.postId : null;
+                if (currentUserId != null && postId != null && postId.isNotEmpty) {
+                  try {
+                    Supabase.instance.client.from('user_interactions').insert({
+                      'user_id': currentUserId,
+                      'post_id': postId,
+                      'interaction_type': 'image_click',
+                      'duration_ms': 0,
+                    });
+                  } catch (_) {}
+                }
                 GalleryScreen.open(
                   context,
                   imageUrls: imagesOnly.map((m) => m.url).toList(),

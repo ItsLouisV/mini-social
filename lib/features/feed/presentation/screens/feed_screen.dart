@@ -11,6 +11,7 @@ import '../../../auth/providers/auth_provider.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../profile/providers/profile_provider.dart';
 import '../../providers/feed_provider.dart';
+import '../widgets/people_you_may_know_carousel.dart';
 import '../widgets/post_card.dart';
 
 class FeedScreen extends ConsumerWidget {
@@ -101,20 +102,37 @@ class FeedScreen extends ConsumerWidget {
               );
             }
 
+            final showPymk = currentUserId != null && currentUserId.isNotEmpty;
+            final pymkPosition = posts.length >= 2 ? 3 : posts.length + 1;
+            final totalItemCount = posts.length + 1 + (showPymk ? 1 : 0);
+
             return RefreshIndicator.adaptive(
               onRefresh: () async {
                 ref.read(postLocalStatesProvider.notifier).clearAll();
                 ref.invalidate(feedPostsProvider);
+                if (currentUserId != null) {
+                  ref.invalidate(pymkProvider(currentUserId));
+                }
               },
               child: ListView.builder(
                 padding: EdgeInsets.zero,
-                itemCount: posts.length + 1,
+                itemCount: totalItemCount,
                 itemBuilder: (context, index) {
                   if (index == 0) {
                     return _buildCreatePostHeaderBar(context, ref);
                   }
+                  
+                  if (showPymk && index == pymkPosition) {
+                    return PeopleYouMayKnowCarousel(currentUserId: currentUserId);
+                  }
+
+                  final postIndex = (showPymk && index > pymkPosition) ? index - 2 : index - 1;
+                  if (postIndex < 0 || postIndex >= posts.length) {
+                    return const SizedBox.shrink();
+                  }
+
                   return PostCard(
-                    post: posts[index - 1],
+                    post: posts[postIndex],
                     currentUserId: currentUserId ?? '',
                   );
                 },

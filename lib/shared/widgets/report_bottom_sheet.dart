@@ -581,7 +581,7 @@ class _ReportBottomSheetState extends ConsumerState<ReportBottomSheet> {
         : 'Báo cáo bài viết hoặc bình luận';
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.86,
+      height: MediaQuery.of(context).size.height * 0.92,
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E2A) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),

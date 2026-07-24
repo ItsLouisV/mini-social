@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:async/async.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -237,13 +239,49 @@ class PostRepository {
         file: item,
       );
 
-      await _client.from(SupabaseConstants.postMediaTable).insert({
+      int? width;
+      int? height;
+      double? aspectRatio;
+
+      if (!isVideo) {
+        try {
+          final bytes = await item.readAsBytes();
+          final codec = await ui.instantiateImageCodec(bytes);
+          final frame = await codec.getNextFrame();
+          width = frame.image.width;
+          height = frame.image.height;
+          if (height > 0) {
+            aspectRatio = double.parse((width / height).toStringAsFixed(4));
+          }
+        } catch (e) {
+          print('Error extracting image metadata: $e');
+        }
+      }
+
+      final mediaInsertData = <String, dynamic>{
         'id': mediaId,
         'post_id': finalPostId,
         'url': url,
+        'path': path,
         'type': mediaType,
         'order_index': i,
-      });
+        if (width != null) 'width': width,
+        if (height != null) 'height': height,
+        if (aspectRatio != null) 'aspect_ratio': aspectRatio,
+        'thumbnail_url': isVideo ? null : url,
+      };
+
+      try {
+        await _client.from(SupabaseConstants.postMediaTable).insert(mediaInsertData);
+      } catch (_) {
+        await _client.from(SupabaseConstants.postMediaTable).insert({
+          'id': mediaId,
+          'post_id': finalPostId,
+          'url': url,
+          'type': mediaType,
+          'order_index': i,
+        });
+      }
     }
 
     // 3. Fetch the complete post
@@ -252,6 +290,33 @@ class PostRepository {
 
   // ── Delete Post ──
   Future<void> deletePost(String postId) async {
+    // 1. Lấy danh sách media trước khi xóa
+    try {
+      final mediaRows = await _client
+          .from(SupabaseConstants.postMediaTable)
+          .select('url, path')
+          .eq('post_id', postId);
+
+      final paths = <String>[];
+      for (final m in mediaRows as List) {
+        final p = m['path'] as String?;
+        final u = m['url'] as String?;
+        if (p != null && p.isNotEmpty) {
+          paths.add(p);
+        } else if (u != null && u.contains('/posts/')) {
+          paths.add(u.split('/posts/').last);
+        }
+      }
+
+      // 2. Xóa file thực tế trên Storage qua SDK (không qua SQL)
+      if (paths.isNotEmpty) {
+        await _client.storage.from(SupabaseConstants.postsBucket).remove(paths);
+      }
+    } catch (e) {
+      debugPrint('Warning: Could not delete storage files for post $postId: $e');
+    }
+
+    // 3. Xóa bản ghi post khỏi Database (post_media sẽ bị cascade delete)
     await _client.from(SupabaseConstants.postsTable).delete().eq('id', postId);
   }
 
