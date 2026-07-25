@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/profile_model.dart';
@@ -190,36 +191,79 @@ class ProfileRepository {
   }
 
   Future<List<PostModel>> getUserPosts(String userId) async {
-    final data = await _client
+    final currentId = currentUserId;
+
+    // 1. Lấy tất cả bài của userId, lọc bài đã xóa (soft delete)
+    var query = _client
         .from(SupabaseConstants.postsTable)
         .select('*, profiles(*), post_media(*)')
         .eq('user_id', userId)
+        .isFilter('deleted_at', null) // Bỏ bài đã chuyển vào thùng rác
         .order('created_at', ascending: false);
 
+    final data = await query;
     final postsList = data as List;
     if (postsList.isEmpty) return [];
 
-    final currentId = currentUserId;
+    // 2. Lọc theo quyền riêng tư (privacy)
+    List filteredPosts;
+
     if (currentId == null) {
-      return postsList.map((e) => PostModel.fromJson(e)).toList();
+      // Chưa đăng nhập: chỉ xem bài public
+      filteredPosts = postsList.where((p) => p['privacy'] == 'public').toList();
+    } else if (currentId == userId) {
+      // Chính chủ: xem tất cả
+      filteredPosts = postsList;
+    } else {
+      // Người khác: kiểm tra quan hệ bạn bè hoặc đang theo dõi
+      bool isFriendOrFollower = false;
+      try {
+        final friendCheck = await _client
+            .from('friend_requests')
+            .select('id')
+            .eq('status', 'accepted')
+            .or('and(sender_id.eq.$currentId,receiver_id.eq.$userId),and(sender_id.eq.$userId,receiver_id.eq.$currentId)')
+            .limit(1);
+
+        final followCheck = await _client
+            .from('follows')
+            .select('id')
+            .eq('follower_id', currentId)
+            .eq('following_id', userId)
+            .limit(1);
+
+        isFriendOrFollower = (friendCheck as List).isNotEmpty || (followCheck as List).isNotEmpty;
+      } catch (_) {}
+
+      filteredPosts = postsList.where((p) {
+        final privacy = p['privacy'] as String? ?? 'public';
+        if (privacy == 'public') return true;
+        if ((privacy == 'friends' || privacy == 'followers') && isFriendOrFollower) return true;
+        return false; // 'private' hoặc 'only_me' → ẩn
+      }).toList();
     }
 
-    // Fetch likes for these posts by current user
-    final postIds = postsList.map((e) => e['id']).toList();
+    if (filteredPosts.isEmpty) return [];
+
+    // 3. Lấy danh sách bài đã thích của người dùng hiện tại
     Set<String> likedPostIds = {};
-    try {
-      final likedPostsData = await _client
-          .from(SupabaseConstants.likesTable)
-          .select('post_id')
-          .eq('user_id', currentId)
-          .inFilter('post_id', postIds);
-
-      likedPostIds = (likedPostsData as List).map((e) => e['post_id'] as String).toSet();
-    } catch (e) {
-      print('Warning: Failed to fetch user profile post likes: $e');
+    if (currentId != null) {
+      try {
+        final postIds = filteredPosts.map((e) => e['id']).toList();
+        final likedPostsData = await _client
+            .from(SupabaseConstants.likesTable)
+            .select('post_id')
+            .eq('user_id', currentId)
+            .inFilter('post_id', postIds);
+        likedPostIds = (likedPostsData as List)
+            .map((e) => e['post_id'] as String)
+            .toSet();
+      } catch (e) {
+        debugPrint('Warning: Failed to fetch profile post likes: $e');
+      }
     }
 
-    return postsList.map((e) {
+    return filteredPosts.map((e) {
       return PostModel.fromJson(e, isLiked: likedPostIds.contains(e['id']));
     }).toList();
   }

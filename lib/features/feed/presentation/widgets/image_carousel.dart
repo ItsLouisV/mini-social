@@ -392,16 +392,19 @@ class _ImageCarouselState extends State<ImageCarousel> {
               if (imageIndex != -1) {
                 final currentUserId = Supabase.instance.client.auth.currentUser?.id;
                 final postId = widget.media.isNotEmpty ? widget.media.first.postId : null;
-                if (currentUserId != null && postId != null && postId.isNotEmpty) {
-                  try {
-                    Supabase.instance.client.from('user_interactions').insert({
-                      'user_id': currentUserId,
-                      'post_id': postId,
-                      'interaction_type': 'image_click',
-                      'duration_ms': 0,
-                    });
-                  } catch (_) {}
-                }
+                 if (currentUserId != null && postId != null && postId.isNotEmpty && postId != 'preview') {
+                   // Gọi bất đồng bộ không chặn UI, nhưng log lỗi nếu có
+                   Supabase.instance.client.from('user_interactions').insert({
+                     'user_id': currentUserId,
+                     'post_id': postId,
+                     'interaction_type': 'image_click',
+                     'duration_ms': 0,
+                   }).then((_) {
+                     debugPrint('Successfully logged image_click to user_interactions');
+                   }).catchError((e) {
+                     debugPrint('Error inserting image_click: $e');
+                   });
+                 }
                 GalleryScreen.open(
                   context,
                   imageUrls: imagesOnly.map((m) => m.url).toList(),

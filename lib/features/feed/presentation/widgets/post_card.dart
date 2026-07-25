@@ -35,11 +35,13 @@ class PostCard extends ConsumerStatefulWidget {
 
 class _PostCardState extends ConsumerState<PostCard> {
   late DateTime _viewStartTime;
+  late final RecommendationRepository _recommendationRepository;
 
   @override
   void initState() {
     super.initState();
     _viewStartTime = DateTime.now();
+    _recommendationRepository = ref.read(recommendationRepositoryProvider);
   }
 
   @override
@@ -47,13 +49,15 @@ class _PostCardState extends ConsumerState<PostCard> {
     final durationMs = DateTime.now().difference(_viewStartTime).inMilliseconds;
     if (durationMs >= 1200 && widget.currentUserId.isNotEmpty) {
       try {
-        ref.read(recommendationRepositoryProvider).trackInteraction(
+        _recommendationRepository.trackInteraction(
           userId: widget.currentUserId,
           postId: widget.post.id,
           interactionType: 'view_dwell',
           durationMs: durationMs,
         );
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Error tracking view_dwell in dispose: $e');
+      }
     }
     super.dispose();
   }
@@ -333,9 +337,8 @@ class _PostCardState extends ConsumerState<PostCard> {
       case 'public':
         return CupertinoIcons.globe;
       case 'friends':
-        return CupertinoIcons.person_2_fill;
       case 'followers':
-        return CupertinoIcons.person_crop_circle_badge_checkmark;
+        return CupertinoIcons.person_2_fill;
       case 'private':
         return CupertinoIcons.lock_fill;
       default:

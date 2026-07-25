@@ -78,11 +78,8 @@ class PostRepository {
       final privacy = postJson['privacy'] as String? ?? 'public';
       if (privacy == 'public') return true;
       if (privacy == 'private') return false; // Private is creator-only
-      if (privacy == 'friends') {
-        return friendIds.contains(postUserId);
-      }
-      if (privacy == 'followers') {
-        return followingIds.contains(postUserId);
+      if (privacy == 'friends' || privacy == 'followers') {
+        return friendIds.contains(postUserId) || followingIds.contains(postUserId);
       }
       return true;
     }).toList();
@@ -335,13 +332,12 @@ class PostRepository {
       if (privacy == 'private') {
         throw Exception('Bài viết này là riêng tư.');
       }
-      if (privacy == 'friends') {
+      if (privacy == 'friends' || privacy == 'followers') {
         final isFriend = await _isFriend(userId, postUserId);
-        if (!isFriend) throw Exception('Bài viết này chỉ dành cho bạn bè.');
-      }
-      if (privacy == 'followers') {
-        final following = await _isFollowing(userId, postUserId);
-        if (!following) throw Exception('Bài viết này chỉ dành cho người theo dõi.');
+        final isFollowing = await _isFollowing(userId, postUserId);
+        if (!isFriend && !isFollowing) {
+          throw Exception('Bài viết này chỉ dành cho bạn bè và người theo dõi.');
+        }
       }
     }
 

@@ -1,9 +1,18 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/post_repository.dart';
 import '../domain/comment_model.dart';
 import '../domain/post_model.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../social/data/recommendation_repository.dart';
+
+/// Global ScrollController cho Feed list.
+/// Được dùng bởi MainShell để cuộn về đầu khi bấm lại tab Home.
+final feedScrollControllerProvider = Provider<ScrollController>((ref) {
+  final controller = ScrollController();
+  ref.onDispose(controller.dispose);
+  return controller;
+});
 
 final postRepositoryProvider = Provider<PostRepository>((ref) {
   return PostRepository(ref.watch(supabaseServiceProvider));

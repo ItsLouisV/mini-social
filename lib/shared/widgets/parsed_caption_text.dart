@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_language.dart';
+import '../../core/localization/locale_provider.dart';
 import '../../features/social/data/ai_repository.dart';
+import 'expandable_caption.dart';
 
 class ParsedCaptionText extends ConsumerStatefulWidget {
   final String text;
@@ -43,7 +46,13 @@ class _ParsedCaptionTextState extends ConsumerState<ParsedCaptionText> {
 
     setState(() => _isTranslating = true);
     try {
-      final res = await ref.read(aiRepositoryProvider).translateText(widget.text);
+      final currentLang = ref.read(appLanguageProvider);
+      final targetLangStr = currentLang == AppLanguage.en ? 'English' : 'tiếng Việt';
+
+      final res = await ref.read(aiRepositoryProvider).translateText(
+        widget.text,
+        targetLanguage: targetLangStr,
+      );
       if (mounted) {
         setState(() {
           _translatedText = res;
@@ -116,10 +125,62 @@ class _ParsedCaptionTextState extends ConsumerState<ParsedCaptionText> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        RichText(
-          maxLines: widget.maxLines,
-          overflow: widget.overflow,
-          text: TextSpan(children: spans),
+        ExpandableCaption(
+          text: displayText,
+          style: defaultStyle,
+          collapsedLines: widget.maxLines ?? 3,
+          buttonStyle: const TextStyle(
+            color: Color(0xFF8A8D91),
+            fontWeight: FontWeight.bold,
+          ),
+          textSpanBuilder: (rawText, activeStyle) {
+            final hStyle = activeStyle.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w600,
+            );
+            final spans = <TextSpan>[];
+            int start = 0;
+
+            for (final match in _tagOrMentionRegExp.allMatches(rawText)) {
+              if (match.start > start) {
+                spans.add(TextSpan(
+                  text: rawText.substring(start, match.start),
+                  style: activeStyle,
+                ));
+              }
+
+              final matchText = match.group(0)!;
+              final isHashtag = matchText.startsWith('#');
+
+              spans.add(
+                TextSpan(
+                  text: matchText,
+                  style: hStyle,
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () {
+                      if (isHashtag) {
+                        final tag = matchText.substring(1);
+                        context.push('/search?q=%23$tag');
+                      } else {
+                        final username = matchText.substring(1);
+                        context.push('/search?q=$username');
+                      }
+                    },
+                ),
+              );
+
+              start = match.end;
+            }
+
+            if (start < rawText.length) {
+              spans.add(TextSpan(
+                text: rawText.substring(start),
+                style: activeStyle,
+              ));
+            }
+
+            return TextSpan(children: spans);
+          },
         ),
         if (widget.enableTranslate && widget.text.trim().isNotEmpty) ...[
           const SizedBox(height: 4),

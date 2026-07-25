@@ -44,15 +44,13 @@ class _PeopleYouMayKnowCarouselState extends ConsumerState<PeopleYouMayKnowCarou
         }
 
         return Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
+          margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF242526) : Colors.white,
-            border: Border.symmetric(
-              horizontal: BorderSide(
-                color: isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB),
-                width: 0.5,
-              ),
+            color: theme.cardColor,
+            border: Border(
+              top: BorderSide(color: theme.dividerColor.withValues(alpha: isDark ? 0.05 : 0.08), width: 0.5),
+              bottom: BorderSide(color: theme.dividerColor.withValues(alpha: isDark ? 0.05 : 0.08), width: 0.5),
             ),
           ),
           child: Column(

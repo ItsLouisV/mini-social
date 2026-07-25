@@ -35,6 +35,7 @@ import '../../features/social/presentation/screens/friends_list_screen.dart';
 import '../../features/social/presentation/screens/notification_screen.dart';
 import '../../features/social/providers/follow_provider.dart';
 import '../../features/call/presentation/screens/call_screens.dart';
+import '../../features/feed/providers/feed_provider.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _feedTabKey = GlobalKey<NavigatorState>(debugLabel: 'feedTab');
@@ -385,7 +386,25 @@ class _MainShellState extends ConsumerState<MainShell> {
     // Map visual index → branch index (skip the "+" slot)
     final branchIndex = index > 2 ? index - 1 : index;
     if (branchIndex == widget.navigationShell.currentIndex) {
-      widget.navigationShell.goBranch(branchIndex, initialLocation: true);
+      // Đang ở tab hiện tại → bấm lại
+      if (branchIndex == 0) {
+        // Tab Home: cuộn về đầu + làm mới feed
+        final scrollController = ref.read(feedScrollControllerProvider);
+        if (scrollController.hasClients) {
+          scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutCubic,
+          );
+        }
+        // Làm mới dữ liệu feed sau khi scroll xong
+        Future.delayed(const Duration(milliseconds: 300), () {
+          ref.read(postLocalStatesProvider.notifier).clearAll();
+          ref.invalidate(feedPostsProvider);
+        });
+      } else {
+        widget.navigationShell.goBranch(branchIndex, initialLocation: true);
+      }
     } else {
       widget.navigationShell.goBranch(branchIndex);
     }
