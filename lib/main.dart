@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
+import 'package:sentry_flutter/sentry_flutter.dart';
+
 import 'app.dart';
 import 'core/errors/global_error_handler.dart';
 import 'core/services/logger_service.dart';
@@ -64,13 +66,32 @@ Future<void> main() async {
     }
   }
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        if (objectBox != null)
-          objectBoxProvider.overrideWithValue(objectBox),
-      ],
-      child: const MiniSocialApp(),
-    ),
-  );
+  final sentryDsn = dotenv.env['SENTRY_DSN'] ?? '';
+  if (sentryDsn.isNotEmpty) {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = sentryDsn;
+        options.tracesSampleRate = 1.0;
+      },
+      appRunner: () => runApp(
+        ProviderScope(
+          overrides: [
+            if (objectBox != null)
+              objectBoxProvider.overrideWithValue(objectBox),
+          ],
+          child: const MiniSocialApp(),
+        ),
+      ),
+    );
+  } else {
+    runApp(
+      ProviderScope(
+        overrides: [
+          if (objectBox != null)
+            objectBoxProvider.overrideWithValue(objectBox),
+        ],
+        child: const MiniSocialApp(),
+      ),
+    );
+  }
 }

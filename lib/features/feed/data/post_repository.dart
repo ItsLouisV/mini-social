@@ -70,10 +70,21 @@ class PostRepository {
       print('Warning: Failed to fetch friends: $e');
     }
 
-    // 3. Filter posts based on privacy settings
+    // 3. Filter posts based on moderation status and privacy settings
     final filteredPostsList = postsList.where((postJson) {
       final postUserId = postJson['user_id'] as String;
-      if (postUserId == userId) return true; // Creator always sees their own posts
+      final status = postJson['status'] as String? ?? 'published';
+
+      // Posts hidden or removed are excluded
+      if (status == 'hidden' || status == 'removed') return false;
+
+      // Creator sees their own published and pending_review posts
+      if (postUserId == userId) {
+        return true;
+      }
+
+      // Non-creators only see published posts
+      if (status != 'published') return false;
 
       final privacy = postJson['privacy'] as String? ?? 'public';
       if (privacy == 'public') return true;
@@ -281,7 +292,20 @@ class PostRepository {
       }
     }
 
-    // 3. Fetch the complete post
+    // 3. Trigger async AI post scan in background (non-blocking)
+    _client.functions.invoke(
+      'ai-service',
+      body: {
+        'action': 'async_post_scan',
+        'postId': finalPostId,
+        'content': finalCaption ?? '',
+        'userId': userId,
+      },
+    ).catchError((err) {
+      print('Async post scan background error: $err');
+    });
+
+    // 4. Fetch the complete post
     return getPost(finalPostId);
   }
 

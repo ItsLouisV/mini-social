@@ -1,17 +1,50 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.8";
+import { Redis } from "npm:@upstash/redis@1.28.4";
+import { Ratelimit } from "npm:@upstash/ratelimit@1.0.1";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const UPSTASH_REDIS_REST_URL = Deno.env.get("UPSTASH_REDIS_REST_URL") || "";
+const UPSTASH_REDIS_REST_TOKEN = Deno.env.get("UPSTASH_REDIS_REST_TOKEN") || "";
 
 // Khởi tạo Supabase client dùng Service Role Key để bypass RLS cấu hình kiểm duyệt
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+// Khởi tạo Upstash Redis & RateLimiter (nếu có cấu hình)
+let redis: Redis | null = null;
+let ratelimit: Ratelimit | null = null;
+
+if (UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN) {
+  try {
+    redis = new Redis({
+      url: UPSTASH_REDIS_REST_URL,
+      token: UPSTASH_REDIS_REST_TOKEN,
+    });
+    ratelimit = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(20, "60 s"),
+      analytics: true,
+    });
+  } catch (err) {
+    console.error("Upstash Redis init error:", err);
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Helper Hash SHA-256 dùng cho Upstash Cache
+async function hashText(text: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 // ============================================================================
 // FALLBACK RULES (Luật dự phòng nếu không kết nối được Database hoặc DB rỗng)
@@ -344,7 +377,26 @@ serve(async (req) => {
   }
 
   try {
-    const { action, text, imageBase64, imageMimeType, targetLanguage, contentId, contentType, userId } = await req.json();
+    const body = await req.json();
+    const { action, text, imageBase64, imageMimeType, targetLanguage, contentId, contentType, userId } = body;
+
+    // ⚡ Upstash Rate Limiting Check
+    if (ratelimit) {
+      const identifier = userId || req.headers.get("x-forwarded-for") || "anonymous";
+      const { success, limit, remaining, reset } = await ratelimit.limit(`ratelimit:${identifier}`);
+      if (!success) {
+        return new Response(JSON.stringify({ error: "Bạn đã vượt quá số lượt gửi yêu cầu cho phép (Too Many Requests)." }), {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "X-RateLimit-Limit": limit.toString(),
+            "X-RateLimit-Remaining": remaining.toString(),
+            "X-RateLimit-Reset": reset.toString(),
+          },
+        });
+      }
+    }
 
     // TRANSLATE
     if (action === "translate") {
@@ -359,16 +411,51 @@ serve(async (req) => {
       });
     }
 
+    // GENERATE EMBEDDING
+    if (action === "generate_embedding") {
+      const embedding = await fetchGeminiEmbedding(text || "");
+      return new Response(JSON.stringify({ embedding }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // HYBRID SEARCH (RRF + GEMINI EMBEDDING + FULL-TEXT SEARCH)
+    if (action === "hybrid_search") {
+      const queryText = text || "";
+      const embedding = await fetchGeminiEmbedding(queryText);
+
+      const { data: searchResults, error: rpcError } = await supabase.rpc(
+        "hybrid_search_posts",
+        {
+          p_query_text: queryText,
+          p_query_embedding: JSON.stringify(embedding),
+          p_match_count: 30,
+          p_rrf_k: 60,
+        }
+      );
+
+      if (rpcError) {
+        console.error("Hybrid Search RPC error:", rpcError);
+        return new Response(JSON.stringify({ posts: [], error: rpcError.message }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ posts: searchResults || [], isSemantic: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // GENERATE CAPTION
     if (action === "generate_caption") {
       const outputInstruction = "CHỈ TRẢ VỀ NỘI DUNG CAPTION VÀ HASHTAG TRỰC TIẾP. KHÔNG ĐƯỢC CHÈN LỜI CHÀO, LỜI KHUYÊN, DẪN DẮT HAY GIẢI THÍCH (như 'Chào bạn...', 'Đây là caption...').";
 
       const vibeInstruction = `
-Về phong cách viết: Hãy đọc kỹ nội dung/ảnh và tự phán đoán tâm trạng, bối cảnh trước khi quyết định phong cách.
-- Nếu bối cảnh vui vẻ, lãng mạn, tự tin, đang khoe bản thân, hay có đôi: có thể pha nhẹ "vibe thả thính" — tinh tế, duyên dáng, ngọt ngào, KHÔNG sến sẩm hay gượng ép.
-- Nếu bối cảnh buồn, nhớ nhung, chia tay, mất mát, cô đơn, tâm sự, hay có chủ đề nghiêm túc (thiên tai, xã hội, sức khỏe, ẩm thực review thực chất, du lịch một mình theo phong cách trải nghiệm, ...): KHÔNG áp dụng thả thính — viết chân thành, đúng cảm xúc với bối cảnh đó.
-- Nếu bối cảnh trung lập hoặc không rõ ràng: ưu tiên phong cách tươi tắn, tự nhiên, không cố gắng thêm vào gì.
-`.trim();
+        Về phong cách viết: Hãy đọc kỹ nội dung/ảnh và tự phán đoán tâm trạng, bối cảnh trước khi quyết định phong cách.
+        - Nếu bối cảnh vui vẻ, lãng mạn, tự tin, đang khoe bản thân, hay có đôi: có thể pha nhẹ "vibe thả thính" — tinh tế, duyên dáng, ngọt ngào, KHÔNG sến sẩm hay gượng ép.
+        - Nếu bối cảnh buồn, nhớ nhung, chia tay, mất mát, cô đơn, tâm sự, hay có chủ đề nghiêm túc (thiên tai, xã hội, sức khỏe, ẩm thực review thực chất, du lịch một mình theo phong cách trải nghiệm, ...): KHÔNG áp dụng thả thính — viết chân thành, đúng cảm xúc với bối cảnh đó.
+        - Nếu bối cảnh trung lập hoặc không rõ ràng: ưu tiên phong cách tươi tắn, tự nhiên, không cố gắng thêm vào gì.
+        `.trim();
 
       const hashtagRule = "QUAN TRỌNG: Hashtag PHẢI viết không dấu, không khoảng trắng, và chỉ dùng chữ cái Latin hoặc số (ví dụ đúng: #CafeSang, #HoiAn, #OiGioi, #CuocSong — ví dụ SAI: #CàPhéSáng, #HộiAn, #ÔiGiời).";
 
@@ -556,6 +643,170 @@ Trả về duy nhất định dạng JSON hợp lệ:
       });
     }
 
+
+    // =========================================================
+    // ACTION: admin_ai_analyze — AI Phân tích vi phạm cho Admin
+    // =========================================================
+    if (body.action === "admin_ai_analyze") {
+      const { content_type, content_caption, reason_level1, reason_level2, category_name, case_id } = body;
+
+      if (!content_caption && !content_type) {
+        return new Response(JSON.stringify({ error: "Thiếu thông tin nội dung cần phân tích" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const analyzePrompt = `Bạn là chuyên gia kiểm duyệt nội dung cộng đồng cho mạng xã hội.
+
+Một người dùng đã báo cáo nội dung sau:
+- Loại nội dung: ${content_type || "post"}
+- Lý do báo cáo chính: ${reason_level1 || "Không xác định"}
+- Lý do chi tiết: ${reason_level2 || "Không xác định"}
+- Danh mục vi phạm: ${category_name || "Không xác định"}
+- Nội dung bị báo cáo: "${content_caption || "(Không có văn bản)"}"
+
+Hãy phân tích và trả về JSON hợp lệ theo định dạng sau:
+{
+  "risk_score": 0_to_100,
+  "toxicity_score": 0.0_to_1.0,
+  "hate_score": 0.0_to_1.0,
+  "scam_score": 0.0_to_1.0,
+  "sexual_score": 0.0_to_1.0,
+  "violence_score": 0.0_to_1.0,
+  "primary_violation": "Tên vi phạm chính bằng tiếng Việt",
+  "recommendation": "allow" | "flag" | "warn" | "hide" | "remove" | "ban",
+  "recommendation_reason": "Lý do đề xuất hành động bằng tiếng Việt (1-2 câu ngắn gọn)"
+}`;
+
+      const aiRaw = await fetchFromGemini({ prompt: analyzePrompt });
+
+      let parsed: any = {
+        risk_score: 50,
+        toxicity_score: 0.0,
+        hate_score: 0.0,
+        scam_score: 0.0,
+        sexual_score: 0.0,
+        violence_score: 0.0,
+        primary_violation: "Không xác định",
+        recommendation: "review",
+        recommendation_reason: "Cần xem xét thủ công.",
+      };
+
+      try {
+        const match = aiRaw.match(/\{[\s\S]*\}/);
+        if (match) parsed = { ...parsed, ...JSON.parse(match[0]) };
+      } catch (_) { /* keep defaults */ }
+
+      // Lưu kết quả vào moderation_results nếu có case_id
+      if (case_id) {
+        try {
+          await supabase.from("moderation_results").insert({
+            case_id,
+            model_name: "gemini-admin-analyze",
+            toxicity_score: parsed.toxicity_score,
+            hate_score: parsed.hate_score,
+            scam_score: parsed.scam_score ?? 0,
+            sexual_score: parsed.sexual_score,
+            violence_score: parsed.violence_score,
+            raw_response: { raw: aiRaw, parsed },
+          });
+        } catch (_) { /* non-blocking */ }
+      }
+
+      return new Response(JSON.stringify({
+        risk_score: parsed.risk_score,
+        toxicity_score: parsed.toxicity_score,
+        hate_score: parsed.hate_score,
+        scam_score: parsed.scam_score,
+        sexual_score: parsed.sexual_score,
+        violence_score: parsed.violence_score,
+        primary_violation: parsed.primary_violation,
+        recommendation: parsed.recommendation,
+        recommendation_reason: parsed.recommendation_reason,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // =========================================================
+    // ACTION: async_post_scan — Quét bất đồng bộ sau khi bài được đăng
+    // =========================================================
+    if (body.action === "async_post_scan") {
+      const { postId, content, userId, imageBase64 } = body;
+
+      const hardCheck = checkHardRules(content || "");
+      let riskScore = 0;
+      let newStatus = "published";
+
+      if (!hardCheck.isSafe) {
+        riskScore = 100;
+        newStatus = "hidden";
+      } else {
+        const aiPrompt = `Bạn là hệ thống tự động kiểm duyệt bài viết vừa đăng lên mạng xã hội.
+Đoạn văn bản: "${content || ''}"
+
+Trả về JSON:
+{
+  "risk_score": 0_den_100,
+  "recommendation": "allow" | "review" | "hide"
+}`;
+        const aiRaw = await fetchFromGemini({ prompt: aiPrompt, imageBase64 });
+        try {
+          const match = aiRaw.match(/\{[\s\S]*\}/);
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            riskScore = parsed.risk_score || 0;
+            if (riskScore >= 90) newStatus = "hidden";
+            else if (riskScore >= 60) newStatus = "pending_review";
+          }
+        } catch (_) {}
+      }
+
+      // Cập nhật trạng thái bài viết
+      if (newStatus !== "published" && postId) {
+        await supabase.from("posts").update({ status: newStatus }).eq("id", postId);
+        // Đẩy vào moderation_cases
+        await logModerationCase({
+          contentId: postId,
+          contentType: "post",
+          userId: userId || "",
+          riskScore: riskScore,
+          status: newStatus === "hidden" ? "blocked" : "pending",
+          decision: newStatus === "hidden" ? "REJECT" : "REVIEW",
+          aiToxicityScore: riskScore / 100.0,
+          aiHateScore: 0,
+          aiSexualScore: 0,
+          aiViolenceScore: 0,
+          rawResponse: "Async post scan",
+        });
+      }
+
+      return new Response(JSON.stringify({ postId, status: newStatus, riskScore }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // =========================================================
+    // ACTION: log_mod_ai_agreement — Ghi log so sánh Mod vs AI
+    // =========================================================
+    if (body.action === "log_mod_ai_agreement") {
+      const { caseId, aiSuggestion, modDecision, moderatorId } = body;
+      const agreed = aiSuggestion === modDecision;
+
+      await supabase.from("mod_ai_agreement_log").insert({
+        case_id: caseId,
+        ai_suggestion: aiSuggestion,
+        mod_decision: modDecision,
+        agreed: agreed,
+        moderator_id: moderatorId || null,
+      });
+
+      return new Response(JSON.stringify({ success: true, agreed }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Action không hợp lệ" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -611,4 +862,39 @@ async function fetchFromGemini({
 
   const data = await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+async function fetchGeminiEmbedding(text: string): Promise<number[]> {
+  if (!text || text.trim().length === 0) {
+    return new Array(768).fill(0);
+  }
+
+  if (!GEMINI_API_KEY) {
+    const dummy = new Array(768).fill(0);
+    for (let i = 0; i < text.length; i++) {
+      dummy[i % 768] += text.charCodeAt(i) / 255.0;
+    }
+    return dummy;
+  }
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "models/text-embedding-004",
+        content: { parts: [{ text }] }
+      }),
+    });
+
+    const data = await res.json();
+    if (data.embedding?.values) {
+      return data.embedding.values as number[];
+    }
+  } catch (err) {
+    console.error("Gemini Embedding error:", err);
+  }
+
+  return new Array(768).fill(0);
 }

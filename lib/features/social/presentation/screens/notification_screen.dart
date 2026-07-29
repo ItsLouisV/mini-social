@@ -155,7 +155,7 @@ class _NotificationTile extends ConsumerWidget {
     final senderName = sender?['full_name'] as String? ??
         sender?['username'] as String? ??
         notification['sender_name'] as String? ??
-        'Người dùng';
+        (type == 'moderation' ? 'Hệ thống MiniSocial' : 'Người dùng');
     final senderAvatar = sender?['avatar_url'] as String?;
 
     String actionText = '';
@@ -192,6 +192,11 @@ class _NotificationTile extends ConsumerWidget {
         actionText = ' đã chấp nhận lời mời kết bạn của bạn';
         icon = CupertinoIcons.person_2_fill;
         iconColor = const Color(0xFF34C759);
+        break;
+      case 'moderation':
+        actionText = ' đã gửi quyết định kiểm duyệt';
+        icon = CupertinoIcons.exclamationmark_triangle_fill;
+        iconColor = const Color(0xFFFF9500);
         break;
       default:
         actionText = ' có một thông báo mới';

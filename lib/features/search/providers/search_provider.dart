@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/search_repository.dart';
 import '../../profile/domain/profile_model.dart';
 import '../../feed/domain/post_model.dart';
+import '../../social/data/ai_repository.dart';
 import '../../../shared/providers/supabase_provider.dart';
 
 final searchRepositoryProvider = Provider<SearchRepository>((ref) {
@@ -88,7 +89,8 @@ final searchResultsProvider =
 final searchPostsProvider =
     FutureProvider.family<List<PostModel>, String>((ref, query) async {
   if (query.trim().length < 2) return [];
-  return ref.watch(searchRepositoryProvider).searchPosts(query);
+  final aiRepo = ref.watch(aiRepositoryProvider);
+  return ref.watch(searchRepositoryProvider).searchPosts(query, aiRepository: aiRepo);
 });
 
 /// Gợi ý người dùng khi ô tìm kiếm trống

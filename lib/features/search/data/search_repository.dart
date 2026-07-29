@@ -29,11 +29,22 @@ class SearchRepository {
     return list;
   }
 
-  /// Tìm kiếm bài viết theo caption
-  Future<List<PostModel>> searchPosts(String query) async {
+  /// Tìm kiếm bài viết theo caption (Ưu tiên AI Hybrid Search, Fallback ILIKE)
+  Future<List<PostModel>> searchPosts(String query, {dynamic aiRepository}) async {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return [];
 
+    // 1. Ưu tiên AI Hybrid Search (Semantic + Full-Text Search RRF)
+    if (aiRepository != null) {
+      try {
+        final aiResults = await aiRepository.hybridSearchPosts(cleanQuery);
+        if (aiResults is List<PostModel> && aiResults.isNotEmpty) {
+          return aiResults;
+        }
+      } catch (_) {}
+    }
+
+    // 2. Fallback sang ILIKE truyền thống
     try {
       final data = await _client
           .from(SupabaseConstants.postsTable)

@@ -33,7 +33,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     _tabController = TabController(length: 3, vsync: this);
     if (widget.initialQuery != null && widget.initialQuery!.isNotEmpty) {
       _query = widget.initialQuery!;
-      _controller.text = widget.initialQuery!;
+      _controller.value = TextEditingValue(
+        text: widget.initialQuery!,
+        selection: TextSelection.collapsed(offset: widget.initialQuery!.length),
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(searchQueryProvider.notifier).state = widget.initialQuery!;
       });
@@ -67,9 +70,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   }
 
   void _selectSearchTerm(String term) {
-    _controller.text = term;
-    _controller.selection = TextSelection.fromPosition(
-      TextPosition(offset: term.length),
+    _controller.value = TextEditingValue(
+      text: term,
+      selection: TextSelection.collapsed(offset: term.length),
     );
     setState(() {
       _query = term;
@@ -106,7 +109,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
             onChanged: _onSearchChanged,
             onSubmitted: _performSearch,
             onSuffixTap: () {
-              _controller.clear();
+              _controller.value = const TextEditingValue(
+                text: '',
+                selection: TextSelection.collapsed(offset: 0),
+              );
               setState(() {
                 _query = '';
               });
@@ -343,12 +349,41 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Text(
-                      'Bài viết',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Bài viết',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(CupertinoIcons.sparkles, size: 11, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text(
+                                'AI Hybrid Search',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   ListView.builder(
