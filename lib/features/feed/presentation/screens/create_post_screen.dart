@@ -123,83 +123,22 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       finalCaption += (finalCaption.isNotEmpty ? '\n' : '') + extraDetails.join(' ');
     }
 
-    // AI Content Moderation trước khi đăng bài (Kiểm duyệt cả Chữ VÀ Ảnh khiêu dâm/nhạy cảm)
+    // Cho đăng bài trực tiếp ngay lập tức, kiểm duyệt âm thầm chạy ngầm (Async Background Scan)
     setState(() => _isPosting = true);
     try {
-      final postId = const Uuid().v4();
-      final currentUserId = ref.read(currentUserIdProvider);
-      
-      String? mediaBase64;
-      String? mimeType;
-      String mediaType = 'image';
-
-      if (_media.isNotEmpty) {
-        final firstFile = _media.first;
-        final isVid = _isVideo(firstFile);
-        mediaType = isVid ? 'video' : 'image';
-
-        if (isVid) {
-          final bytes = await firstFile.readAsBytes();
-          mediaBase64 = base64Encode(bytes);
-          final ext = firstFile.name.split('.').last.toLowerCase();
-          mimeType = ext == 'mov' ? 'video/quicktime' : 'video/mp4';
-        } else {
-          final bytes = await ImageCompressor.compressXFile(firstFile);
-          mediaBase64 = base64Encode(bytes);
-          final ext = firstFile.name.split('.').last.toLowerCase();
-          mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
-        }
-      }
-
-      final mod = await ref.read(aiRepositoryProvider).moderateContent(
-            text: finalCaption.isNotEmpty ? finalCaption : null,
-            imageBase64: mediaBase64,
-            imageMimeType: mimeType,
-            contentId: postId,
-            contentType: 'post',
-            userId: currentUserId,
-          );
-
-      if (mod.decision == 'REJECT' || !mod.isSafe) {
-        if (mounted) {
-          setState(() => _isPosting = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('🛑 Từ chối bài viết: ${mod.reason}'),
-              backgroundColor: Colors.redAccent,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-        return;
-      }
-
-      if (mod.decision == 'HUMAN_REVIEW') {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('⏳ Bài viết của bạn cần kiểm duyệt thủ công: ${mod.reason}'),
-              backgroundColor: Colors.orangeAccent,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-      }
-
       await ref.read(postRepositoryProvider).createPost(
             caption: finalCaption,
             media: _media,
             privacy: _privacy,
             layoutType: _selectedLayout,
-            postId: postId,
           );
       if (mounted) context.pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Lỗi: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            content: Text('Không thể đăng bài: ${e.toString()}'),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
