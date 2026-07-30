@@ -347,21 +347,6 @@ class _PostCardState extends ConsumerState<PostCard> {
   }
 }
 
-void _showGlobalReportDialog(BuildContext context, WidgetRef ref, PostModel post) {
-  final currentUserId = ref.read(currentUserIdProvider) ?? '';
-  showModalBottomSheet(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) => ReportBottomSheet(
-      contentId: post.id,
-      contentType: 'post',
-      reporterId: currentUserId,
-    ),
-  );
-}
-
 // ── Multi-page Bottom Sheet kiểu Facebook ──
 class _FacebookOptionsBottomSheet extends StatefulWidget {
   final PostModel post;
