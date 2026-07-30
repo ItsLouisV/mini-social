@@ -344,6 +344,7 @@ class _PostCardState extends ConsumerState<PostCard> {
       default:
         return CupertinoIcons.globe;
     }
+  }
 }
 
 void _showGlobalReportDialog(BuildContext context, WidgetRef ref, PostModel post) {
