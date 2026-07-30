@@ -2657,6 +2657,20 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
     );
   }
 
+  void _showMessageReportDialog(MessageModel message) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ReportBottomSheet(
+        contentId: message.id,
+        contentType: 'message',
+        reporterId: widget.currentUserId,
+      ),
+    );
+  }
+
   String get _timeStr {
     final local = widget.message.createdAt.isUtc
         ? widget.message.createdAt.toLocal()

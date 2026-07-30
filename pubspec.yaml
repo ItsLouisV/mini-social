@@ -29,7 +29,7 @@ dependencies:
   flutter_image_compress: ^2.3.0
 
   # Analytics & Monitoring
-  sentry_flutter: ^8.1.0
+  sentry_flutter: ^8.13.0
 
   # Utilities
   timeago: ^3.6.1

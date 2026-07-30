@@ -29,6 +29,7 @@ class PostRepository {
         .from(SupabaseConstants.postsTable)
         .select('*, profiles(*), post_media(*)')
         .filter('deleted_at', 'is', null)
+        .inFilter('moderation_status', ['published', 'shadow_limited'])
         .order('created_at', ascending: false);
 
     final postsList = data as List;

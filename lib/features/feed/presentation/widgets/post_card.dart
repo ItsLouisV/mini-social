@@ -344,7 +344,21 @@ class _PostCardState extends ConsumerState<PostCard> {
       default:
         return CupertinoIcons.globe;
     }
-  }
+}
+
+void _showGlobalReportDialog(BuildContext context, WidgetRef ref, PostModel post) {
+  final currentUserId = ref.read(currentUserIdProvider) ?? '';
+  showModalBottomSheet(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => ReportBottomSheet(
+      contentId: post.id,
+      contentType: 'post',
+      reporterId: currentUserId,
+    ),
+  );
 }
 
 // ── Multi-page Bottom Sheet kiểu Facebook ──

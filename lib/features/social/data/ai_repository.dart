@@ -136,7 +136,7 @@ class AIRepository {
     return (isSafe: true, decision: 'ALLOW', riskScore: 0, violations: <String>[], reason: '');
   }
 
-  /// Gửi báo cáo vi phạm lên hệ thống kiểm duyệt động (moderation_reports) qua Edge Function riêng biệt
+  /// Gửi báo cáo vi phạm lên hệ thống kiểm duyệt (reports table v2)
   Future<bool> submitReport({
     required String reporterId,
     required String contentId,
@@ -153,28 +153,28 @@ class AIRepository {
     bool shouldDeleteConversation = false,
   }) async {
     try {
-      final res = await _client.functions.invoke(
-        'report-service',
-        body: {
-          'reporterId': reporterId,
-          'contentId': contentId,
-          'contentType': contentType,
-          if (categoryName != null) 'categoryName': categoryName,
-          if (description != null) 'description': description,
-          if (reasonLevel1 != null) 'reasonLevel1': reasonLevel1,
-          if (reasonLevel2 != null) 'reasonLevel2': reasonLevel2,
-          if (reasonLevel3 != null) 'reasonLevel3': reasonLevel3,
-          if (urgencyLevel != null) 'urgencyLevel': urgencyLevel,
-          if (reportScope != null) 'reportScope': reportScope,
-          'shouldBlockUser': shouldBlockUser,
-          'shouldHideContent': shouldHideContent,
-          'shouldDeleteConversation': shouldDeleteConversation,
-        },
-      );
+      String validReason = 'other';
+      final r = (reasonLevel1 ?? '').toLowerCase();
+      if (r.contains('spam') || r.contains('rác')) validReason = 'spam';
+      else if (r.contains('harass') || r.contains('quấy rối')) validReason = 'harassment';
+      else if (r.contains('sex') || r.contains('khiêu dâm') || r.contains('nude')) validReason = 'nudity_sexual';
+      else if (r.contains('violat') || r.contains('bạo lực')) validReason = 'violence_gore';
+      else if (r.contains('hate') || r.contains('thù ghét')) validReason = 'hate_speech';
+      else if (r.contains('misinfo') || r.contains('sai sự thật')) validReason = 'misinformation';
 
-      if (res.data != null && res.data['success'] == true) {
-        return true;
-      }
+      final insertData = <String, dynamic>{
+        'content_type': contentType,
+        if (contentType == 'post') 'post_id': contentId,
+        if (contentType == 'comment') 'comment_id': contentId,
+        if (contentType == 'message') 'message_id': contentId,
+        'reporter_id': reporterId,
+        'reason': validReason,
+        if (description != null && description.isNotEmpty) 'description': description,
+        'status': 'pending',
+      };
+
+      await _client.from('reports').insert(insertData);
+      return true;
     } catch (e) {
       debugPrint('Submit Report error: $e');
     }
