@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/profile_repository.dart';
 import '../domain/profile_model.dart';
 import '../../../core/services/supabase_service.dart';
-import '../../feed/domain/post_model.dart';
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
   return ProfileRepository(ref.watch(supabaseServiceProvider));
@@ -74,7 +73,7 @@ final profileProvider =
 final profileRefreshProvider = StateProvider<int>((ref) => 0);
 
 final userPostsProvider =
-    FutureProvider.family<List<PostModel>, String>(
+    FutureProvider.family<UserPostsData, String>(
         (ref, userId) async {
   ref.watch(profileRefreshProvider);
   return ref.watch(profileRepositoryProvider).getUserPosts(userId);

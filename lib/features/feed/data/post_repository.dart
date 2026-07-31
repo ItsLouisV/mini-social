@@ -205,12 +205,14 @@ class PostRepository {
     String privacy = 'public',
     String layoutType = 'grid',
     String? postId,
+    int? moderationScore,
+    String? moderationStatus,
   }) async {
     final userId = currentUserId!;
     final finalPostId = postId ?? _uuid.v4();
 
     final finalCaption = media.length >= 3
-        ? (caption != null && caption.trim().isNotEmpty
+        ? (caption.trim().isNotEmpty
             ? '${caption.trim()}\n[layout:$layoutType]'
             : '[layout:$layoutType]')
         : caption;
@@ -221,6 +223,8 @@ class PostRepository {
       'user_id': userId,
       'caption': finalCaption,
       'privacy': privacy,
+      if (moderationScore != null) 'moderation_score': moderationScore,
+      if (moderationStatus != null) 'moderation_status': moderationStatus,
     };
 
     try {
@@ -305,7 +309,7 @@ class PostRepository {
       body: {
         'content_type': 'post',
         'target_id': finalPostId,
-        'content': finalCaption ?? '',
+        'content': finalCaption,
         'image_urls': uploadedMediaUrls,
       },
     );
@@ -620,11 +624,15 @@ class PostRepository {
     String layoutType = 'panel-top',
     List<PostMedia>? remainingExistingMedia,
     List<XFile>? newMedia,
+    int? moderationScore,
+    String? moderationStatus,
   }) async {
     final userId = currentUserId!;
     final updateData = <String, dynamic>{
       'caption': caption,
       'privacy': privacy,
+      if (moderationScore != null) 'moderation_score': moderationScore,
+      if (moderationStatus != null) 'moderation_status': moderationStatus,
     };
     try {
       updateData['layout_type'] = layoutType;

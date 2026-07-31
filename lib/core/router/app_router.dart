@@ -89,11 +89,48 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/login',
-        pageBuilder: (_, __) => const CupertinoPage(child: LoginScreen()),
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          child: const LoginScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+              child: child,
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+          reverseTransitionDuration: const Duration(milliseconds: 300),
+        ),
       ),
       GoRoute(
         path: '/register',
-        pageBuilder: (_, __) => const CupertinoPage(child: RegisterScreen()),
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          child: const RegisterScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final slideAnim = Tween<Offset>(
+              begin: const Offset(0.0, 1.0), // Slide up from bottom
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            ));
+
+            final fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            );
+
+            return SlideTransition(
+              position: slideAnim,
+              child: FadeTransition(
+                opacity: fadeAnim,
+                child: child,
+              ),
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 380),
+          reverseTransitionDuration: const Duration(milliseconds: 320),
+        ),
       ),
       GoRoute(
         path: '/forgot-password',

@@ -3,11 +3,9 @@ import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
 
 
 import 'package:http/http.dart' as http;
@@ -21,7 +19,6 @@ import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
 import '../../../social/providers/follow_list_provider.dart';
-import '../../../profile/domain/profile_model.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
 import '../../../social/data/ai_repository.dart';
@@ -45,7 +42,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   String _selectedLayout = 'panel-top'; // Mặc định cố định panel-top khi >= 3 ảnh/video
 
   bool _isGeneratingAICaption = false;
-  bool _isCheckingModeration = false;
 
   // Extra status items
   String? _selectedMusic;
@@ -143,6 +139,66 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
     setState(() => _isPosting = true);
     try {
+      // ── AI Pre-Moderation Scan ─────────────────────────────────────
+      String? imageBase64;
+      String? mimeType;
+      if (_media.isNotEmpty && !_isVideo(_media.first)) {
+        try {
+          final bytes = await ImageCompressor.compressXFile(_media.first);
+          if (bytes.isNotEmpty) {
+            imageBase64 = base64Encode(bytes);
+            final ext = _media.first.name.split('.').last.toLowerCase();
+            mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
+          }
+        } catch (_) {}
+      }
+
+      final modResult = await ref.read(aiRepositoryProvider).moderateContent(
+        text: finalCaption,
+        imageBase64: imageBase64,
+        imageMimeType: mimeType,
+      );
+
+      if (!modResult.isSafe || modResult.riskScore >= 70 || modResult.decision == 'REJECT' || modResult.decision == 'BLOCK') {
+        // Ghi nhận log vi phạm vào bảng user_violations
+        final currentUserId = ref.read(currentUserProvider)?.id;
+        if (currentUserId != null) {
+          ref.read(aiRepositoryProvider).recordViolation(
+            userId: currentUserId,
+            contentType: 'post',
+            violationType: 'nudity_sexual_or_inappropriate',
+            riskScore: modResult.riskScore,
+            reason: modResult.reason.isNotEmpty
+                ? modResult.reason
+                : 'Nội dung chứa hình ảnh 18+ / vi phạm tiêu chuẩn cộng đồng',
+          );
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(CupertinoIcons.exclamationmark_shield_fill, color: Colors.white),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Bài viết bị từ chối (Điểm vi phạm AI: ${modResult.riskScore}/100).\n${modResult.reason.isNotEmpty ? modResult.reason : "Chứa nội dung nhạy cảm / 18+ không phù hợp tiêu chuẩn."}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.redAccent,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+
+      final modStatus = modResult.decision == 'FLAG' ? 'shadow_limited' : 'published';
+
       if (widget.editPost != null) {
         await ref.read(postRepositoryProvider).updatePost(
               postId: widget.editPost!.id,
@@ -151,6 +207,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               layoutType: _selectedLayout,
               remainingExistingMedia: _existingMedia,
               newMedia: _media,
+              moderationScore: modResult.riskScore,
+              moderationStatus: modStatus,
             );
         ref.invalidate(feedPostsProvider);
       } else {
@@ -159,6 +217,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               media: _media,
               privacy: _privacy,
               layoutType: _selectedLayout,
+              moderationScore: modResult.riskScore,
+              moderationStatus: modStatus,
             );
       }
       if (mounted) context.pop();

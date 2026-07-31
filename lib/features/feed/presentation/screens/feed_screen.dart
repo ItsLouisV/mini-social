@@ -68,7 +68,7 @@ class FeedScreen extends ConsumerWidget {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'MiniSocial',
+                  'Viora',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     letterSpacing: -0.5,

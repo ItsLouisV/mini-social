@@ -51,7 +51,10 @@ class AuthRepository {
   Future<bool> signInWithGoogle() async {
     return await _client.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: kIsWeb ? null : 'minisocial://login-callback',
+      redirectTo: kIsWeb ? Uri.base.origin : 'viora://login-callback',
+      queryParams: {
+        'prompt': 'select_account',
+      },
     );
   }
 
@@ -59,7 +62,7 @@ class AuthRepository {
   Future<bool> signInWithApple() async {
     return await _client.auth.signInWithOAuth(
       OAuthProvider.apple,
-      redirectTo: kIsWeb ? null : 'minisocial://login-callback',
+      redirectTo: kIsWeb ? Uri.base.origin : 'viora://login-callback',
     );
   }
 

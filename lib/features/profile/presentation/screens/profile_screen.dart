@@ -10,7 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
-import '../../../../shared/widgets/loading_indicator.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../social/providers/follow_provider.dart';
 import '../../../chat/presentation/widgets/full_screen_image_viewer.dart';
@@ -155,7 +154,6 @@ class ProfileScreen extends ConsumerWidget {
 
   Widget _buildHeader(BuildContext context, WidgetRef ref, ProfileModel profile, bool isMine) {
     final theme = Theme.of(context);
-    final topPadding = MediaQuery.of(context).padding.top;
     
     return Stack(
       clipBehavior: Clip.none,
@@ -177,8 +175,8 @@ class ProfileScreen extends ConsumerWidget {
                         child: CachedNetworkImage(
                           imageUrl: profile.coverUrl!,
                           fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(color: theme.colorScheme.surfaceVariant),
-                          errorWidget: (_, __, ___) => Container(color: theme.colorScheme.surfaceVariant),
+                          placeholder: (_, __) => Container(color: theme.colorScheme.surfaceContainerHighest),
+                          errorWidget: (_, __, ___) => Container(color: theme.colorScheme.surfaceContainerHighest),
                         ),
                       )
                     : Container(
@@ -385,7 +383,7 @@ class ProfileScreen extends ConsumerWidget {
             break;
           case FriendStatus.pendingSent:
             label = 'Đã gửi lời mời';
-            bgColor = Theme.of(context).dividerColor.withOpacity(0.1);
+            bgColor = Theme.of(context).dividerColor.withValues(alpha: 0.1);
             textColor = Theme.of(context).textTheme.bodyLarge?.color;
             onTap = () => ref.read(friendStatusProvider(profile.id).notifier).cancelOrUnfriend();
             break;
@@ -397,9 +395,9 @@ class ProfileScreen extends ConsumerWidget {
             break;
           case FriendStatus.accepted:
             label = 'Bạn bè';
-            bgColor = Colors.green.withOpacity(0.1);
+            bgColor = Colors.green.withValues(alpha: 0.1);
             textColor = Colors.green;
-            borderSide = BorderSide(color: Colors.green.withOpacity(0.2), width: 1);
+            borderSide = BorderSide(color: Colors.green.withValues(alpha: 0.2), width: 1);
             onTap = () => _showUnfriendOptions(context, ref, profile.id);
             break;
         }

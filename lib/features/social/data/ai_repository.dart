@@ -267,6 +267,29 @@ class AIRepository {
     }
   }
 
+  /// Ghi nhận bản ghi vi phạm vào bảng user_violations
+  Future<void> recordViolation({
+    required String userId,
+    String? contentId,
+    String contentType = 'post',
+    required String violationType,
+    required int riskScore,
+    required String reason,
+  }) async {
+    try {
+      await _client.from('user_violations').insert({
+        'user_id': userId,
+        if (contentId != null) 'content_id': contentId,
+        'content_type': contentType,
+        'violation_type': violationType,
+        'risk_score': riskScore,
+        'reason': reason,
+      });
+    } catch (e) {
+      debugPrint('Record violation log error: $e');
+    }
+  }
+
   /// Lấy danh sách vi phạm của người dùng
   Future<List<Map<String, dynamic>>> getViolations(String userId) async {
     try {
