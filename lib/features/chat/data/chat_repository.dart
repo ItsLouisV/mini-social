@@ -321,7 +321,19 @@ class ChatRepository {
       'last_message_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 
-    return MessageModel.fromJson(data);
+    final message = MessageModel.fromJson(data);
+
+    // Trigger async moderate-post for chat message
+    _safeInvokeFunction(
+      'moderate-post',
+      body: {
+        'content_type': 'message',
+        'target_id': message.id,
+        'content': content,
+      },
+    );
+
+    return message;
   }
 
   Future<MessageModel> sendImageMessage(
@@ -376,7 +388,30 @@ class ChatRepository {
       'last_message_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 
-    return MessageModel.fromJson(data);
+    final message = MessageModel.fromJson(data);
+
+    // Trigger async moderate-post for chat image message
+    _safeInvokeFunction(
+      'moderate-post',
+      body: {
+        'content_type': 'message',
+        'target_id': message.id,
+        'content': caption ?? '',
+        'image_urls': [url],
+      },
+    );
+
+    return message;
+  }
+
+  void _safeInvokeFunction(String functionName, {Map<String, dynamic>? body}) {
+    Future(() async {
+      try {
+        await _client.functions.invoke(functionName, body: body);
+      } catch (err) {
+        print('$functionName background error: $err');
+      }
+    });
   }
 
   Future<MessageModel> sendVoiceMessage(

@@ -18,6 +18,7 @@ import '../../features/chat/presentation/screens/hidden_conversations_screen.dar
 import '../../features/chat/presentation/screens/conversation_settings_screen.dart';
 import '../../features/chat/presentation/screens/shared_media_screen.dart';
 import '../../features/chat/presentation/screens/wallpaper_history_screen.dart';
+import '../../features/feed/domain/post_model.dart';
 import '../../features/feed/presentation/widgets/feed_drawer.dart';
 import '../../features/feed/presentation/screens/create_post_screen.dart';
 import '../../features/feed/presentation/screens/feed_screen.dart';
@@ -149,10 +150,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/create',
         parentNavigatorKey: _rootNavigatorKey,
-        pageBuilder: (_, __) => const CupertinoPage(
-          fullscreenDialog: true,
-          child: CreatePostScreen(),
-        ),
+        pageBuilder: (context, state) {
+          final editPost = state.extra as PostModel?;
+          return CupertinoPage(
+            fullscreenDialog: true,
+            child: CreatePostScreen(editPost: editPost),
+          );
+        },
       ),
       GoRoute(
         path: '/chat/hidden',

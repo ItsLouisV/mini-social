@@ -29,6 +29,8 @@ import '../widgets/elastic_scroll_to_bottom_button.dart';
 import '../../presentation/widgets/message_popup_menu_content.dart';
 import '../../presentation/widgets/message_context_menu_route.dart';
 import '../../../social/data/ai_repository.dart';
+import '../../../../core/localization/locale_provider.dart';
+import '../../../../core/localization/app_language.dart';
 
 // ── Helper data class ─────────────────────────────────────────────────────────
 
@@ -2263,35 +2265,57 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
   bool _showTranslation = false;
 
   Future<void> _translateMessage() async {
-    final content = widget.message.content;
-    if (content == null || content.trim().isEmpty) return;
+    final content = widget.message.content?.trim();
 
-    // Toggle ẩn/hiện nếu đã có bản dịch
-    if (_translatedText != null) {
-      setState(() => _showTranslation = !_showTranslation);
+    if (content == null || content.isEmpty || _isTranslating) {
       return;
     }
 
-    setState(() => _isTranslating = true);
+    // Nếu đã dịch rồi thì chỉ ẩn/hiện, không gọi API lại
+    if (_translatedText != null) {
+      setState(() {
+        _showTranslation = !_showTranslation;
+      });
+      return;
+    }
+
+    setState(() {
+      _isTranslating = true;
+    });
+
     try {
-      final aiRepo = ref.read(aiRepositoryProvider);
-      final result = await aiRepo.translateText(content, targetLanguage: 'tiếng Anh nếu văn bản tiếng Việt, hoặc tiếng Việt nếu văn bản tiếng nước ngoài');
+      final currentLanguage = ref.read(appLanguageProvider);
+
+      final targetLanguage =
+          currentLanguage == AppLanguage.en ? 'en' : 'vi';
+
+      final aiRepository = ref.read(aiRepositoryProvider);
+
+      final translatedText = await aiRepository.translateText(
+        content,
+        targetLanguage: targetLanguage,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _translatedText = translatedText;
+        _showTranslation = true;
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không thể dịch tin nhắn này'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } finally {
       if (mounted) {
         setState(() {
-          _translatedText = result;
-          _showTranslation = true;
           _isTranslating = false;
         });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isTranslating = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Không thể dịch tin nhắn này'),
-            duration: Duration(seconds: 2),
-          ),
-        );
       }
     }
   }

@@ -1,15 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.39.8";
 import { Redis } from "npm:@upstash/redis@1.28.4";
 import { Ratelimit } from "npm:@upstash/ratelimit@1.0.1";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const UPSTASH_REDIS_REST_URL = Deno.env.get("UPSTASH_REDIS_REST_URL") || "";
 const UPSTASH_REDIS_REST_TOKEN = Deno.env.get("UPSTASH_REDIS_REST_TOKEN") || "";
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 let redis: Redis | null = null;
 let ratelimit: Ratelimit | null = null;
@@ -35,7 +30,54 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function fetchFromGemini({ prompt, imageBase64, imageMimeType }: { prompt: string; imageBase64?: string; imageMimeType?: string }): Promise<string> {
+/**
+ * Loại bỏ toàn bộ dấu tiếng Việt và dấu phụ của mọi ngôn ngữ (Unaccented String Generator)
+ */
+function removeAccents(str: string): string {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/æ/g, "ae")
+    .replace(/œ/g, "oe")
+    .replace(/ß/g, "ss")
+    .replace(/ô/g, "o")
+    .replace(/ư/g, "u")
+    .replace(/ơ/g, "o")
+    .replace(/ă/g, "a")
+    .replace(/â/g, "a")
+    .replace(/ê/g, "e");
+}
+
+/**
+ * Chuẩn hóa Caption: Giữ nguyên DẤU của nội dung Caption, 
+ * nhưng tự động chuyển đổi TOÀN BỘ HASHTAG (#...) thành KHÔNG DẤU.
+ */
+function processCaptionAndHashtags(rawText: string): { caption: string; hashtags: string[] } {
+  const hashtags: string[] = [];
+
+  const processedCaption = rawText.replace(/#([^\s#]+)/g, (fullMatch, tagContent) => {
+    // Chuyển hashtag thành không dấu và loại bỏ các ký tự đặc biệt không hợp lệ
+    const cleanTagContent = removeAccents(tagContent).replace(/[^a-zA-Z0-9_]/g, "");
+    const unaccentedHashtag = `#${cleanTagContent}`;
+    hashtags.push(unaccentedHashtag);
+    return unaccentedHashtag;
+  });
+
+  return { caption: processedCaption, hashtags };
+}
+
+async function fetchFromGemini({
+  prompt,
+  imageBase64,
+  imageMimeType,
+}: {
+  prompt: string;
+  imageBase64?: string;
+  imageMimeType?: string;
+}): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
 
   const contents: any[] = [];
@@ -68,89 +110,15 @@ async function fetchFromGemini({ prompt, imageBase64, imageMimeType }: { prompt:
   return text.trim();
 }
 
-async function fetchGeminiEmbedding(text: string): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "models/text-embedding-004",
-      content: { parts: [{ text }] },
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Gemini Embedding Error: ${await res.text()}`);
-  }
-
-  const json = await res.json();
-  return json.embedding?.values || [];
-}
-
-// Check Banned Keywords v2 (zero_tolerance & flag_for_review)
-async function checkBannedKeywords(text: string): Promise<{ isViolated: boolean; severity?: string; reason?: string }> {
-  if (!text) return { isViolated: false };
-  try {
-    const { data: keywords } = await supabase.from("banned_keywords").select("*").eq("is_active", true);
-    if (!keywords || keywords.length === 0) return { isViolated: false };
-
-    const lower = text.toLowerCase();
-    for (const k of keywords) {
-      if (k.match_type === "exact") {
-        if (lower.includes(k.pattern.toLowerCase())) {
-          return { isViolated: true, severity: k.severity, reason: `Từ khóa cấm: ${k.pattern}` };
-        }
-      } else if (k.match_type === "regex") {
-        try {
-          const re = new RegExp(k.pattern, "i");
-          if (re.test(text)) {
-            return { isViolated: true, severity: k.severity, reason: `Pattern cấm: ${k.pattern}` };
-          }
-        } catch (_) { }
-      }
-    }
-  } catch (err) {
-    console.error("checkBannedKeywords error:", err);
-  }
-  return { isViolated: false };
-}
-
-// Log Moderation Action v2
-async function logModerationAction({
-  contentType,
-  postId,
-  commentId,
-  messageId,
-  userId,
-  actionType,
-  reason,
-  isAutomated = true,
-}: {
-  contentType: "post" | "comment" | "message";
-  postId?: string;
-  commentId?: string;
-  messageId?: string;
-  userId?: string;
-  actionType: string;
-  reason: string;
-  isAutomated?: boolean;
-}) {
-  try {
-    await supabase.from("moderation_actions").insert([{
-      content_type: contentType,
-      post_id: postId || null,
-      comment_id: commentId || null,
-      message_id: messageId || null,
-      target_user_id: userId || null,
-      action_type: actionType,
-      reason,
-      is_automated: isAutomated,
-    }]);
-  } catch (err) {
-    console.error("logModerationAction error:", err);
-  }
-}
-
+/**
+ * AI SERVICE EDGE FUNCTION
+ * Chuyên dụng cho việc SÁNG TẠO NỘI DUNG & TẠO CAPTION bài viết (Có dấu) + Hashtag (KHÔNG DẤU).
+ * Phục vụ 4 trường hợp:
+ * 1. Có input text, KHÔNG có ảnh
+ * 2. Có ảnh, KHÔNG có input text
+ * 3. Có CẢ ảnh VÀ input text
+ * 4. KHÔNG có gì hết (Sáng tạo tự do)
+ */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -158,116 +126,98 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { action, text, imageBase64, imageMimeType, targetLanguage, contentId, contentType = "post", userId, postId, commentId, messageId } = body;
+    const { action, text, imageBase64, imageMimeType, targetLanguage, userId } = body;
 
-    // Rate limiter
+    // Upstash Redis Rate Limiting (ĐƯỢC SỬ DỤNG TẠI ĐÂY)
     if (ratelimit) {
       const identifier = userId || req.headers.get("x-forwarded-for") || "anonymous";
-      const { success } = await ratelimit.limit(`ratelimit:${identifier}`);
+      const { success } = await ratelimit.limit(`ratelimit:ai:${identifier}`);
       if (!success) {
-        return new Response(JSON.stringify({ error: "Quá nhiều yêu cầu. Vui lòng thử lại sau." }), { status: 429, headers: corsHeaders });
+        return new Response(
+          JSON.stringify({ error: "Quá nhiều yêu cầu tạo AI. Vui lòng thử lại sau 1 phút." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 
-    // TRANSLATE
+    // ── XỬ LÝ CHÍNH: TẠO CAPTION & SÁNG TẠO NỘI DUNG (4 TRƯỜNG HỢP) ──
+    if (!action || action === "generate_caption" || action === "create_content") {
+      const hasText = Boolean(text && typeof text === "string" && text.trim().length > 0);
+      const hasImage = Boolean(imageBase64 && typeof imageBase64 === "string" && imageBase64.trim().length > 0);
+
+      let prompt = "";
+
+      // TRƯỜNG HỢP 1: Có ảnh VÀ có input text
+      if (hasImage && hasText) {
+        prompt = `Bạn là chuyên gia sáng tạo nội dung mạng xã hội. 
+Hãy phân tích bức ảnh đính kèm kết hợp với ý tưởng/chủ đề người dùng cung cấp: "${text.trim()}".
+Viết một caption dựa trên sự phân tích bức ảnh và ý tưởng/chủ đề người dùng cung cấp (viết tiếng Việt CÓ DẤU bình thường) và kèm theo 3 đến 5 hashtag liên quan KHÔNG DẤU ở cuối (ví dụ: #cuocsong #banbe).
+
+YÊU CẦU BẮT BUỘC:
+1. Nội dung caption viết CÓ DẤU bình thường. Tuy nhiên, toàn bộ HASHTAG (#...) ở cuối BẮT BUỘC KHÔNG DẤU.
+2. Chỉ trả về duy nhất nội dung caption kèm hashtag. KHÔNG trả về bất kỳ lời chào, lời dẫn đầu (như "Đây là caption của bạn:", "Chắc chắn rồi!"), hay ghi chú giải thích nào.`;
+      } 
+      // TRƯỜNG HỢP 2: Có ảnh nhưng KHÔNG có input text
+      else if (hasImage && !hasText) {
+        prompt = `Bạn là chuyên gia sáng tạo nội dung mạng xã hội.
+Hãy phân tích nội dung bức ảnh đính kèm và viết một caption bài viết dựa trên sự phân tích của bức ảnh (viết tiếng Việt CÓ DẤU bình thường), kèm 3-5 hashtag KHÔNG DẤU ở cuối (ví dụ: #khoankhak #cuocsong).
+
+YÊU CẦU BẮT BUỘC:
+1. Nội dung caption viết CÓ DẤU bình thường. Tuy nhiên, toàn bộ HASHTAG (#...) ở cuối BẮT BUỘC KHÔNG DẤU.
+2. Chỉ trả về duy nhất nội dung caption kèm hashtag. KHÔNG trả về bất kỳ lời chào, lời dẫn đầu (như "Đây là caption của bạn:", "Chắc chắn rồi!"), hay ghi chú giải thích nào.`;
+      } 
+      // TRƯỜNG HỢP 3: Có input text nhưng KHÔNG có ảnh
+      else if (!hasImage && hasText) {
+        prompt = `Bạn là chuyên gia sáng tạo nội dung mạng xã hội.
+Dựa trên ý tưởng/chủ đề người dùng cung cấp: "${text.trim()}", hãy viết một caption bài viết dựa trên sự phân tích của ý tưởng (viết tiếng Việt CÓ DẤU bình thường), kèm 3-5 hashtag KHÔNG DẤU ở cuối (ví dụ: #khoankhak #cuocsong).
+
+YÊU CẦU BẮT BUỘC:
+1. Nội dung caption viết CÓ DẤU bình thường. Tuy nhiên, toàn bộ HASHTAG (#...) ở cuối BẮT BUỘC KHÔNG DẤU.
+2. Chỉ trả về duy nhất nội dung caption kèm hashtag. KHÔNG trả về bất kỳ lời chào, lời dẫn đầu (như "Đây là caption của bạn:", "Chắc chắn rồi!"), hay ghi chú giải thích nào.`;
+      } 
+      // TRƯỜNG HỢP 4: Không có ảnh VÀ Không có input text (Ngẫu nhiên / Sáng tạo tự do)
+      else {
+        prompt = `Bạn là chuyên gia sáng tạo nội dung mạng xã hội.
+Hãy tự do nghĩ ra một caption mạng xã hội ngẫu nhiên thật hay, tươi vui, bắt hot trend (viết tiếng Việt CÓ DẤU bình thường), kèm theo 3-5 hashtag KHÔNG DẤU ở cuối bài.
+
+YÊU CẦU BẮT BUỘC:
+1. Nội dung caption viết CÓ DẤU bình thường. Tuy nhiên, toàn bộ HASHTAG (#...) ở cuối BẮT BUỘC KHÔNG DẤU.
+2. Chỉ trả về duy nhất nội dung caption kèm hashtag. KHÔNG trả về bất kỳ lời chào, lời dẫn đầu (như "Đây là caption của bạn:", "Chắc chắn rồi!"), hay ghi chú giải thích nào.`;
+      }
+
+      const rawAiResponse = await fetchFromGemini({ prompt, imageBase64, imageMimeType });
+
+      // Làm sạch lời dẫn đầu và bỏ ngoặc kép thừa
+      const cleaned = rawAiResponse
+        .replace(/^["'„“«]+|["'”»]+$/g, "")
+        .replace(/^(Đây là caption|Here is your caption|Caption|Gợi ý caption)[:\s]*/i, "")
+        .trim();
+
+      // Giữ nguyên DẤU cho caption, và LỌC KHÔNG DẤU cho các Hashtag (#...)
+      const { caption, hashtags } = processCaptionAndHashtags(cleaned);
+
+      return new Response(
+        JSON.stringify({
+          caption,
+          hashtags,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── FALLBACK CHO DỊCH VĂN BẢN ──
     if (action === "translate") {
-      const lang = targetLanguage || "tiếng Việt";
-      const prompt = `Dịch đoạn văn bản sau sang ${lang}. Chỉ trả về duy nhất bản dịch, không giải thích gì thêm:\n"${text}"`;
-      const response = await fetchFromGemini({ prompt });
-      return new Response(JSON.stringify({ translatedText: response }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // GENERATE CAPTION
-    if (action === "generate_caption") {
-      const prompt = `Hãy đóng vai nhà sáng tạo nội dung mạng xã hội. Viết một caption tươi vui ngắn gọn cho bài viết: "${text || ''}".`;
-      const response = await fetchFromGemini({ prompt, imageBase64, imageMimeType });
-      return new Response(JSON.stringify({ caption: response }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // GENERATE EMBEDDING
-    if (action === "generate_embedding") {
-      const embedding = await fetchGeminiEmbedding(text || "");
-      return new Response(JSON.stringify({ embedding }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // ASYNC POST SCAN v2 (Background Scan)
-    if (action === "async_post_scan") {
-      const targetPostId = postId || contentId;
-      const targetCommentId = commentId;
-      const targetMessageId = messageId;
-      const type: "post" | "comment" | "message" = contentType as any || "post";
-
-      const kwCheck = await checkBannedKeywords(text || "");
-      let riskScore = 0;
-      let targetStatus: "published" | "shadow_limited" | "under_review" | "hidden" | "removed" = "published";
-      let actionType = "auto_block";
-
-      if (kwCheck.isViolated) {
-        if (kwCheck.severity === "zero_tolerance") {
-          targetStatus = "removed";
-          actionType = "auto_block";
-          riskScore = 100;
-        } else {
-          targetStatus = "shadow_limited";
-          actionType = "auto_shadow_limit";
-          riskScore = 70;
-        }
-      } else {
-        const aiPrompt = `Bạn là hệ thống kiểm duyệt an toàn mạng xã hội. Đánh giá đoạn văn bản: "${text || ''}". Trả về JSON: {"risk_score": 0_den_100}`;
-        try {
-          const aiRaw = await fetchFromGemini({ prompt: aiPrompt, imageBase64 });
-          const match = aiRaw.match(/\{[\s\S]*\}/);
-          if (match) {
-            const parsed = JSON.parse(match[0]);
-            riskScore = parsed.risk_score || 0;
-            if (riskScore >= 90) {
-              targetStatus = "hidden";
-              actionType = "auto_block";
-            } else if (riskScore >= 60) {
-              targetStatus = "under_review";
-              actionType = "auto_shadow_limit";
-            }
-          }
-        } catch (_) { }
-      }
-
-      // Cập nhật bảng nội dung tương ứng
-      if (type === "post" && targetPostId) {
-        await supabase.from("posts").update({ moderation_status: targetStatus, ai_moderation_score: riskScore / 100.0, moderated_at: new Date().toISOString() }).eq("id", targetPostId);
-      } else if (type === "comment" && targetCommentId) {
-        await supabase.from("comments").update({ moderation_status: targetStatus, ai_moderation_score: riskScore / 100.0, moderated_at: new Date().toISOString() }).eq("id", targetCommentId);
-      } else if (type === "message" && targetMessageId) {
-        await supabase.from("messages").update({ moderation_status: targetStatus, ai_moderation_score: riskScore / 100.0, moderated_at: new Date().toISOString() }).eq("id", targetMessageId);
-      }
-
-      if (targetStatus !== "published") {
-        await logModerationAction({
-          contentType: type,
-          postId: targetPostId,
-          commentId: targetCommentId,
-          messageId: targetMessageId,
-          userId,
-          actionType,
-          reason: kwCheck.reason || `AI Risk Score: ${riskScore}`,
-          isAutomated: true,
-        });
-      }
-
-      return new Response(JSON.stringify({ status: targetStatus, riskScore }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // ADMIN AI ANALYZE v2
-    if (action === "admin_ai_analyze") {
-      const { contentCaption, reasonLevel1 } = body;
-      const aiPrompt = `Phân tích báo cáo vi phạm nội dung: "${contentCaption || ''}". Lý do báo cáo: ${reasonLevel1 || 'Khác'}. Trả về JSON: {"risk_score": 0_den_100, "recommendation": "allow" | "hide" | "remove", "recommendation_reason": "Lý do ngắn gọn"}`;
-      const aiRaw = await fetchFromGemini({ prompt: aiPrompt });
-      let parsed = { risk_score: 50, recommendation: "allow", recommendation_reason: "Cần xem xét thủ công." };
-      try {
-        const match = aiRaw.match(/\{[\s\S]*\}/);
-        if (match) parsed = { ...parsed, ...JSON.parse(match[0]) };
-      } catch (_) { }
-
-      return new Response(JSON.stringify({ data: parsed }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const lang = targetLanguage || "vi";
+      const isEn = String(lang).toLowerCase().includes("en");
+      const prompt = isEn
+        ? `Translate into English. Return ONLY the translation:\n"${text}"`
+        : `Dịch sang tiếng Việt. Chỉ trả về duy nhất bản dịch:\n"${text}"`;
+      const raw = await fetchFromGemini({ prompt });
+      const clean = raw.replace(/^["'„“«]+|["'”»]+$/g, "").trim();
+      return new Response(
+        JSON.stringify({ translatedText: clean }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(JSON.stringify({ error: "Unknown action" }), { status: 400, headers: corsHeaders });

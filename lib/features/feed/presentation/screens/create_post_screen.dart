@@ -28,14 +28,17 @@ import '../../../social/data/ai_repository.dart';
 import '../widgets/image_carousel.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
-  const CreatePostScreen({super.key});
+  final PostModel? editPost;
+
+  const CreatePostScreen({super.key, this.editPost});
 
   @override
   ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
 }
 
 class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
-  final _captionController = TextEditingController();
+  late final TextEditingController _captionController;
+  List<PostMedia> _existingMedia = [];
   final List<XFile> _media = [];
   bool _isPosting = false;
   String _privacy = 'public'; // Mặc định Công khai
@@ -51,6 +54,19 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   List<String> _taggedFriends = [];
   bool _isInstagramOn = false;
   bool _isThreadsOn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _captionController = TextEditingController(text: widget.editPost?.caption ?? '');
+    if (widget.editPost != null) {
+      _privacy = widget.editPost!.privacy;
+      if (widget.editPost!.layoutType.isNotEmpty) {
+        _selectedLayout = widget.editPost!.layoutType;
+      }
+      _existingMedia = List<PostMedia>.from(widget.editPost!.media);
+    }
+  }
 
   @override
   void dispose() {
@@ -70,7 +86,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   Future<void> _pickImages() async {
-    if (_media.length >= 6) {
+    final totalMedia = _existingMedia.length + _media.length;
+    if (totalMedia >= 6) {
       _showMaxMediaSnackBar();
       return;
     }
@@ -78,7 +95,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final picked = await picker.pickMultiImage();
     if (picked.isEmpty) return;
 
-    final remaining = 5 - _media.length;
+    final remaining = 6 - totalMedia;
     final toAdd = picked.take(remaining).toList();
 
     final compressed = <XFile>[];
@@ -91,7 +108,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   Future<void> _pickVideo() async {
-    if (_media.length >= 5) {
+    final totalMedia = _existingMedia.length + _media.length;
+    if (totalMedia >= 6) {
       _showMaxMediaSnackBar();
       return;
     }
@@ -104,7 +122,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   Future<void> _post() async {
     final caption = _captionController.text.trim();
-    if (caption.isEmpty && _media.isEmpty && _selectedMusic == null && _selectedFeeling == null) {
+    if (caption.isEmpty && _existingMedia.isEmpty && _media.isEmpty && _selectedMusic == null && _selectedFeeling == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Hãy viết gì đó hoặc thêm nội dung bài viết')),
       );
@@ -123,21 +141,32 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       finalCaption += (finalCaption.isNotEmpty ? '\n' : '') + extraDetails.join(' ');
     }
 
-    // Cho đăng bài trực tiếp ngay lập tức, kiểm duyệt âm thầm chạy ngầm (Async Background Scan)
     setState(() => _isPosting = true);
     try {
-      await ref.read(postRepositoryProvider).createPost(
-            caption: finalCaption,
-            media: _media,
-            privacy: _privacy,
-            layoutType: _selectedLayout,
-          );
+      if (widget.editPost != null) {
+        await ref.read(postRepositoryProvider).updatePost(
+              postId: widget.editPost!.id,
+              caption: finalCaption,
+              privacy: _privacy,
+              layoutType: _selectedLayout,
+              remainingExistingMedia: _existingMedia,
+              newMedia: _media,
+            );
+        ref.invalidate(feedPostsProvider);
+      } else {
+        await ref.read(postRepositoryProvider).createPost(
+              caption: finalCaption,
+              media: _media,
+              privacy: _privacy,
+              layoutType: _selectedLayout,
+            );
+      }
       if (mounted) context.pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Không thể đăng bài: ${e.toString()}'),
+            content: Text(widget.editPost != null ? 'Không thể cập nhật bài viết: ${e.toString()}' : 'Không thể đăng bài: ${e.toString()}'),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -894,7 +923,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           onPressed: () => context.pop(),
         ),
         title: Text(
-          AppTranslations.tr(ref, 'new_post'),
+          widget.editPost != null ? 'Chỉnh sửa bài viết' : AppTranslations.tr(ref, 'new_post'),
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
@@ -1043,89 +1072,116 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     ),
 
                     // ── Media Preview ─────────────────────────────────────
-                    if (_media.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      // Xem trước trực tiếp Live ImageCarousel tương ứng với 1, 2, hoặc 3+ ảnh
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: theme.dividerColor.withValues(alpha: 0.15),
-                            ),
-                          ),
-                          child: ImageCarousel(
-                            media: _media.asMap().entries.map((e) {
-                              final file = e.value;
-                              final isVideo = _isVideo(file);
-                              return PostMedia(
-                                id: 'preview_${e.key}',
-                                postId: 'preview',
-                                url: file.path,
-                                type: isVideo ? 'video' : 'image',
-                                orderIndex: e.key,
-                                createdAt: DateTime.now(),
-                              );
-                            }).toList(),
-                            layoutType: _selectedLayout,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Danh sách thumbnail nhỏ kèm nút xóa X
-                      SizedBox(
-                        height: 90,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _media.length,
-                          itemBuilder: (context, i) {
-                            final file = _media[i];
+                    Builder(
+                      builder: (context) {
+                        final allPreviewMedia = <PostMedia>[
+                          ..._existingMedia,
+                          ..._media.asMap().entries.map((e) {
+                            final file = e.value;
                             final isVideo = _isVideo(file);
-                            return Container(
-                              margin: const EdgeInsets.only(right: 10),
-                              width: 80,
-                              child: Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Container(
-                                      color: isDark ? Colors.white10 : Colors.black12,
-                                      width: 80,
-                                      height: 90,
-                                      child: isVideo
-                                          ? const Center(child: Icon(CupertinoIcons.play_circle_fill, size: 26, color: Colors.white))
-                                          : (kIsWeb
-                                              ? Image.network(file.path, fit: BoxFit.cover)
-                                              : Image.file(io.File(file.path), fit: BoxFit.cover)),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: GestureDetector(
-                                      onTap: () => setState(() => _media.removeAt(i)),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.6),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(CupertinoIcons.xmark, size: 12, color: Colors.white),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            return PostMedia(
+                              id: 'new_${e.key}',
+                              postId: widget.editPost?.id ?? 'preview',
+                              url: file.path,
+                              type: isVideo ? 'video' : 'image',
+                              orderIndex: _existingMedia.length + e.key,
+                              createdAt: DateTime.now(),
                             );
-                          },
-                        ),
-                      ),
-                    ],
+                          }),
+                        ];
+
+                        if (allPreviewMedia.isEmpty) return const SizedBox();
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 12),
+                            // Xem trước trực tiếp Live ImageCarousel
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: theme.dividerColor.withValues(alpha: 0.15),
+                                  ),
+                                ),
+                                child: ImageCarousel(
+                                  media: allPreviewMedia,
+                                  layoutType: _selectedLayout,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Danh sách thumbnail nhỏ kèm nút xóa X
+                            SizedBox(
+                              height: 90,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: allPreviewMedia.length,
+                                itemBuilder: (context, i) {
+                                  final isExisting = i < _existingMedia.length;
+                                  final isVideo = isExisting
+                                      ? _existingMedia[i].type == 'video'
+                                      : _isVideo(_media[i - _existingMedia.length]);
+
+                                  return Container(
+                                    margin: const EdgeInsets.only(right: 10),
+                                    width: 80,
+                                    child: Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Container(
+                                            color: isDark ? Colors.white10 : Colors.black12,
+                                            width: 80,
+                                            height: 90,
+                                            child: isVideo
+                                                ? const Center(child: Icon(CupertinoIcons.play_circle_fill, size: 26, color: Colors.white))
+                                                : (isExisting
+                                                    ? Image.network(_existingMedia[i].url, fit: BoxFit.cover)
+                                                    : (kIsWeb
+                                                        ? Image.network(_media[i - _existingMedia.length].path, fit: BoxFit.cover)
+                                                        : Image.file(io.File(_media[i - _existingMedia.length].path), fit: BoxFit.cover))),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          top: 4,
+                                          right: 4,
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              setState(() {
+                                                if (isExisting) {
+                                                  _existingMedia.removeAt(i);
+                                                } else {
+                                                  _media.removeAt(i - _existingMedia.length);
+                                                }
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withOpacity(0.6),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(CupertinoIcons.xmark, size: 12, color: Colors.white),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
 
                     // ── Layout Selector Bar (Cho 3 ảnh/video trở lên) ─────
-                    if (_media.length >= 3) ...[
+                    if (_existingMedia.length + _media.length >= 3) ...[
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1367,7 +1423,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : Text(
-                            AppTranslations.tr(ref, 'post_button'),
+                            widget.editPost != null ? 'Xong' : AppTranslations.tr(ref, 'post_button'),
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,

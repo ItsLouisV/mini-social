@@ -39,25 +39,47 @@ class AIRepository {
     return 'Một ngày thật tuyệt vời! ✨ #MiniSocial #LifeMoment';
   }
 
-  /// Gọi AI Service để dịch văn bản
-  Future<String> translateText(String text, {String targetLanguage = 'tiếng Việt'}) async {
-    if (text.trim().isEmpty) return text;
+  /// Gọi Translate Service để dịch bài viết, bình luận hoặc tin nhắn
+  Future<String> translateText(
+    String text, {
+    required String targetLanguage,
+  }) async {
+    final originalText = text.trim();
+
+    if (originalText.isEmpty) return text;
+
     try {
-      final res = await _client.functions.invoke(
-        'ai-service',
+      final response = await _client.functions.invoke(
+        'translate-service',
         body: {
-          'action': 'translate',
-          'text': text,
+          'text': originalText,
+
+          // Chỉ gửi "vi" hoặc "en"
           'targetLanguage': targetLanguage,
+
+          // Có thể dùng cho rate limit
+          'userId': _client.auth.currentUser?.id,
         },
       );
 
-      if (res.data != null && res.data['translatedText'] != null) {
-        return res.data['translatedText'] as String;
+      final data = response.data;
+
+      if (data is Map && data['translatedText'] is String) {
+        final translatedText = data['translatedText'] as String;
+
+        if (translatedText.trim().isNotEmpty) {
+          return translatedText;
+        }
       }
-    } catch (e) {
-      debugPrint('AI Translate error: $e');
+
+      if (data is Map && data['error'] != null) {
+        debugPrint('Translate Service error: ${data['error']}');
+      }
+    } catch (error, stackTrace) {
+      debugPrint('AI Translate error: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
+
     return text;
   }
 
@@ -100,41 +122,6 @@ class AIRepository {
     return (isSafe: true, decision: 'ALLOW', riskScore: 0, reason: '');
   }
 
-  /// Gọi AI Service chuyên dụng (media-moderator) để kiểm duyệt Ảnh / Video độc hại
-  Future<({bool isSafe, String decision, int riskScore, List<String> violations, String reason})> moderateMedia({
-    required String mediaBase64,
-    required String mediaMimeType,
-    String mediaType = 'image',
-  }) async {
-    try {
-      final res = await _client.functions.invoke(
-        'media-moderator',
-        body: {
-          'mediaBase64': mediaBase64,
-          'mediaMimeType': mediaMimeType,
-          'mediaType': mediaType,
-        },
-      );
-
-      if (res.data != null) {
-        final isSafe = (res.data['isSafe'] as bool?) ?? true;
-        final decision = (res.data['decision'] as String?) ?? 'ALLOW';
-        final riskScore = (res.data['riskScore'] as int?) ?? 0;
-        final violationsList = (res.data['violations'] as List?)?.map((e) => e.toString()).toList() ?? <String>[];
-        final reason = (res.data['reason'] as String?) ?? '';
-        return (
-          isSafe: isSafe,
-          decision: decision,
-          riskScore: riskScore,
-          violations: violationsList,
-          reason: reason
-        );
-      }
-    } catch (e) {
-      debugPrint('Media Moderation error: $e');
-    }
-    return (isSafe: true, decision: 'ALLOW', riskScore: 0, violations: <String>[], reason: '');
-  }
 
   /// Gửi báo cáo vi phạm lên hệ thống kiểm duyệt (reports table v2)
   Future<bool> submitReport({
@@ -173,12 +160,32 @@ class AIRepository {
         'status': 'pending',
       };
 
-      await _client.from('reports').insert(insertData);
+      final data = await _client.from('reports').insert(insertData).select('id').single();
+      final reportId = data['id'] as String;
+
+      // Trigger process-report Edge Function in background to calculate priority score
+      _safeInvokeFunction(
+        'process-report',
+        body: {
+          'report_id': reportId,
+        },
+      );
+
       return true;
     } catch (e) {
       debugPrint('Submit Report error: $e');
     }
     return false;
+  }
+
+  void _safeInvokeFunction(String functionName, {Map<String, dynamic>? body}) {
+    Future(() async {
+      try {
+        await _client.functions.invoke(functionName, body: body);
+      } catch (err) {
+        debugPrint('$functionName background error: $err');
+      }
+    });
   }
 
   /// Tìm kiếm bài viết bằng AI Semantic + Hybrid Search (RRF)

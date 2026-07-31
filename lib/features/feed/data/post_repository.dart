@@ -231,6 +231,8 @@ class PostRepository {
       await _client.from(SupabaseConstants.postsTable).insert(insertData);
     }
 
+    final uploadedMediaUrls = <String>[];
+
     // 2. Upload media and insert media records
     for (int i = 0; i < media.length; i++) {
       final item = media[i];
@@ -247,6 +249,10 @@ class PostRepository {
         path: path,
         file: item,
       );
+
+      if (!isVideo) {
+        uploadedMediaUrls.add(url);
+      }
 
       int? width;
       int? height;
@@ -293,18 +299,16 @@ class PostRepository {
       }
     }
 
-    // 3. Trigger async AI post scan in background (non-blocking)
-    _client.functions.invoke(
-      'ai-service',
+    // 3. Trigger async moderate-post Edge Function in background (non-blocking)
+    _safeInvokeFunction(
+      'moderate-post',
       body: {
-        'action': 'async_post_scan',
-        'postId': finalPostId,
+        'content_type': 'post',
+        'target_id': finalPostId,
         'content': finalCaption ?? '',
-        'userId': userId,
+        'image_urls': uploadedMediaUrls,
       },
-    ).catchError((err) {
-      print('Async post scan background error: $err');
-    });
+    );
 
     // 4. Fetch the complete post
     return getPost(finalPostId);
@@ -516,7 +520,20 @@ class PostRepository {
         })
         .select('*, profiles(*)')
         .single();
-    return CommentModel.fromJson(data);
+
+    final comment = CommentModel.fromJson(data);
+
+    // Trigger async moderate-post Edge Function in background (non-blocking)
+    _safeInvokeFunction(
+      'moderate-post',
+      body: {
+        'content_type': 'comment',
+        'target_id': comment.id,
+        'content': content,
+      },
+    );
+
+    return comment;
   }
 
   Future<void> deleteComment(String commentId) async {
@@ -547,34 +564,36 @@ class PostRepository {
     final currentId = currentUserId;
     if (currentId == null) throw Exception('Not authenticated');
 
-    // Ánh xạ lý do tiếng Việt sang category name trong database
-    String categoryName = 'spam';
-    if (reason.contains('Bạo lực')) {
-      categoryName = 'violence';
-    } else if (reason.contains('Tình dục')) {
-      categoryName = 'adult';
-    } else if (reason.contains('Lừa đảo')) {
-      categoryName = 'scam';
-    } else if (reason.contains('Ngôn từ thù ghét')) {
-      categoryName = 'hate_speech';
-    } else if (reason.contains('Quấy rối')) {
-      categoryName = 'harassment';
-    }
+    String validReason = 'other';
+    final r = reason.toLowerCase();
+    if (r.contains('spam') || r.contains('rác')) validReason = 'spam';
+    else if (r.contains('quấy rối') || r.contains('harass')) validReason = 'harassment';
+    else if (r.contains('tình dục') || r.contains('nude')) validReason = 'nudity_sexual';
+    else if (r.contains('bạo lực') || r.contains('violence')) validReason = 'violence_gore';
+    else if (r.contains('thù ghét') || r.contains('hate')) validReason = 'hate_speech';
+    else if (r.contains('lừa đảo') || r.contains('sai sự thật')) validReason = 'misinformation';
 
-    await _client.functions.invoke(
-      'report-service',
+    final data = await _client.from('reports').insert({
+      'content_type': 'post',
+      'post_id': postId,
+      'reporter_id': currentId,
+      'reason': validReason,
+      'description': reason,
+      'status': 'pending',
+    }).select('id').single();
+
+    final reportId = data['id'] as String;
+
+    // Trigger process-report Edge Function in background
+    _safeInvokeFunction(
+      'process-report',
       body: {
-        'reporterId': currentId,
-        'contentId': postId,
-        'contentType': 'post',
-        'categoryName': categoryName,
-        'description': reason,
+        'report_id': reportId,
       },
     );
   }
 
   Future<void> cancelReportPost(String postId) async {
-    // Không làm gì vì bảng reports cũ đã bị xóa và thay bằng hệ thống động
   }
 
   // ── Trash & Edit Operations ──
@@ -594,11 +613,103 @@ class PostRepository {
         .select();
   }
 
+  Future<void> updatePost({
+    required String postId,
+    required String caption,
+    String privacy = 'public',
+    String layoutType = 'panel-top',
+    List<PostMedia>? remainingExistingMedia,
+    List<XFile>? newMedia,
+  }) async {
+    final userId = currentUserId!;
+    final updateData = <String, dynamic>{
+      'caption': caption,
+      'privacy': privacy,
+    };
+    try {
+      updateData['layout_type'] = layoutType;
+      await _client.from(SupabaseConstants.postsTable).update(updateData).eq('id', postId);
+    } catch (_) {
+      updateData.remove('layout_type');
+      await _client.from(SupabaseConstants.postsTable).update(updateData).eq('id', postId);
+    }
+
+    // 1. Quản lý media cũ: xóa bản ghi media bị gỡ
+    if (remainingExistingMedia != null) {
+      try {
+        final currentDbMedia = await _client
+            .from(SupabaseConstants.postMediaTable)
+            .select('id')
+            .eq('post_id', postId);
+        
+        final remainingIds = remainingExistingMedia.map((m) => m.id).toSet();
+        for (final m in (currentDbMedia as List)) {
+          final id = m['id'] as String;
+          if (!remainingIds.contains(id)) {
+            await _client.from(SupabaseConstants.postMediaTable).delete().eq('id', id);
+          }
+        }
+      } catch (e) {
+        print('Error syncing remaining post media: $e');
+      }
+    }
+
+    // 2. Upload media mới nếu có
+    final uploadedUrls = <String>[];
+    if (newMedia != null && newMedia.isNotEmpty) {
+      final baseOrderIndex = remainingExistingMedia?.length ?? 0;
+      for (int i = 0; i < newMedia.length; i++) {
+        final item = newMedia[i];
+        final mediaId = _uuid.v4();
+        final extension = item.name.split('.').last.toLowerCase();
+        final isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp'].contains(extension);
+        final fileExtension = isVideo ? extension : 'jpg';
+        final path = '$userId/$postId/${baseOrderIndex + i}.$fileExtension';
+        final mediaType = isVideo ? 'video' : 'image';
+
+        final url = await _service.uploadFile(
+          bucket: SupabaseConstants.postsBucket,
+          path: path,
+          file: item,
+        );
+
+        if (!isVideo) uploadedUrls.add(url);
+
+        try {
+          await _client.from(SupabaseConstants.postMediaTable).insert({
+            'id': mediaId,
+            'post_id': postId,
+            'url': url,
+            'path': path,
+            'type': mediaType,
+            'order_index': baseOrderIndex + i,
+          });
+        } catch (_) {
+          await _client.from(SupabaseConstants.postMediaTable).insert({
+            'id': mediaId,
+            'post_id': postId,
+            'url': url,
+            'type': mediaType,
+            'order_index': baseOrderIndex + i,
+          });
+        }
+      }
+    }
+
+    // 3. Trigger async moderate-post Edge Function in background (non-blocking)
+    _safeInvokeFunction(
+      'moderate-post',
+      body: {
+        'content_type': 'post',
+        'target_id': postId,
+        'content': caption,
+        if (uploadedUrls.isNotEmpty) 'image_urls': uploadedUrls,
+      },
+    );
+  }
+
   Future<void> updatePostCaption(String postId, String newCaption) async {
-    await _client
-        .from(SupabaseConstants.postsTable)
-        .update({'caption': newCaption})
-        .eq('id', postId);
+    await updatePost(postId: postId, caption: newCaption);
   }
   Future<List<PostModel>> getTrashedPosts() async {
     final userId = currentUserId;
@@ -618,5 +729,15 @@ class PostRepository {
       print('Error fetching trashed posts: $e');
       return [];
     }
+  }
+
+  void _safeInvokeFunction(String functionName, {Map<String, dynamic>? body}) {
+    Future(() async {
+      try {
+        await _client.functions.invoke(functionName, body: body);
+      } catch (err) {
+        print('$functionName background error: $err');
+      }
+    });
   }
 }

@@ -417,7 +417,7 @@ class _FacebookOptionsBottomSheetState extends State<_FacebookOptionsBottomSheet
             title: 'Chỉnh sửa bài viết',
             onTap: () {
               Navigator.pop(context);
-              _showEditCaptionDialog(context, widget.ref, widget.post);
+              context.push('/create', extra: widget.post);
             },
           ),
           const Divider(height: 1),
