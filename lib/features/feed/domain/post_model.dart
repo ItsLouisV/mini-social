@@ -81,6 +81,7 @@ class PostModel {
   final String layoutType;
   final int? aiModerationScore;
   final String? moderationStatus;
+  final bool isAiGenerated;
 
   const PostModel({
     required this.id,
@@ -96,6 +97,7 @@ class PostModel {
     this.layoutType = 'grid',
     this.aiModerationScore,
     this.moderationStatus,
+    this.isAiGenerated = false,
   });
 
   factory PostModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
@@ -132,6 +134,7 @@ class PostModel {
       layoutType: extractedLayout,
       aiModerationScore: (json['ai_moderation_score'] ?? json['moderation_score'] as num?)?.toInt(),
       moderationStatus: json['moderation_status'] as String?,
+      isAiGenerated: json['is_ai_generated'] as bool? ?? false,
     );
   }
 
@@ -146,6 +149,7 @@ class PostModel {
         'layout_type': layoutType,
         'ai_moderation_score': aiModerationScore,
         'moderation_status': moderationStatus,
+        'is_ai_generated': isAiGenerated,
       };
 
   PostModel copyWith({
@@ -153,6 +157,7 @@ class PostModel {
     int? commentsCount,
     bool? isLiked,
     String? layoutType,
+    bool? isAiGenerated,
   }) {
     return PostModel(
       id: id,
@@ -166,6 +171,9 @@ class PostModel {
       isLiked: isLiked ?? this.isLiked,
       privacy: privacy,
       layoutType: layoutType ?? this.layoutType,
+      aiModerationScore: aiModerationScore,
+      moderationStatus: moderationStatus,
+      isAiGenerated: isAiGenerated ?? this.isAiGenerated,
     );
   }
 }

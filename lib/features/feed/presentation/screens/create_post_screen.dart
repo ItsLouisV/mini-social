@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -20,9 +20,10 @@ import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
 import '../../../social/providers/follow_list_provider.dart';
 import '../../domain/post_model.dart';
-import '../../providers/feed_provider.dart';
 import '../../../social/data/ai_repository.dart';
 import '../widgets/image_carousel.dart';
+import 'media_edit_modal.dart';
+import 'post_publish_preview_screen.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
   final PostModel? editPost;
@@ -37,7 +38,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   late final TextEditingController _captionController;
   List<PostMedia> _existingMedia = [];
   final List<XFile> _media = [];
-  bool _isPosting = false;
   String _privacy = 'public'; // Mặc định Công khai
   String _selectedLayout = 'panel-top'; // Mặc định cố định panel-top khi >= 3 ảnh/video
 
@@ -48,8 +48,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   String? _selectedLocation;
   String? _selectedFeeling;
   final List<String> _taggedFriends = [];
-  bool _isInstagramOn = false;
-  bool _isThreadsOn = false;
 
   @override
   void initState() {
@@ -81,14 +79,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     );
   }
 
-  Future<void> _pickImages() async {
+  Future<void> _pickMedia() async {
     final totalMedia = _existingMedia.length + _media.length;
     if (totalMedia >= 6) {
       _showMaxMediaSnackBar();
       return;
     }
     final picker = ImagePicker();
-    final picked = await picker.pickMultiImage();
+    final picked = await picker.pickMultipleMedia();
     if (picked.isEmpty) return;
 
     final remaining = 6 - totalMedia;
@@ -96,8 +94,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
     final compressed = <XFile>[];
     for (final x in toAdd) {
-      final file = await ImageUtils.compressImage(x);
-      compressed.add(file ?? x);
+      if (!_isVideo(x)) {
+        final file = await ImageUtils.compressImage(x);
+        compressed.add(file ?? x);
+      } else {
+        compressed.add(x);
+      }
     }
 
     setState(() => _media.addAll(compressed));
@@ -116,124 +118,52 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     setState(() => _media.add(picked));
   }
 
-  Future<void> _post() async {
+  void _openMediaEditModal() {
+    MediaEditModal.show(
+      context,
+      existingMedia: _existingMedia,
+      media: _media,
+      onSave: (updatedExisting, updatedNew) {
+        setState(() {
+          _existingMedia.clear();
+          _existingMedia.addAll(updatedExisting);
+          _media.clear();
+          _media.addAll(updatedNew);
+        });
+      },
+    );
+  }
+
+  void _goToNextScreen() {
     final caption = _captionController.text.trim();
-    if (caption.isEmpty && _existingMedia.isEmpty && _media.isEmpty && _selectedMusic == null && _selectedFeeling == null) {
+    if (caption.isEmpty &&
+        _existingMedia.isEmpty &&
+        _media.isEmpty &&
+        _selectedMusic == null &&
+        _selectedFeeling == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Hãy viết gì đó hoặc thêm nội dung bài viết')),
       );
       return;
     }
 
-    // Ghép thông tin cảm xúc / vị trí / nhạc vào caption nếu có
-    final extraDetails = <String>[];
-    if (_selectedFeeling != null) extraDetails.add('— đang cảm thấy $_selectedFeeling');
-    if (_selectedLocation != null) extraDetails.add('tại $_selectedLocation');
-    if (_selectedMusic != null) extraDetails.add('🎵 $_selectedMusic');
-    if (_taggedFriends.isNotEmpty) extraDetails.add('cùng ${_taggedFriends.join(", ")}');
-
-    String finalCaption = caption;
-    if (extraDetails.isNotEmpty) {
-      finalCaption += (finalCaption.isNotEmpty ? '\n' : '') + extraDetails.join(' ');
-    }
-
-    setState(() => _isPosting = true);
-    try {
-      // ── AI Pre-Moderation Scan ─────────────────────────────────────
-      String? imageBase64;
-      String? mimeType;
-      if (_media.isNotEmpty && !_isVideo(_media.first)) {
-        try {
-          final bytes = await ImageCompressor.compressXFile(_media.first);
-          if (bytes.isNotEmpty) {
-            imageBase64 = base64Encode(bytes);
-            final ext = _media.first.name.split('.').last.toLowerCase();
-            mimeType = ext == 'png' ? 'image/png' : 'image/jpeg';
-          }
-        } catch (_) {}
-      }
-
-      final modResult = await ref.read(aiRepositoryProvider).moderateContent(
-        text: finalCaption,
-        imageBase64: imageBase64,
-        imageMimeType: mimeType,
-      );
-
-      if (!modResult.isSafe || modResult.riskScore >= 70 || modResult.decision == 'REJECT' || modResult.decision == 'BLOCK') {
-        // Ghi nhận log vi phạm vào bảng user_violations
-        final currentUserId = ref.read(currentUserProvider)?.id;
-        if (currentUserId != null) {
-          ref.read(aiRepositoryProvider).recordViolation(
-            userId: currentUserId,
-            contentType: 'post',
-            violationType: 'nudity_sexual_or_inappropriate',
-            riskScore: modResult.riskScore,
-            reason: modResult.reason.isNotEmpty
-                ? modResult.reason
-                : 'Nội dung chứa hình ảnh 18+ / vi phạm tiêu chuẩn cộng đồng',
-          );
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(CupertinoIcons.exclamationmark_shield_fill, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Bài viết bị từ chối (Điểm vi phạm AI: ${modResult.riskScore}/100).\n${modResult.reason.isNotEmpty ? modResult.reason : "Chứa nội dung nhạy cảm / 18+ không phù hợp tiêu chuẩn."}',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.redAccent,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
-        return;
-      }
-
-      final modStatus = modResult.decision == 'FLAG' ? 'shadow_limited' : 'published';
-
-      if (widget.editPost != null) {
-        await ref.read(postRepositoryProvider).updatePost(
-              postId: widget.editPost!.id,
-              caption: finalCaption,
-              privacy: _privacy,
-              layoutType: _selectedLayout,
-              remainingExistingMedia: _existingMedia,
-              newMedia: _media,
-              moderationScore: modResult.riskScore,
-              moderationStatus: modStatus,
-            );
-        ref.invalidate(feedPostsProvider);
-      } else {
-        await ref.read(postRepositoryProvider).createPost(
-              caption: finalCaption,
-              media: _media,
-              privacy: _privacy,
-              layoutType: _selectedLayout,
-              moderationScore: modResult.riskScore,
-              moderationStatus: modStatus,
-            );
-      }
-      if (mounted) context.pop();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.editPost != null ? 'Không thể cập nhật bài viết: ${e.toString()}' : 'Không thể đăng bài: ${e.toString()}'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isPosting = false);
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PostPublishPreviewScreen(
+          caption: _captionController.text,
+          existingMedia: _existingMedia,
+          media: _media,
+          selectedLayout: _selectedLayout,
+          selectedMusic: _selectedMusic,
+          selectedLocation: _selectedLocation,
+          selectedFeeling: _selectedFeeling,
+          taggedFriends: _taggedFriends,
+          initialPrivacy: _privacy,
+          editPost: widget.editPost,
+        ),
+      ),
+    );
   }
 
   Future<void> _generateAICaption() async {
@@ -298,34 +228,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
   }
 
-  String _getPrivacyLabel() {
-    switch (_privacy) {
-      case 'public':
-        return AppTranslations.tr(ref, 'public');
-      case 'friends':
-      case 'followers':
-        return AppTranslations.tr(ref, 'friends_and_followers');
-      case 'private':
-        return AppTranslations.tr(ref, 'only_me');
-      default:
-        return AppTranslations.tr(ref, 'friends_and_followers');
-    }
-  }
-
-  IconData _getPrivacyIcon() {
-    switch (_privacy) {
-      case 'public':
-        return CupertinoIcons.globe;
-      case 'friends':
-      case 'followers':
-        return CupertinoIcons.person_2_fill;
-      case 'private':
-        return CupertinoIcons.lock_fill;
-      default:
-        return CupertinoIcons.person_2_fill;
-    }
-  }
-
   void _showCustomFullScreenModal({
     required String title,
     String? subtitle,
@@ -353,7 +255,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 10),
-                    // Thanh kéo
                     Container(
                       width: 38,
                       height: 4,
@@ -363,7 +264,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    // Header tiêu đề + Nút X đóng
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 6, 12, 10),
                       child: Row(
@@ -408,68 +308,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           },
         );
       },
-    );
-  }
-
-  void _showPrivacyBottomSheet() {
-    _showCustomFullScreenModal(
-      title: 'Đối tượng của bài viết',
-      subtitle: 'Ai có thể nhìn thấy bài viết này của bạn?',
-      heightFactor: 0.55,
-      bodyBuilder: (ctx, setModalState) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            children: [
-              _buildPrivacyTile('public', 'Công khai', CupertinoIcons.globe, 'Bất kỳ ai ở trong và ngoài MiniSocial'),
-              _buildPrivacyTile('friends', 'Bạn bè & Người theo dõi', CupertinoIcons.person_2_fill, 'Bạn bè hoặc người đang theo dõi bạn có thể xem'),
-              _buildPrivacyTile('private', 'Chỉ mình tôi', CupertinoIcons.lock_fill, 'Chỉ mình bạn mới có thể xem bài viết này'),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPrivacyTile(String value, String title, IconData icon, String subtitle) {
-    final isSelected = _privacy == value;
-    final theme = Theme.of(context);
-
-    return InkWell(
-      onTap: () {
-        setState(() => _privacy = value);
-        Navigator.pop(context);
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-        child: Row(
-          children: [
-            Icon(icon, color: isSelected ? AppColors.primary : theme.hintColor, size: 22),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      fontSize: 15,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(fontSize: 12, color: theme.hintColor),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(CupertinoIcons.checkmark_alt, color: AppColors.primary, size: 20),
-          ],
-        ),
-      ),
     );
   }
 
@@ -995,7 +833,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         _selectedMusic != null ||
         _selectedFeeling != null;
 
-    final cardBgColor = isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB);
     final chipBgColor = isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB);
     final chipTextColor = isDark ? Colors.white : Colors.black87;
 
@@ -1014,12 +851,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(CupertinoIcons.ellipsis, color: theme.textTheme.bodyLarge?.color),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(
@@ -1196,70 +1027,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                                 child: ImageCarousel(
                                   media: allPreviewMedia,
                                   layoutType: _selectedLayout,
+                                  onTapCarousel: _openMediaEditModal,
                                 ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-
-                            // Danh sách thumbnail nhỏ kèm nút xóa X
-                            SizedBox(
-                              height: 90,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: allPreviewMedia.length,
-                                itemBuilder: (context, i) {
-                                  final isExisting = i < _existingMedia.length;
-                                  final isVideo = isExisting
-                                      ? _existingMedia[i].type == 'video'
-                                      : _isVideo(_media[i - _existingMedia.length]);
-
-                                  return Container(
-                                    margin: const EdgeInsets.only(right: 10),
-                                    width: 80,
-                                    child: Stack(
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: Container(
-                                            color: isDark ? Colors.white10 : Colors.black12,
-                                            width: 80,
-                                            height: 90,
-                                            child: isVideo
-                                                ? const Center(child: Icon(CupertinoIcons.play_circle_fill, size: 26, color: Colors.white))
-                                                : (isExisting
-                                                    ? Image.network(_existingMedia[i].url, fit: BoxFit.cover)
-                                                    : (kIsWeb
-                                                        ? Image.network(_media[i - _existingMedia.length].path, fit: BoxFit.cover)
-                                                        : Image.file(io.File(_media[i - _existingMedia.length].path), fit: BoxFit.cover))),
-                                          ),
-                                        ),
-                                        Positioned(
-                                          top: 4,
-                                          right: 4,
-                                          child: GestureDetector(
-                                            onTap: () {
-                                              setState(() {
-                                                if (isExisting) {
-                                                  _existingMedia.removeAt(i);
-                                                } else {
-                                                  _media.removeAt(i - _existingMedia.length);
-                                                }
-                                              });
-                                            },
-                                            child: Container(
-                                              padding: const EdgeInsets.all(4),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black.withValues(alpha: 0.6),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: const Icon(CupertinoIcons.xmark, size: 12, color: Colors.white),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
                               ),
                             ),
                           ],
@@ -1323,176 +1092,70 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               ),
             ),
 
-            // ── Attachment Option Cards (Thư viện, GIF, Gợi ý AI, Trực tiếp) ──
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              color: isDark ? const Color(0xFF18191A) : Colors.grey.shade50,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildOptionCard(
-                      icon: CupertinoIcons.sparkles,
-                      label: _isGeneratingAICaption ? 'Đang tạo...' : 'AI gợi ý ✨',
-                      bgColor: Colors.purple.withValues(alpha: 0.15),
-                      textColor: Colors.purpleAccent,
-                      onTap: _isGeneratingAICaption ? null : () => _generateAICaption(),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildOptionCard(
-                      icon: CupertinoIcons.photo_on_rectangle,
-                      label: AppTranslations.tr(ref, 'gallery'),
-                      bgColor: cardBgColor,
-                      textColor: chipTextColor,
-                      onTap: _pickImages,
-                    ),
-                    const SizedBox(width: 8),
-                    _buildOptionCard(
-                      icon: CupertinoIcons.photo,
-                      label: AppTranslations.tr(ref, 'gif'),
-                      badgeText: 'GIF',
-                      bgColor: cardBgColor,
-                      textColor: chipTextColor,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('GIF')),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _buildOptionCard(
-                      icon: CupertinoIcons.star,
-                      label: AppTranslations.tr(ref, 'life_event'),
-                      bgColor: cardBgColor,
-                      textColor: chipTextColor,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Life Event')),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _buildOptionCard(
-                      icon: CupertinoIcons.videocam,
-                      label: AppTranslations.tr(ref, 'live'),
-                      bgColor: cardBgColor,
-                      textColor: chipTextColor,
-                      onTap: _pickVideo,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
             const Divider(height: 1),
 
-            // ── Bottom Toolbar (Bạn bè, Instagram, Threads & Nút Đăng) ──
+            // ── Bottom Attachment Tools & Nút "Tiếp" ──
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              color: isDark ? const Color(0xFF18191A) : Colors.white,
               child: Row(
                 children: [
-                  // Audience selector chip (Bạn bè / Công khai)
-                  InkWell(
-                    onTap: _showPrivacyBottomSheet,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: chipBgColor,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(_getPrivacyIcon(), size: 14, color: chipTextColor),
-                          const SizedBox(width: 6),
-                          Text(
-                            _getPrivacyLabel(),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: chipTextColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  // 1. AI gợi ý ✨ (giữ nguyên nút action)
+                  _buildOptionCard(
+                    iconWidget: const FaIcon(FontAwesomeIcons.wandMagicSparkles, size: 14, color: Colors.purpleAccent),
+                    label: _isGeneratingAICaption ? 'Đang tạo...' : 'AI gợi ý ✨',
+                    bgColor: Colors.purple.withValues(alpha: 0.15),
+                    textColor: Colors.purpleAccent,
+                    onTap: _isGeneratingAICaption ? null : () => _generateAICaption(),
                   ),
 
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
 
-                  // Instagram toggle chip
-                  InkWell(
-                    onTap: () => setState(() => _isInstagramOn = !_isInstagramOn),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _isInstagramOn
-                            ? AppColors.primary.withValues(alpha: 0.2)
-                            : chipBgColor,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            CupertinoIcons.camera_fill,
-                            size: 14,
-                            color: _isInstagramOn ? AppColors.primary : chipTextColor,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _isInstagramOn ? 'Bật' : 'Tắt',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: _isInstagramOn ? AppColors.primary : chipTextColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  // 2. Icon Thư viện (FontAwesome image)
+                  IconButton(
+                    icon: const FaIcon(FontAwesomeIcons.image, color: AppColors.primary, size: 20),
+                    tooltip: 'Thư viện ảnh & video',
+                    onPressed: () {
+                      if (_existingMedia.isNotEmpty || _media.isNotEmpty) {
+                        _openMediaEditModal();
+                      } else {
+                        _pickMedia();
+                      }
+                    },
                   ),
 
-                  const SizedBox(width: 6),
-
-                  // Threads toggle chip
-                  InkWell(
-                    onTap: () => setState(() => _isThreadsOn = !_isThreadsOn),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _isThreadsOn
-                            ? AppColors.primary.withValues(alpha: 0.2)
-                            : chipBgColor,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            CupertinoIcons.at,
-                            size: 14,
-                            color: _isThreadsOn ? AppColors.primary : chipTextColor,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _isThreadsOn ? 'Bật' : 'Tắt',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: _isThreadsOn ? AppColors.primary : chipTextColor,
-                            ),
-                          ),
-                        ],
-                      ),
+                  // 3, 4, 5. GIF, Cột mốc, Trực tiếp (bị ẩn khi đã chọn ảnh/media)
+                  if (_existingMedia.isEmpty && _media.isEmpty) ...[
+                    IconButton(
+                      icon: const Icon(Icons.gif_box_outlined, color: Colors.green, size: 24),
+                      tooltip: 'Ảnh GIF',
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Tính năng GIF')),
+                        );
+                      },
                     ),
-                  ),
+                    IconButton(
+                      icon: const FaIcon(FontAwesomeIcons.ghost, color: Colors.purple, size: 19),
+                      tooltip: 'Cột mốc đáng nhớ',
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Cột mốc đáng nhớ')),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const FaIcon(FontAwesomeIcons.video, color: Colors.redAccent, size: 19),
+                      tooltip: 'Trực tiếp / Video',
+                      onPressed: _pickVideo,
+                    ),
+                  ],
 
                   const Spacer(),
 
-                  // ── Nút Đăng (Post Button) ─────────────────────────
+                  // ── Nút "Tiếp" ─────────────────────────
                   ElevatedButton(
-                    onPressed: (hasContent && !_isPosting) ? _post : null,
+                    onPressed: hasContent ? _goToNextScreen : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: hasContent ? AppColors.primary : (isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB)),
                       disabledBackgroundColor: isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB),
@@ -1503,20 +1166,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     ),
-                    child: _isPosting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Text(
-                            widget.editPost != null ? 'Xong' : AppTranslations.tr(ref, 'post_button'),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: hasContent ? Colors.white : (isDark ? const Color(0xFF8A8D91) : Colors.grey.shade600),
-                            ),
-                          ),
+                    child: Text(
+                      'Tiếp',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: hasContent ? Colors.white : (isDark ? const Color(0xFF8A8D91) : Colors.grey.shade600),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1578,7 +1235,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   // Helper cho Attachment Option Cards (Thư viện, GIF, Cột mốc, Trực tiếp)
   Widget _buildOptionCard({
-    required IconData icon,
+    required Widget iconWidget,
     required String label,
     String? badgeText,
     required Color bgColor,
@@ -1613,7 +1270,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ),
                     ),
                   )
-                : Icon(icon, size: 16, color: textColor),
+                : iconWidget,
             const SizedBox(width: 6),
             Text(
               label,

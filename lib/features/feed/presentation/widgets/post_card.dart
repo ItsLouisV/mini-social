@@ -185,6 +185,25 @@ class _PostCardState extends ConsumerState<PostCard> {
                       const SizedBox(height: 2),
                       Row(
                         children: [
+                          if (post.isAiGenerated) ...[
+                            const Text(
+                              'Nội dung do AI tạo',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.purpleAccent,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '•',
+                              style: TextStyle(
+                                color: Theme.of(context).hintColor,
+                                fontSize: 11,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
                           Text(
                             post.createdAt.timeAgo,
                             style: AppTextStyles.caption.copyWith(
@@ -242,47 +261,110 @@ class _PostCardState extends ConsumerState<PostCard> {
           ),
           const SizedBox(height: 10),
 
-          // Badge kiểm duyệt: chỉ hiện với creator khi bài đang pending
-          if (isOwner && post.moderationStatus == 'pending') ...[
+          // Badge kiểm duyệt: chỉ hiện với creator khi bài chưa được published
+          if (isOwner && post.moderationStatus != 'published' && post.moderationStatus != null) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: Colors.orange.withValues(alpha: 0.35),
-                        width: 0.8,
+                  if (post.moderationStatus == 'pending')
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.35),
+                          width: 0.8,
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 10,
-                          height: 10,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.orange.shade700,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 10,
+                            height: 10,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.orange.shade700,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Đang kiểm duyệt...',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.orange.shade700,
+                          const SizedBox(width: 6),
+                          Text(
+                            'Đang kiểm duyệt...',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.orange.shade700,
+                            ),
                           ),
+                        ],
+                      ),
+                    )
+                  else if (post.moderationStatus == 'hidden' || post.moderationStatus == 'removed')
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: Colors.red.withValues(alpha: 0.35),
+                          width: 0.8,
                         ),
-                      ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.exclamationmark_triangle_fill,
+                            size: 11,
+                            color: Colors.red.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Bài viết bị ẩn (Vi phạm tiêu chuẩn cộng đồng)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (post.moderationStatus == 'shadow_limited')
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.35),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.eye_slash,
+                            size: 11,
+                            color: Colors.amber.shade800,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Giới hạn phân phối',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.amber.shade800,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -334,48 +416,6 @@ class _PostCardState extends ConsumerState<PostCard> {
           isOwner: isOwner,
         );
       },
-    );
-  }
-
-  void _showReportDialog(BuildContext context, WidgetRef ref) {
-    _showGlobalReportDialog(context, ref, widget.post);
-  }
-
-  void _confirmDelete(BuildContext context, WidgetRef ref) {
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Xóa bài viết'),
-        content: const Text('Bạn có chắc muốn xóa bài viết này không?'),
-        actions: [
-          CupertinoDialogAction(
-            onPressed: () => ctx.pop(),
-            child: const Text('Hủy'),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              ctx.pop();
-              try {
-                await ref
-                    .read(postRepositoryProvider)
-                    .deletePost(widget.post.id);
-                ref.invalidate(feedPostsProvider);
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Xóa thất bại: ${e.toString()}'),
-                      backgroundColor: Theme.of(context).colorScheme.error,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Xóa'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -633,50 +673,7 @@ class _FacebookOptionsBottomSheetState extends State<_FacebookOptionsBottomSheet
   }
 }
 
-// ── Dialog Chỉnh sửa bài viết ──
-void _showEditCaptionDialog(BuildContext context, WidgetRef ref, PostModel post) {
-  final controller = TextEditingController(text: post.caption);
-  showDialog(
-    context: context,
-    builder: (context) {
-      final theme = Theme.of(context);
-      return AlertDialog(
-        title: const Text('Chỉnh sửa bài viết', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Nhập nội dung mới...',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 4,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newCaption = controller.text.trim();
-              Navigator.pop(context);
-              try {
-                await ref.read(postRepositoryProvider).updatePostCaption(post.id, newCaption);
-                ref.invalidate(feedPostsProvider);
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Lỗi cập nhật: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Lưu'),
-          ),
-        ],
-      );
-    },
-  );
-}
+
 
 // ── Xác nhận chuyển vào thùng rác ──
 void _confirmMoveToTrash(BuildContext context, WidgetRef ref, PostModel post) {

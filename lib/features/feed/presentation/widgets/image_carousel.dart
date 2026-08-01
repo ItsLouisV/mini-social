@@ -12,11 +12,15 @@ import '../../../../core/constants/app_colors.dart';
 class ImageCarousel extends StatefulWidget {
   final List<PostMedia> media;
   final String layoutType;
+  final Function(PostMedia media)? onDeleteMedia;
+  final VoidCallback? onTapCarousel;
 
   const ImageCarousel({
     super.key,
     required this.media,
     this.layoutType = 'dashboard',
+    this.onDeleteMedia,
+    this.onTapCarousel,
   });
 
   @override
@@ -385,11 +389,43 @@ class _ImageCarouselState extends State<ImageCarousel> {
       );
     }
 
+    if (widget.onDeleteMedia != null) {
+      mediaWidget = Stack(
+        fit: StackFit.expand,
+        children: [
+          mediaWidget,
+          Positioned(
+            top: 8,
+            right: 8,
+            child: GestureDetector(
+              onTap: () => widget.onDeleteMedia?.call(item),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white24, width: 1),
+                ),
+                child: const Icon(
+                  CupertinoIcons.trash_fill,
+                  size: 14,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return GestureDetector(
-      onTap: isVideo
-          ? null
-          : () {
-              if (imageIndex != -1) {
+      onTap: () {
+        if (widget.onTapCarousel != null) {
+          widget.onTapCarousel!();
+          return;
+        }
+        if (isVideo) return;
+        if (imageIndex != -1) {
                 final currentUserId = Supabase.instance.client.auth.currentUser?.id;
                 final postId = widget.media.isNotEmpty ? widget.media.first.postId : null;
                  if (currentUserId != null && postId != null && postId.isNotEmpty && postId != 'preview') {

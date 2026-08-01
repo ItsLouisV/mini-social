@@ -268,10 +268,21 @@ class ProfileRepository {
     bool isFriendOrFollower = false;
 
     if (currentId == null) {
-      // Chưa đăng nhập: chỉ xem bài public
-      filteredPostsJson = postsList.where((p) => (p['privacy'] as String? ?? 'public') == 'public').toList();
+      // Chưa đăng nhập: chỉ xem bài public và đã published
+      filteredPostsJson = postsList.where((p) {
+        final status = p['moderation_status'] as String? ?? 'pending';
+        final privacy = p['privacy'] as String? ?? 'public';
+        return status == 'published' && privacy == 'public';
+      }).toList();
     } else if (currentId == userId) {
-      // Chính chủ: xem tất cả bài viết của bản thân
+      // // Chính chủ: xem bài của bản thân (loại bài hidden/removed do vi phạm)
+      // filteredPostsJson = postsList.where((p) {
+      //   final status = p['moderation_status'] as String? ?? 'pending';
+      //   return status != 'hidden' && status != 'removed';
+      // }).toList();
+
+
+      // Chính chủ: xem tất cả bài viết của bản thân trong profile (kể cả hidden / removed / pending)
       filteredPostsJson = postsList;
       isFriendOrFollower = true;
     } else {
@@ -301,6 +312,10 @@ class ProfileRepository {
       }
 
       filteredPostsJson = postsList.where((p) {
+        final status = p['moderation_status'] as String? ?? 'pending';
+        // Người khác chỉ thấy bài published
+        if (status != 'published') return false;
+
         final privacy = (p['privacy'] as String? ?? 'public').toLowerCase();
 
         // Riêng tư (private / only_me) -> TUYỆT ĐỐI KHÔNG HIỂN THỊ CHO NGƯỜI KHÁC

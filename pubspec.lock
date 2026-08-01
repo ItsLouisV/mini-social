@@ -129,6 +129,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.3.0"
+  bloc:
+    dependency: transitive
+    description:
+      name: bloc
+      sha256: e03b235924e4f509c27b5d6b2f949200e0a91149a9818b4f65eeb56662b75413
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.2.1"
   boolean_selector:
     dependency: transitive
     description:
@@ -433,6 +441,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.3"
+  equatable:
+    dependency: transitive
+    description:
+      name: equatable
+      sha256: "3bce007a596ff8b3119c45d68aaef631272537c03d30e5d4534dd24bf4c5eaa2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.0"
   fake_async:
     dependency: transitive
     description:
@@ -510,6 +526,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_bloc:
+    dependency: transitive
+    description:
+      name: flutter_bloc
+      sha256: cf51747952201a455a1c840f8171d273be009b932c75093020f9af64f2123e38
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.1.1"
   flutter_cache_manager:
     dependency: transitive
     description:
@@ -1064,6 +1088,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.17.6"
+  nested:
+    dependency: transitive
+    description:
+      name: nested
+      sha256: "03bac4c528c64c95c722ec99280375a6f2fc708eec17c7b3f07253b626cd2a20"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   nm:
     dependency: transitive
     description:
@@ -1248,6 +1280,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.2"
+  photo_manager:
+    dependency: transitive
+    description:
+      name: photo_manager
+      sha256: "4f7de6c9778993c5c54cf1fb2eaa8d5c27c0771dc24a4dfca341aa81aef13fe1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.11.0"
+  photo_manager_image_provider:
+    dependency: transitive
+    description:
+      name: photo_manager_image_provider
+      sha256: b6015b67b32f345f57cf32c126f871bced2501236c405aafaefa885f7c821e4f
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
   photo_view:
     dependency: "direct main"
     description:
@@ -1304,6 +1352,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.0"
+  provider:
+    dependency: transitive
+    description:
+      name: provider
+      sha256: "4e82183fa20e5ca25703ead7e05de9e4cceed1fbd1eadc1ac3cb6f565a09f272"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.1.5+1"
   pub_semver:
     dependency: transitive
     description:
@@ -1600,6 +1656,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.0"
+  simple_media_picker:
+    dependency: "direct main"
+    description:
+      name: simple_media_picker
+      sha256: "9bb245f3d2669d00a95f0d203c97ca175b7bc597630ace4d26a8058e689a1cf8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   sky_engine:
     dependency: transitive
     description: flutter

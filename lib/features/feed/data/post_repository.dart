@@ -37,7 +37,12 @@ class PostRepository {
 
     final userId = currentUserId;
     if (userId == null) {
-      return postsList.map((e) => PostModel.fromJson(e)).toList();
+      final publicOnly = postsList.where((p) {
+        final status = p['moderation_status'] as String? ?? 'pending';
+        final privacy = p['privacy'] as String? ?? 'public';
+        return status == 'published' && privacy == 'public';
+      });
+      return publicOnly.map((e) => PostModel.fromJson(e)).toList();
     }
 
     // 1. Get the current user's follows
@@ -76,12 +81,14 @@ class PostRepository {
       final postUserId = postJson['user_id'] as String;
       final status = postJson['moderation_status'] as String? ?? 'pending';
 
-      // Creator LUÔN thấy bài của chính mình (kể cả pending / hidden)
-      // để họ biết bài đang ở trạng thái nào.
+      // Bài viết bị vi phạm nặng (hidden / removed) bị ẩn hoàn toàn khỏi feed (kể cả creator)
+      if (status == 'hidden' || status == 'removed') return false;
+
+      // Creator thấy bài của chính mình (bao gồm cả 'pending' để xem trạng thái kiểm duyệt)
       if (postUserId == userId) return true;
 
       // Người khác chỉ thấy bài đã published.
-      // pending / shadow_limited / hidden đều bị ẩn cho tới khi AI xác nhận.
+      // pending / shadow_limited đều bị ẩn cho tới khi AI xác nhận an toàn.
       if (status != 'published') return false;
 
       final privacy = postJson['privacy'] as String? ?? 'public';
@@ -204,6 +211,7 @@ class PostRepository {
     String? postId,
     int? moderationScore,
     String? moderationStatus,
+    bool isAiGenerated = false,
   }) async {
     final userId = currentUserId!;
     final finalPostId = postId ?? _uuid.v4();
@@ -220,6 +228,7 @@ class PostRepository {
       'user_id': userId,
       'caption': finalCaption,
       'privacy': privacy,
+      if (isAiGenerated) 'is_ai_generated': true,
       if (moderationScore != null) 'ai_moderation_score': moderationScore,
       if (moderationStatus != null) 'moderation_status': moderationStatus,
     };
@@ -228,8 +237,13 @@ class PostRepository {
       insertData['layout_type'] = layoutType;
       await _client.from(SupabaseConstants.postsTable).insert(insertData);
     } catch (_) {
-      insertData.remove('layout_type');
-      await _client.from(SupabaseConstants.postsTable).insert(insertData);
+      try {
+        insertData.remove('layout_type');
+        await _client.from(SupabaseConstants.postsTable).insert(insertData);
+      } catch (_) {
+        insertData.remove('is_ai_generated');
+        await _client.from(SupabaseConstants.postsTable).insert(insertData);
+      }
     }
 
     final uploadedMediaUrls = <String>[];

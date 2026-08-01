@@ -51,6 +51,7 @@ class SearchRepository {
           .select('*, profiles(*), post_media(*)')
           .ilike('caption', '%$cleanQuery%')
           .filter('deleted_at', 'is', null)
+          .eq('moderation_status', 'published')
           .order('created_at', ascending: false)
           .limit(30);
 
@@ -62,6 +63,7 @@ class SearchRepository {
           .from(SupabaseConstants.postsTable)
           .select('*, profiles(*), post_media(*)')
           .ilike('caption', '%$cleanQuery%')
+          .eq('moderation_status', 'published')
           .order('created_at', ascending: false)
           .limit(30);
 

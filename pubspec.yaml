@@ -70,6 +70,7 @@ dependencies:
   connectivity_plus: ^7.0.0
   custom_pop_up_menu: ^1.2.4
   google_fonts: ^8.1.0
+  simple_media_picker: ^1.0.1
 
 dev_dependencies:
   flutter_test:
