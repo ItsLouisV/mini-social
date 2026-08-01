@@ -303,9 +303,9 @@ class PostRepository {
       }
     }
 
-    // 3. Trigger async moderate-post Edge Function in background (non-blocking)
+    // 3. Trigger async moderate-content Edge Function in background (non-blocking)
     _safeInvokeFunction(
-      'moderate-post',
+      'moderate-content',
       body: {
         'content_type': 'post',
         'target_id': finalPostId,
@@ -527,9 +527,9 @@ class PostRepository {
 
     final comment = CommentModel.fromJson(data);
 
-    // Trigger async moderate-post Edge Function in background (non-blocking)
+    // Trigger async moderate-content Edge Function in background (non-blocking)
     _safeInvokeFunction(
-      'moderate-post',
+      'moderate-content',
       body: {
         'content_type': 'comment',
         'target_id': comment.id,
@@ -704,9 +704,9 @@ class PostRepository {
       }
     }
 
-    // 3. Trigger async moderate-post Edge Function in background (non-blocking)
+    // 3. Trigger async moderate-content Edge Function in background (non-blocking)
     _safeInvokeFunction(
-      'moderate-post',
+      'moderate-content',
       body: {
         'content_type': 'post',
         'target_id': postId,

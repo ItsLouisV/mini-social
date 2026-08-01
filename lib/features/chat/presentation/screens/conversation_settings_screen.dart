@@ -46,7 +46,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     // Fetch shared media images from the conversation history
     final messagesAsync = ref.watch(realtimeMessagesProvider(widget.conversationId));
     final mediaMessages = messagesAsync.valueOrNull?.messages
-            .where((m) => m.isImage || (m.mediaUrl != null && m.mediaUrl!.isNotEmpty))
+            .where((m) => m.isImage || m.mediaUrls.isNotEmpty)
             .toList() ??
         [];
 
@@ -253,7 +253,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                               itemBuilder: (context, idx) {
                                 final msg = mediaMessages[idx];
                                 return GestureDetector(
-                                  onTap: () => _openSharedImage(context, msg.mediaUrl!),
+                                  onTap: () => _openSharedImage(context, msg.firstMediaUrl!),
                                   child: Container(
                                     margin: const EdgeInsets.only(right: 10),
                                     width: 80,
@@ -265,9 +265,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(9),
                                       child: Hero(
-                                        tag: msg.mediaUrl!,
+                                        tag: msg.firstMediaUrl!,
                                         child: CachedNetworkImage(
-                                          imageUrl: msg.mediaUrl!,
+                                          imageUrl: msg.firstMediaUrl!,
                                           fit: BoxFit.cover,
                                           placeholder: (_, __) => const Center(child: CupertinoActivityIndicator(radius: 8)),
                                           errorWidget: (_, __, ___) => const Icon(CupertinoIcons.photo),

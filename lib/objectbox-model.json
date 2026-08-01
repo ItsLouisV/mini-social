@@ -91,7 +91,7 @@
     },
     {
       "id": "2:282038241542904864",
-      "lastPropertyId": "15:4765953919967120532",
+      "lastPropertyId": "16:2963107133958559576",
       "name": "CachedMessage",
       "properties": [
         {
@@ -122,11 +122,6 @@
         {
           "id": "5:2447177151411105811",
           "name": "content",
-          "type": 9
-        },
-        {
-          "id": "6:5482535668441099760",
-          "name": "mediaUrl",
           "type": 9
         },
         {
@@ -172,6 +167,11 @@
         {
           "id": "15:4765953919967120532",
           "name": "replyMessageType",
+          "type": 9
+        },
+        {
+          "id": "16:2963107133958559576",
+          "name": "mediaUrlsJson",
           "type": 9
         }
       ],
@@ -230,7 +230,7 @@
     },
     {
       "id": "4:5440757973749173711",
-      "lastPropertyId": "11:7662968625500453152",
+      "lastPropertyId": "12:7968274623739255368",
       "name": "FailedMessage",
       "properties": [
         {
@@ -289,8 +289,8 @@
           "type": 9
         },
         {
-          "id": "11:7662968625500453152",
-          "name": "mediaUrl",
+          "id": "12:7968274623739255368",
+          "name": "mediaUrlsJson",
           "type": 9
         }
       ],
@@ -305,7 +305,10 @@
   "modelVersionParserMinimum": 5,
   "retiredEntityUids": [],
   "retiredIndexUids": [],
-  "retiredPropertyUids": [],
+  "retiredPropertyUids": [
+    5482535668441099760,
+    7662968625500453152
+  ],
   "retiredRelationUids": [],
   "version": 1
 }

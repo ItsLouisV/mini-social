@@ -50,7 +50,7 @@ serve(async (req) => {
     if (!mapping) throw new Error(`content_type không hợp lệ: ${report.content_type}`);
     const { table, idColumn } = mapping;
 
-    // 2. Điểm AI đã chấm sẵn từ Lớp 1 (moderate-post) — không gọi lại Gemini để tiết kiệm chi phí
+    // 2. Điểm AI đã chấm sẵn từ Lớp 1 (moderate-content) — không gọi lại Gemini để tiết kiệm chi phí
     const { data: item, error: itemErr } = await supabase
       .from(table)
       .select("ai_moderation_score, ai_moderation_labels")

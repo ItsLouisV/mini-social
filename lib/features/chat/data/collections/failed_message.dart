@@ -15,7 +15,8 @@ class FailedMessage {
 
   late String senderId;
   String? content;
-  String? mediaUrl;
+  /// JSON-encoded list of media URLs, e.g. '["https://cdn.../a.jpg"]'
+  String? mediaUrlsJson;
   String messageType = 'text';
   String? replyToMessageId;
   late String createdAt;

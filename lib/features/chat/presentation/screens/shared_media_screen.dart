@@ -39,7 +39,7 @@ class _SharedMediaScreenState extends ConsumerState<SharedMediaScreen> with Sing
     final allMessages = messagesAsync.valueOrNull?.messages ?? [];
 
     final imageMessages = allMessages
-        .where((m) => m.isImage || (m.mediaUrl != null && m.mediaUrl!.isNotEmpty))
+        .where((m) => m.isImage || m.mediaUrls.isNotEmpty)
         .toList();
 
     // Currently the app doesn't have video upload, so this is empty by default
@@ -125,7 +125,7 @@ class _SharedMediaScreenState extends ConsumerState<SharedMediaScreen> with Sing
       itemBuilder: (context, index) {
         final msg = imageMessages[index];
         return GestureDetector(
-          onTap: () => _openFullScreenImage(context, msg.mediaUrl!),
+          onTap: () => _openFullScreenImage(context, msg.firstMediaUrl!),
           child: Container(
             decoration: BoxDecoration(
               color: cardBgColor,
@@ -134,9 +134,9 @@ class _SharedMediaScreenState extends ConsumerState<SharedMediaScreen> with Sing
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Hero(
-                tag: msg.mediaUrl!,
+                tag: msg.firstMediaUrl!,
                 child: CachedNetworkImage(
-                  imageUrl: msg.mediaUrl!,
+                  imageUrl: msg.firstMediaUrl!,
                   fit: BoxFit.cover,
                   placeholder: (_, __) => const Center(child: CupertinoActivityIndicator()),
                   errorWidget: (_, __, ___) => const Icon(CupertinoIcons.photo, size: 30),

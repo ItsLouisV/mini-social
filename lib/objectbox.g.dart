@@ -126,7 +126,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(2, 282038241542904864),
     name: 'CachedMessage',
-    lastPropertyId: const obx_int.IdUid(15, 4765953919967120532),
+    lastPropertyId: const obx_int.IdUid(16, 2963107133958559576),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -158,12 +158,6 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(5, 2447177151411105811),
         name: 'content',
-        type: 9,
-        flags: 0,
-      ),
-      obx_int.ModelProperty(
-        id: const obx_int.IdUid(6, 5482535668441099760),
-        name: 'mediaUrl',
         type: 9,
         flags: 0,
       ),
@@ -218,6 +212,12 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(15, 4765953919967120532),
         name: 'replyMessageType',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(16, 2963107133958559576),
+        name: 'mediaUrlsJson',
         type: 9,
         flags: 0,
       ),
@@ -287,7 +287,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(4, 5440757973749173711),
     name: 'FailedMessage',
-    lastPropertyId: const obx_int.IdUid(11, 7662968625500453152),
+    lastPropertyId: const obx_int.IdUid(12, 7968274623739255368),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -353,8 +353,8 @@ final _entities = <obx_int.ModelEntity>[
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(11, 7662968625500453152),
-        name: 'mediaUrl',
+        id: const obx_int.IdUid(12, 7968274623739255368),
+        name: 'mediaUrlsJson',
         type: 9,
         flags: 0,
       ),
@@ -408,7 +408,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
     retiredIndexUids: const [],
-    retiredPropertyUids: const [],
+    retiredPropertyUids: const [5482535668441099760, 7662968625500453152],
     retiredRelationUids: const [],
     modelVersion: 5,
     modelVersionParserMinimum: 5,
@@ -543,9 +543,6 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final contentOffset = object.content == null
             ? null
             : fbb.writeString(object.content!);
-        final mediaUrlOffset = object.mediaUrl == null
-            ? null
-            : fbb.writeString(object.mediaUrl!);
         final messageTypeOffset = fbb.writeString(object.messageType);
         final replyToMessageIdOffset = object.replyToMessageId == null
             ? null
@@ -564,13 +561,15 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final replyMessageTypeOffset = object.replyMessageType == null
             ? null
             : fbb.writeString(object.replyMessageType!);
-        fbb.startTable(16);
+        final mediaUrlsJsonOffset = object.mediaUrlsJson == null
+            ? null
+            : fbb.writeString(object.mediaUrlsJson!);
+        fbb.startTable(17);
         fbb.addInt64(0, object.obxId);
         fbb.addOffset(1, idOffset);
         fbb.addOffset(2, conversationIdOffset);
         fbb.addOffset(3, senderIdOffset);
         fbb.addOffset(4, contentOffset);
-        fbb.addOffset(5, mediaUrlOffset);
         fbb.addOffset(6, messageTypeOffset);
         fbb.addBool(7, object.isSeen);
         fbb.addOffset(8, replyToMessageIdOffset);
@@ -580,6 +579,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(12, replyContentOffset);
         fbb.addOffset(13, replySenderIdOffset);
         fbb.addOffset(14, replyMessageTypeOffset);
+        fbb.addOffset(15, mediaUrlsJsonOffset);
         fbb.finish(fbb.endTable());
         return object.obxId;
       },
@@ -601,9 +601,6 @@ obx_int.ModelDefinition getObjectBoxModel() {
           ..content = const fb.StringReader(
             asciiOptimization: true,
           ).vTableGetNullable(buffer, rootOffset, 12)
-          ..mediaUrl = const fb.StringReader(
-            asciiOptimization: true,
-          ).vTableGetNullable(buffer, rootOffset, 14)
           ..messageType = const fb.StringReader(
             asciiOptimization: true,
           ).vTableGet(buffer, rootOffset, 16, '')
@@ -633,7 +630,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
           ).vTableGetNullable(buffer, rootOffset, 30)
           ..replyMessageType = const fb.StringReader(
             asciiOptimization: true,
-          ).vTableGetNullable(buffer, rootOffset, 32);
+          ).vTableGetNullable(buffer, rootOffset, 32)
+          ..mediaUrlsJson = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGetNullable(buffer, rootOffset, 34);
 
         return object;
       },
@@ -729,10 +729,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final replySenderIdOffset = object.replySenderId == null
             ? null
             : fbb.writeString(object.replySenderId!);
-        final mediaUrlOffset = object.mediaUrl == null
+        final mediaUrlsJsonOffset = object.mediaUrlsJson == null
             ? null
-            : fbb.writeString(object.mediaUrl!);
-        fbb.startTable(12);
+            : fbb.writeString(object.mediaUrlsJson!);
+        fbb.startTable(13);
         fbb.addInt64(0, object.obxId);
         fbb.addOffset(1, localIdOffset);
         fbb.addOffset(2, conversationIdOffset);
@@ -743,7 +743,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(7, createdAtOffset);
         fbb.addOffset(8, replyContentOffset);
         fbb.addOffset(9, replySenderIdOffset);
-        fbb.addOffset(10, mediaUrlOffset);
+        fbb.addOffset(11, mediaUrlsJsonOffset);
         fbb.finish(fbb.endTable());
         return object.obxId;
       },
@@ -780,9 +780,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           ..replySenderId = const fb.StringReader(
             asciiOptimization: true,
           ).vTableGetNullable(buffer, rootOffset, 22)
-          ..mediaUrl = const fb.StringReader(
+          ..mediaUrlsJson = const fb.StringReader(
             asciiOptimization: true,
-          ).vTableGetNullable(buffer, rootOffset, 24);
+          ).vTableGetNullable(buffer, rootOffset, 26);
 
         return object;
       },
@@ -896,53 +896,53 @@ class CachedMessage_ {
     _entities[1].properties[4],
   );
 
-  /// See [CachedMessage.mediaUrl].
-  static final mediaUrl = obx.QueryStringProperty<CachedMessage>(
-    _entities[1].properties[5],
-  );
-
   /// See [CachedMessage.messageType].
   static final messageType = obx.QueryStringProperty<CachedMessage>(
-    _entities[1].properties[6],
+    _entities[1].properties[5],
   );
 
   /// See [CachedMessage.isSeen].
   static final isSeen = obx.QueryBooleanProperty<CachedMessage>(
-    _entities[1].properties[7],
+    _entities[1].properties[6],
   );
 
   /// See [CachedMessage.replyToMessageId].
   static final replyToMessageId = obx.QueryStringProperty<CachedMessage>(
-    _entities[1].properties[8],
+    _entities[1].properties[7],
   );
 
   /// See [CachedMessage.callId].
   static final callId = obx.QueryStringProperty<CachedMessage>(
-    _entities[1].properties[9],
+    _entities[1].properties[8],
   );
 
   /// See [CachedMessage.createdAt].
   static final createdAt = obx.QueryStringProperty<CachedMessage>(
-    _entities[1].properties[10],
+    _entities[1].properties[9],
   );
 
   /// See [CachedMessage.syncedAt].
   static final syncedAt = obx.QueryStringProperty<CachedMessage>(
-    _entities[1].properties[11],
+    _entities[1].properties[10],
   );
 
   /// See [CachedMessage.replyContent].
   static final replyContent = obx.QueryStringProperty<CachedMessage>(
-    _entities[1].properties[12],
+    _entities[1].properties[11],
   );
 
   /// See [CachedMessage.replySenderId].
   static final replySenderId = obx.QueryStringProperty<CachedMessage>(
-    _entities[1].properties[13],
+    _entities[1].properties[12],
   );
 
   /// See [CachedMessage.replyMessageType].
   static final replyMessageType = obx.QueryStringProperty<CachedMessage>(
+    _entities[1].properties[13],
+  );
+
+  /// See [CachedMessage.mediaUrlsJson].
+  static final mediaUrlsJson = obx.QueryStringProperty<CachedMessage>(
     _entities[1].properties[14],
   );
 }
@@ -1042,8 +1042,8 @@ class FailedMessage_ {
     _entities[3].properties[9],
   );
 
-  /// See [FailedMessage.mediaUrl].
-  static final mediaUrl = obx.QueryStringProperty<FailedMessage>(
+  /// See [FailedMessage.mediaUrlsJson].
+  static final mediaUrlsJson = obx.QueryStringProperty<FailedMessage>(
     _entities[3].properties[10],
   );
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -381,6 +382,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return '$seconds giây';
   }
 
+
+  List<String> _decodeMediaUrls(String? json) {
+    if (json == null || json.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) return decoded.whereType<String>().toList();
+    } catch (_) {}
+    return [json];
+  }
 
   int _getVanishDuration(String messageType) {
     final parts = messageType.split(':');
@@ -802,7 +812,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 conversationId: widget.conversationId,
                 senderId: currentUserId,
                 content: text.isNotEmpty ? text : 'Đã gửi một ảnh',
-                mediaUrl: image.path,
+                mediaUrls: [image.path],
                 messageType: msgType,
                 replyToMessageId: replyId,
                 replyContent: _replyingToMessage?.content,
@@ -1089,7 +1099,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           conversationId: f.conversationId,
                           senderId: f.senderId,
                           content: f.content,
-                          mediaUrl: f.mediaUrl,
+                          mediaUrls: _decodeMediaUrls(f.mediaUrlsJson),
                           messageType: f.messageType,
                           createdAt: DateTime.parse(f.createdAt).toLocal(),
                           replyToMessageId: f.replyToMessageId,
@@ -1767,13 +1777,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ],
             ),
           ),
-          if (msg.isImage && msg.mediaUrl != null)
+          if (msg.isImage && msg.firstMediaUrl != null)
             Padding(
               padding: const EdgeInsets.only(right: 12, left: 8),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: CachedNetworkImage(
-                  imageUrl: msg.mediaUrl!,
+                  imageUrl: msg.firstMediaUrl!,
                   width: 32,
                   height: 32,
                   fit: BoxFit.cover,
@@ -2470,13 +2480,13 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                         ),
                       ),
                       if (message.replyToMessage!.isImage &&
-                          message.replyToMessage!.mediaUrl != null)
+                          message.replyToMessage!.firstMediaUrl != null)
                         Padding(
                           padding: const EdgeInsets.only(left: 8),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(4),
                             child: CachedNetworkImage(
-                              imageUrl: message.replyToMessage!.mediaUrl!,
+                              imageUrl: message.replyToMessage!.firstMediaUrl!,
                               width: 32,
                               height: 32,
                               fit: BoxFit.cover,
@@ -2495,13 +2505,13 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                   ),
                 ),
               ),
-            if (message.isImage && message.mediaUrl != null)
+            if (message.isImage && message.firstMediaUrl != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _ImageBubble(
-                    url: message.mediaUrl!,
+                    url: message.firstMediaUrl!,
                     isMine: isMine,
                     hasCaption: hasCaption,
                   ),
@@ -2909,13 +2919,13 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                             ),
                           ),
                           if (message.replyToMessage!.isImage &&
-                              message.replyToMessage!.mediaUrl != null)
+                              message.replyToMessage!.firstMediaUrl != null)
                             Padding(
                               padding: const EdgeInsets.only(left: 8),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(4),
                                 child: CachedNetworkImage(
-                                  imageUrl: message.replyToMessage!.mediaUrl!,
+                                  imageUrl: message.replyToMessage!.firstMediaUrl!,
                                   width: 32,
                                   height: 32,
                                   fit: BoxFit.cover,
@@ -2950,13 +2960,13 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                     ),
                   ),
                 )
-              else if (message.isImage && message.mediaUrl != null)
+              else if (message.isImage && message.firstMediaUrl != null)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _ImageBubble(
-                      url: message.mediaUrl!,
+                      url: message.firstMediaUrl!,
                       isMine: isMine,
                       hasCaption: hasCaption,
                     ),
@@ -2977,9 +2987,9 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                 )
               else if (message.isCall)
                 _CallLogBubble(message: message, isMine: isMine)
-              else if (message.isVoice && message.mediaUrl != null)
+              else if (message.isVoice && message.firstMediaUrl != null)
                 VoiceMessageBubble(
-                  audioUrl: message.mediaUrl!,
+                  audioUrl: message.firstMediaUrl!,
                   isMe: isMine,
                   themeColor: getChatThemePrimaryColor(themeName),
                   contentLabel: message.content,

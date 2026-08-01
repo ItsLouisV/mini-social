@@ -634,7 +634,7 @@ class ChatMessagesNotifier
     required String conversationId,
     required String senderId,
     required String content,
-    String? mediaUrl,
+    List<String> mediaUrls = const [],
     String messageType = 'text',
     String? replyToMessageId,
     String? replyContent,
@@ -648,7 +648,7 @@ class ChatMessagesNotifier
       ..conversationId = conversationId
       ..senderId = senderId
       ..content = content
-      ..mediaUrl = mediaUrl
+      ..mediaUrlsJson = mediaUrls.isNotEmpty ? jsonEncode(mediaUrls) : null
       ..messageType = messageType
       ..replyToMessageId = replyToMessageId
       ..replyContent = replyContent
@@ -679,13 +679,20 @@ class ChatMessagesNotifier
 
     try {
       final repo = ref.read(chatRepositoryProvider);
-      if (failed.messageType == 'image' && failed.mediaUrl != null) {
-        await repo.sendImageMessage(
-          failed.conversationId,
-          XFile(failed.mediaUrl!),
-          caption: failed.content != 'Đã gửi một ảnh' ? failed.content : null,
-          replyToMessageId: failed.replyToMessageId,
-        );
+      if (failed.messageType == 'image' && failed.mediaUrlsJson != null) {
+        List<String> urls = [];
+        try {
+          final decoded = jsonDecode(failed.mediaUrlsJson!);
+          if (decoded is List) urls = decoded.whereType<String>().toList();
+        } catch (_) {}
+        if (urls.isNotEmpty) {
+          await repo.sendImageMessage(
+            failed.conversationId,
+            XFile(urls.first),
+            caption: failed.content != 'Đã gửi một ảnh' ? failed.content : null,
+            replyToMessageId: failed.replyToMessageId,
+          );
+        }
       } else {
         await repo.sendMessage(
           failed.conversationId,

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/objectbox_service.dart';
@@ -258,7 +259,7 @@ class LocalChatRepository {
       ..conversationId = m.conversationId
       ..senderId = m.senderId
       ..content = m.content
-      ..mediaUrl = m.mediaUrl
+      ..mediaUrlsJson = m.mediaUrls.isNotEmpty ? jsonEncode(m.mediaUrls) : null
       ..messageType = m.messageType
       ..isSeen = m.isSeen
       ..replyToMessageId = m.replyToMessageId
@@ -283,12 +284,24 @@ class LocalChatRepository {
       );
     }
 
+    List<String> mediaUrls = const [];
+    if (m.mediaUrlsJson != null && m.mediaUrlsJson!.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(m.mediaUrlsJson!);
+        if (decoded is List) {
+          mediaUrls = decoded.whereType<String>().toList();
+        }
+      } catch (_) {
+        mediaUrls = [m.mediaUrlsJson!];
+      }
+    }
+
     return MessageModel(
       id: m.id,
       conversationId: m.conversationId,
       senderId: m.senderId,
       content: m.content,
-      mediaUrl: m.mediaUrl,
+      mediaUrls: mediaUrls,
       messageType: m.messageType,
       isSeen: m.isSeen,
       createdAt: DateTime.parse(m.createdAt).toLocal(),

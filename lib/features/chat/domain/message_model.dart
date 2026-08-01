@@ -1,9 +1,11 @@
+import 'dart:convert';
+
 class MessageModel {
   final String id;
   final String conversationId;
   final String senderId;
   final String? content;
-  final String? mediaUrl;
+  final List<String> mediaUrls;
   final String messageType; // 'text' | 'image' | 'voice' | 'recalled'
   final bool isSeen;
   final DateTime createdAt;
@@ -23,7 +25,7 @@ class MessageModel {
     required this.conversationId,
     required this.senderId,
     this.content,
-    this.mediaUrl,
+    this.mediaUrls = const [],
     this.messageType = 'text',
     this.isSeen = false,
     required this.createdAt,
@@ -33,6 +35,9 @@ class MessageModel {
     this.isFailed = false,
     this.reactions = const {},
   });
+
+  /// Tiện lợi: lấy URL ảnh/media đầu tiên (hoặc null nếu không có)
+  String? get firstMediaUrl => mediaUrls.isNotEmpty ? mediaUrls.first : null;
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
     // Parse reactions từ joined data (list of {emoji, user_id})
@@ -48,12 +53,33 @@ class MessageModel {
       }
     }
 
+    // Parse media_urls: hỗ trợ cả định dạng mảng mới và string cũ (backward-compat)
+    List<String> parsedMediaUrls = const [];
+    final rawMediaUrls = json['media_urls'];
+    final rawMediaUrl = json['media_url']; // backward-compat cột cũ
+    if (rawMediaUrls is List) {
+      parsedMediaUrls = rawMediaUrls.whereType<String>().toList();
+    } else if (rawMediaUrls is String && rawMediaUrls.isNotEmpty) {
+      // Trường hợp được decode từ JSON string (ObjectBox cache)
+      try {
+        final decoded = jsonDecode(rawMediaUrls);
+        if (decoded is List) {
+          parsedMediaUrls = decoded.whereType<String>().toList();
+        }
+      } catch (_) {
+        parsedMediaUrls = [rawMediaUrls];
+      }
+    } else if (rawMediaUrl is String && rawMediaUrl.isNotEmpty) {
+      // Backward-compat: cột media_url cũ dạng string đơn
+      parsedMediaUrls = [rawMediaUrl];
+    }
+
     return MessageModel(
       id: json['id'] as String,
       conversationId: json['conversation_id'] as String,
       senderId: json['sender_id'] as String,
       content: json['content'] as String?,
-      mediaUrl: json['media_url'] as String?,
+      mediaUrls: parsedMediaUrls,
       messageType: json['message_type'] as String? ?? 'text',
       isSeen: json['is_seen'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
@@ -76,7 +102,7 @@ class MessageModel {
       'conversation_id': conversationId,
       'sender_id': senderId,
       'content': content,
-      'media_url': mediaUrl,
+      'media_urls': mediaUrls,
       'message_type': messageType,
       'is_seen': isSeen,
       'created_at': createdAt.toUtc().toIso8601String(),
@@ -99,7 +125,7 @@ class MessageModel {
     String? conversationId,
     String? senderId,
     String? content,
-    String? mediaUrl,
+    List<String>? mediaUrls,
     String? messageType,
     bool? isSeen,
     DateTime? createdAt,
@@ -114,7 +140,7 @@ class MessageModel {
       conversationId: conversationId ?? this.conversationId,
       senderId: senderId ?? this.senderId,
       content: content ?? this.content,
-      mediaUrl: mediaUrl ?? this.mediaUrl,
+      mediaUrls: mediaUrls ?? this.mediaUrls,
       messageType: messageType ?? this.messageType,
       isSeen: isSeen ?? this.isSeen,
       createdAt: createdAt ?? this.createdAt,

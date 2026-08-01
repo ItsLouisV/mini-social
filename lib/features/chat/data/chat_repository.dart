@@ -321,19 +321,7 @@ class ChatRepository {
       'last_message_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 
-    final message = MessageModel.fromJson(data);
-
-    // Trigger async moderate-post for chat message
-    _safeInvokeFunction(
-      'moderate-post',
-      body: {
-        'content_type': 'message',
-        'target_id': message.id,
-        'content': content,
-      },
-    );
-
-    return message;
+    return MessageModel.fromJson(data);
   }
 
   Future<MessageModel> sendImageMessage(
@@ -375,7 +363,7 @@ class ChatRepository {
           'conversation_id': conversationId,
           'sender_id': currentUserId,
           'content': caption ?? 'Đã gửi một ảnh',
-          'media_url': url,
+          'media_urls': [url],
           'message_type': messageType,
           if (replyToMessageId != null)
             'reply_to_message_id': replyToMessageId,
@@ -388,30 +376,7 @@ class ChatRepository {
       'last_message_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 
-    final message = MessageModel.fromJson(data);
-
-    // Trigger async moderate-post for chat image message
-    _safeInvokeFunction(
-      'moderate-post',
-      body: {
-        'content_type': 'message',
-        'target_id': message.id,
-        'content': caption ?? '',
-        'image_urls': [url],
-      },
-    );
-
-    return message;
-  }
-
-  void _safeInvokeFunction(String functionName, {Map<String, dynamic>? body}) {
-    Future(() async {
-      try {
-        await _client.functions.invoke(functionName, body: body);
-      } catch (err) {
-        print('$functionName background error: $err');
-      }
-    });
+    return MessageModel.fromJson(data);
   }
 
   Future<MessageModel> sendVoiceMessage(
@@ -449,7 +414,7 @@ class ChatRepository {
           'conversation_id': conversationId,
           'sender_id': currentUserId,
           'content': 'Tin nhắn thoại ($durLabel)',
-          'media_url': url,
+          'media_urls': [url],
           'message_type': messageType,
           if (replyToMessageId != null)
             'reply_to_message_id': replyToMessageId,
@@ -511,7 +476,7 @@ class ChatRepository {
         .update({
           'content': 'Tin nhắn đã thu hồi',
           'message_type': 'recalled',
-          'media_url': null,
+          'media_urls': [],
         })
         .eq('id', messageId);
   }
