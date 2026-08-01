@@ -24,12 +24,12 @@ class PostRepository {
     final from = page * pageSize;
     final to = from + pageSize - 1;
 
-    // Fetch all posts from Supabase first
+    // Không dùng .inFilter('moderation_status', [...]) ở SQL để tránh lọc nhầm
+    // bài 'pending' của chính creator — để quyết định hoàn toàn in-memory bên dưới.
     final data = await _client
         .from(SupabaseConstants.postsTable)
         .select('*, profiles(*), post_media(*)')
         .filter('deleted_at', 'is', null)
-        .inFilter('moderation_status', ['published', 'shadow_limited'])
         .order('created_at', ascending: false);
 
     final postsList = data as List;
@@ -74,22 +74,19 @@ class PostRepository {
     // 3. Filter posts based on moderation status and privacy settings
     final filteredPostsList = postsList.where((postJson) {
       final postUserId = postJson['user_id'] as String;
-      final status = postJson['status'] as String? ?? 'published';
+      final status = postJson['moderation_status'] as String? ?? 'pending';
 
-      // Posts hidden or removed are excluded
-      if (status == 'hidden' || status == 'removed') return false;
+      // Creator LUÔN thấy bài của chính mình (kể cả pending / hidden)
+      // để họ biết bài đang ở trạng thái nào.
+      if (postUserId == userId) return true;
 
-      // Creator sees their own published and pending_review posts
-      if (postUserId == userId) {
-        return true;
-      }
-
-      // Non-creators only see published posts
+      // Người khác chỉ thấy bài đã published.
+      // pending / shadow_limited / hidden đều bị ẩn cho tới khi AI xác nhận.
       if (status != 'published') return false;
 
       final privacy = postJson['privacy'] as String? ?? 'public';
       if (privacy == 'public') return true;
-      if (privacy == 'private') return false; // Private is creator-only
+      if (privacy == 'private') return false;
       if (privacy == 'friends' || privacy == 'followers') {
         return friendIds.contains(postUserId) || followingIds.contains(postUserId);
       }
@@ -361,12 +358,20 @@ class PostRepository {
     final userId = currentUserId;
     final postUserId = data['user_id'] as String;
     final privacy = data['privacy'] as String? ?? 'public';
-    if (userId != null && postUserId != userId) {
+    final moderationStatus = data['moderation_status'] as String? ?? 'pending';
+    final isOwner = userId != null && postUserId == userId;
+
+    // Chặn người khác xem bài chưa được AI xác nhận an toàn (kể cả qua link trực tiếp)
+    if (!isOwner && moderationStatus != 'published') {
+      throw Exception('Bài viết này hiện không khả dụng.');
+    }
+
+    if (!isOwner) {
       if (privacy == 'private') {
         throw Exception('Bài viết này là riêng tư.');
       }
       if (privacy == 'friends' || privacy == 'followers') {
-        final isFriend = await _isFriend(userId, postUserId);
+        final isFriend = await _isFriend(userId!, postUserId);
         final isFollowing = await _isFollowing(userId, postUserId);
         if (!isFriend && !isFollowing) {
           throw Exception('Bài viết này chỉ dành cho bạn bè và người theo dõi.');

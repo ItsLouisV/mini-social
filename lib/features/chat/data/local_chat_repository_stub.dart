@@ -10,7 +10,7 @@ class FailedMessage {
   late String conversationId;
   late String senderId;
   String? content;
-  String? mediaUrl;
+  String? mediaUrlsJson;
   String messageType = 'text';
   String? replyToMessageId;
   late String createdAt;
