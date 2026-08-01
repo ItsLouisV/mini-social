@@ -47,7 +47,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   String? _selectedMusic;
   String? _selectedLocation;
   String? _selectedFeeling;
-  List<String> _taggedFriends = [];
+  final List<String> _taggedFriends = [];
   bool _isInstagramOn = false;
   bool _isThreadsOn = false;
 
@@ -266,6 +266,33 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } catch (e) {
       debugPrint('Error generating AI caption: $e');
+      if (mounted) {
+        final errorMsg = e.toString().replaceAll('Exception: ', '').replaceAll('PostgrestException: ', '');
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(CupertinoIcons.exclamationmark_shield_fill, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    errorMsg.contains('nhạy cảm') || errorMsg.contains('18+')
+                        ? errorMsg
+                        : 'Không thể tạo caption AI: $errorMsg',
+                    style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isGeneratingAICaption = false);
     }
@@ -1222,7 +1249,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                                             child: Container(
                                               padding: const EdgeInsets.all(4),
                                               decoration: BoxDecoration(
-                                                color: Colors.black.withOpacity(0.6),
+                                                color: Colors.black.withValues(alpha: 0.6),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: const Icon(CupertinoIcons.xmark, size: 12, color: Colors.white),
@@ -1605,7 +1632,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   // Helper cho Layout Option Pills (Lưới vuông, Cột đứng, Nổi bật, Trượt ngang)
   Widget _buildLayoutOptionPill(String layoutKey, String label, IconData icon, bool isDark) {
     final isSelected = _selectedLayout == layoutKey;
-    final activeColor = AppColors.primary;
+    const activeColor = AppColors.primary;
 
     return InkWell(
       onTap: () => setState(() => _selectedLayout = layoutKey),

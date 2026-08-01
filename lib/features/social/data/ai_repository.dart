@@ -30,13 +30,25 @@ class AIRepository {
         },
       );
 
-      if (res.data != null && res.data['caption'] != null) {
-        return res.data['caption'] as String;
+      if (res.data != null) {
+        if (res.data['caption'] != null) {
+          return res.data['caption'] as String;
+        }
+        if (res.data['error'] != null) {
+          throw Exception(res.data['error']);
+        }
       }
+    } on FunctionException catch (fe) {
+      debugPrint('AI Caption FunctionException: ${fe.details}');
+      if (fe.details != null && fe.details is Map && fe.details['error'] != null) {
+        throw Exception(fe.details['error']);
+      }
+      rethrow;
     } catch (e) {
       debugPrint('AI Caption error: $e');
+      rethrow;
     }
-    return 'Một ngày thật tuyệt vời! ✨ #MiniSocial #LifeMoment';
+    throw Exception('Không nhận được phản hồi từ AI Service.');
   }
 
   /// Gọi Translate Service để dịch bài viết, bình luận hoặc tin nhắn
@@ -142,12 +154,19 @@ class AIRepository {
     try {
       String validReason = 'other';
       final r = (reasonLevel1 ?? '').toLowerCase();
-      if (r.contains('spam') || r.contains('rác')) validReason = 'spam';
-      else if (r.contains('harass') || r.contains('quấy rối')) validReason = 'harassment';
-      else if (r.contains('sex') || r.contains('khiêu dâm') || r.contains('nude')) validReason = 'nudity_sexual';
-      else if (r.contains('violat') || r.contains('bạo lực')) validReason = 'violence_gore';
-      else if (r.contains('hate') || r.contains('thù ghét')) validReason = 'hate_speech';
-      else if (r.contains('misinfo') || r.contains('sai sự thật')) validReason = 'misinformation';
+      if (r.contains('spam') || r.contains('rác')) {
+        validReason = 'spam';
+      } else if (r.contains('harass') || r.contains('quấy rối')) {
+        validReason = 'harassment';
+      } else if (r.contains('sex') || r.contains('khiêu dâm') || r.contains('nude')) {
+        validReason = 'nudity_sexual';
+      } else if (r.contains('violat') || r.contains('bạo lực')) {
+        validReason = 'violence_gore';
+      } else if (r.contains('hate') || r.contains('thù ghét')) {
+        validReason = 'hate_speech';
+      } else if (r.contains('misinfo') || r.contains('sai sự thật')) {
+        validReason = 'misinformation';
+      }
 
       final insertData = <String, dynamic>{
         'content_type': contentType,

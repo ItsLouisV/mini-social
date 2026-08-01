@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,63 +28,51 @@ class QrProfileBottomSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     final profileAsync = ref.watch(profileProvider(targetUserId));
     final friendStatusAsync = ref.watch(friendStatusProvider(targetUserId));
     final friendStatus = friendStatusAsync.value ?? FriendStatus.none;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.72,
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.15),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
+      child: Column(
         children: [
-          // 1. App Wallpaper Background (bg2.jpg)
-          Image.asset(
-            'assets/images/bg2.jpg',
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(color: const Color(0xFF0F172A)),
-          ),
-
-          // 2. Dark Blur Glassmorphism Layer
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.65),
+          const SizedBox(height: 12),
+          // Drag handle pill
+          Container(
+            width: 42,
+            height: 5,
+            decoration: BoxDecoration(
+              color: colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
+          const SizedBox(height: 16),
 
-          // 3. BottomSheet Main Content
-          SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                // Drag handle pill
-                Container(
-                  width: 42,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Expanded(
-                  child: profileAsync.when(
-                    data: (profile) => _buildProfileContent(context, ref, profile, friendStatus),
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(color: Colors.white),
-                    ),
-                    error: (e, _) => AppErrorWidget(
-                      message: e.toString(),
-                      onRetry: () => ref.invalidate(profileProvider(targetUserId)),
-                    ),
-                  ),
-                ),
-              ],
+          Expanded(
+            child: profileAsync.when(
+              data: (profile) => _buildProfileContent(context, ref, profile, friendStatus),
+              loading: () => Center(
+                child: CircularProgressIndicator(color: colorScheme.primary),
+              ),
+              error: (e, _) => AppErrorWidget(
+                message: e.toString(),
+                onRetry: () => ref.invalidate(profileProvider(targetUserId)),
+              ),
             ),
           ),
         ],
@@ -99,6 +86,9 @@ class QrProfileBottomSheet extends ConsumerWidget {
     ProfileModel profile,
     FriendStatus friendStatus,
   ) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Column(
@@ -113,7 +103,7 @@ class QrProfileBottomSheet extends ConsumerWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF38BDF8).withValues(alpha: 0.4),
+                  color: const Color(0xFF38BDF8).withValues(alpha: 0.35),
                   blurRadius: 16,
                   spreadRadius: 2,
                 ),
@@ -130,10 +120,9 @@ class QrProfileBottomSheet extends ConsumerWidget {
           // Full Name & Username
           Text(
             profile.displayName,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
+            style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
+              color: colorScheme.onSurface,
             ),
             textAlign: TextAlign.center,
           ),
@@ -141,22 +130,20 @@ class QrProfileBottomSheet extends ConsumerWidget {
             const SizedBox(height: 4),
             Text(
               '@${profile.username}',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 14,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ],
 
-          // Bio if available
+          // Bio
           if (profile.bio != null && profile.bio!.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
               profile.bio!,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.85),
-                fontSize: 14,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
                 fontStyle: FontStyle.italic,
               ),
               textAlign: TextAlign.center,
@@ -171,25 +158,25 @@ class QrProfileBottomSheet extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
+              color: colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+              border: Border.all(color: colorScheme.outlineVariant),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStatItem('Bài viết', profile.postsCount),
-                Container(width: 1, height: 28, color: Colors.white.withValues(alpha: 0.2)),
-                _buildStatItem('Người theo dõi', profile.followersCount),
-                Container(width: 1, height: 28, color: Colors.white.withValues(alpha: 0.2)),
-                _buildStatItem('Đang theo dõi', profile.followingCount),
+                _buildStatItem(context, 'Bài viết', profile.postsCount),
+                VerticalDivider(color: colorScheme.outlineVariant, thickness: 1, width: 1),
+                _buildStatItem(context, 'Người theo dõi', profile.followersCount),
+                VerticalDivider(color: colorScheme.outlineVariant, thickness: 1, width: 1),
+                _buildStatItem(context, 'Đang theo dõi', profile.followingCount),
               ],
             ),
           ),
 
           const SizedBox(height: 28),
 
-          // Friend Action Button Row
+          // Friend Action Button
           _buildActionButton(context, ref, profile, friendStatus),
 
           const SizedBox(height: 12),
@@ -203,13 +190,17 @@ class QrProfileBottomSheet extends ConsumerWidget {
                 context.pop();
                 context.push('/profile/${profile.id}');
               },
-              icon: const Icon(CupertinoIcons.person_crop_circle, color: Colors.white, size: 20),
-              label: const Text(
+              icon: Icon(CupertinoIcons.person_crop_circle, color: colorScheme.primary, size: 20),
+              label: Text(
                 'Xem trang cá nhân đầy đủ',
-                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: colorScheme.primary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.5)),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
             ),
@@ -221,23 +212,24 @@ class QrProfileBottomSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatItem(String label, int value) {
+  Widget _buildStatItem(BuildContext context, String label, int value) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Column(
       children: [
         Text(
           '$value',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
+          style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
+            color: colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.65),
-            fontSize: 12,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -265,7 +257,8 @@ class QrProfileBottomSheet extends ConsumerWidget {
         break;
       case FriendStatus.pendingSent:
         label = 'Đã gửi lời mời';
-        bgColor = Colors.white.withValues(alpha: 0.2);
+        bgColor = Theme.of(context).colorScheme.surfaceContainerHighest;
+        textColor = Theme.of(context).colorScheme.onSurfaceVariant;
         iconData = CupertinoIcons.clock_fill;
         onTap = () => ref.read(friendStatusProvider(profile.id).notifier).cancelOrUnfriend();
         break;
@@ -277,8 +270,8 @@ class QrProfileBottomSheet extends ConsumerWidget {
         break;
       case FriendStatus.accepted:
         label = 'Bạn bè';
-        bgColor = Colors.green.withValues(alpha: 0.25);
-        textColor = Colors.greenAccent;
+        bgColor = Colors.green.withValues(alpha: 0.18);
+        textColor = Colors.green;
         iconData = CupertinoIcons.person_2_fill;
         break;
     }
@@ -343,7 +336,7 @@ class QrProfileBottomSheet extends ConsumerWidget {
           backgroundColor: bgColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
-          shadowColor: bgColor.withValues(alpha: 0.4),
+          shadowColor: bgColor.withValues(alpha: 0.35),
         ),
       ),
     );

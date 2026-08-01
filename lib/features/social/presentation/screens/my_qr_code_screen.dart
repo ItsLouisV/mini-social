@@ -46,7 +46,6 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
           await Share.shareXFiles([xFile], text: 'Mã QR Viora của ${profile.displayName}');
           shareSuccess = true;
         } catch (_) {
-          // Fallback if plugin isn't registered on current dev session
           await Clipboard.setData(ClipboardData(text: 'viora://profile/${profile.id}'));
         }
 
@@ -90,6 +89,10 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     final currentUserId = ref.watch(currentUserIdProvider);
 
     if (currentUserId == null) {
@@ -102,283 +105,255 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
     final profileAsync = ref.watch(profileProvider(currentUserId));
 
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // 1. Wallpaper background (bg2.jpg)
-          Image.asset(
-            'assets/images/bg2.jpg',
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(color: const Color(0xFF0F172A)),
-          ),
-
-          // 2. Dark Blur & Gradient Overlay
-          BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.55),
-            ),
-          ),
-
-          // 3. Content Body
-          SafeArea(
-            child: Column(
-              children: [
-                // Custom Top Bar with Back and Share Button
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      backgroundColor: colorScheme.surface,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Top Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            onPressed: () => context.pop(),
-                            icon: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(CupertinoIcons.chevron_back, color: Colors.white, size: 20),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Mã QR của tôi',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                      IconButton(
+                        onPressed: () => context.pop(),
+                        icon: Icon(
+                          CupertinoIcons.chevron_back,
+                          color: colorScheme.onSurface,
+                          size: 22,
+                        ),
                       ),
-
-                      // Direct Image Share Button in Header with FontAwesome arrowUpFromBracket
-                      profileAsync.maybeWhen(
-                        data: (profile) {
-                          return IconButton(
-                            onPressed: () => _saveQrImage(context, profile),
-                            icon: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const FaIcon(
-                                FontAwesomeIcons.arrowUpFromBracket,
-                                color: Colors.white,
-                                size: 17,
-                              ),
-                            ),
-                          );
-                        },
-                        orElse: () => const SizedBox.shrink(),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Mã QR của tôi',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
                       ),
                     ],
                   ),
-                ),
 
-                Expanded(
-                  child: profileAsync.when(
+                  // Share Button
+                  profileAsync.maybeWhen(
                     data: (profile) {
-                      final qrPayload = 'viora://profile/${profile.id}';
-
-                      return SingleChildScrollView(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 12),
-
-                            // RepaintBoundary to capture QR Card Image
-                            RepaintBoundary(
-                              key: _qrCardKey,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(28),
-                                child: BackdropFilter(
-                                  filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(24),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.14),
-                                      borderRadius: BorderRadius.circular(28),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(alpha: 0.28),
-                                        width: 1.5,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.3),
-                                          blurRadius: 20,
-                                          offset: const Offset(0, 8),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        // Single Row with Avatar + Name + Username
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(3),
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                gradient: const LinearGradient(
-                                                  colors: [Color(0xFF38BDF8), Color(0xFF818CF8)],
-                                                ),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: const Color(0xFF38BDF8).withValues(alpha: 0.4),
-                                                    blurRadius: 10,
-                                                    spreadRadius: 1,
-                                                  ),
-                                                ],
-                                              ),
-                                              child: AppAvatar(
-                                                imageUrl: profile.avatarUrl,
-                                                name: profile.displayName,
-                                                radius: 26,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    profile.displayName,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 18,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                  if (profile.username.isNotEmpty) ...[
-                                                    const SizedBox(height: 2),
-                                                    Text(
-                                                      '@${profile.username}',
-                                                      style: TextStyle(
-                                                        color: Colors.white.withValues(alpha: 0.7),
-                                                        fontSize: 13,
-                                                        fontWeight: FontWeight.w500,
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                  ],
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          'Người liên hệ trên Viora.',
-                                          style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.75),
-                                            fontSize: 13,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-
-                                        const SizedBox(height: 18),
-
-                                        // QR Code Rendering Container (Smaller size)
-                                        Container(
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(20),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(alpha: 0.15),
-                                                blurRadius: 10,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ],
-                                          ),
-                                          child: QrImageView(
-                                            data: qrPayload,
-                                            version: QrVersions.auto,
-                                            size: 175.0,
-                                            eyeStyle: const QrEyeStyle(
-                                              eyeShape: QrEyeShape.square,
-                                              color: Color(0xFF0F172A),
-                                            ),
-                                            dataModuleStyle: const QrDataModuleStyle(
-                                              dataModuleShape: QrDataModuleShape.square,
-                                              color: Color(0xFF1E293B),
-                                            ),
-                                          ),
-                                        ),
-
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          'Mã QR này là của riêng bạn. Khi bạn chia sẻ mã, người khác có thể dùng camera trong Viora để quét mã và kết nối với bạn.',
-                                          style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.75),
-                                            fontSize: 13,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(height: 28),
-
-                            // Switch to Scan QR Button (Smaller width, rounded, labeled 'Quét QR')
-                            SizedBox(
-                              width: 180,
-                              height: 46,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  context.push('/qr-scan');
-                                },
-                                icon: const Icon(CupertinoIcons.qrcode_viewfinder, color: Colors.white, size: 20),
-                                label: const Text(
-                                  'Quét QR',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF38BDF8),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(26),
-                                  ),
-                                  elevation: 4,
-                                  shadowColor: const Color(0xFF38BDF8).withValues(alpha: 0.4),
-                                ),
-                              ),
-                            ),
-                          ],
+                      return IconButton(
+                        onPressed: () => _saveQrImage(context, profile),
+                        icon: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primaryContainer,
+                            shape: BoxShape.circle,
+                          ),
+                          child: FaIcon(
+                            FontAwesomeIcons.arrowUpFromBracket,
+                            color: colorScheme.onPrimaryContainer,
+                            size: 16,
+                          ),
                         ),
                       );
                     },
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(color: Colors.white),
-                    ),
-                    error: (e, _) => AppErrorWidget(
-                      message: e.toString(),
-                      onRetry: () => ref.invalidate(profileProvider(currentUserId)),
-                    ),
+                    orElse: () => const SizedBox.shrink(),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+
+            Expanded(
+              child: profileAsync.when(
+                data: (profile) {
+                  final qrPayload = 'viora://profile/${profile.id}';
+
+                  // Màu QR tự động theo theme
+                  final qrForegroundColor = isDark ? Colors.white : const Color(0xFF0F172A);
+                  final qrBackgroundColor = isDark ? const Color(0xFF1E293B) : Colors.white;
+
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 8),
+
+                        // QR Card
+                        RepaintBoundary(
+                          key: _qrCardKey,
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant,
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colorScheme.shadow.withValues(alpha: isDark ? 0.4 : 0.08),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                // Avatar + Name row
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(3),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: const LinearGradient(
+                                          colors: [Color(0xFF38BDF8), Color(0xFF818CF8)],
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF38BDF8).withValues(alpha: 0.35),
+                                            blurRadius: 10,
+                                            spreadRadius: 1,
+                                          ),
+                                        ],
+                                      ),
+                                      child: AppAvatar(
+                                        imageUrl: profile.avatarUrl,
+                                        name: profile.displayName,
+                                        radius: 26,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            profile.displayName,
+                                            style: theme.textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: colorScheme.onSurface,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          if (profile.username.isNotEmpty) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '@${profile.username}',
+                                              style: theme.textTheme.bodySmall?.copyWith(
+                                                color: colorScheme.onSurfaceVariant,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                Text(
+                                  'Người liên hệ trên Viora.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+
+                                const SizedBox(height: 18),
+
+                                // QR Code
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: qrBackgroundColor,
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: colorScheme.shadow.withValues(alpha: 0.1),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: QrImageView(
+                                    data: qrPayload,
+                                    version: QrVersions.auto,
+                                    size: 175.0,
+                                    backgroundColor: qrBackgroundColor,
+                                    eyeStyle: QrEyeStyle(
+                                      eyeShape: QrEyeShape.square,
+                                      color: qrForegroundColor,
+                                    ),
+                                    dataModuleStyle: QrDataModuleStyle(
+                                      dataModuleShape: QrDataModuleShape.square,
+                                      color: qrForegroundColor,
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Mã QR này là của riêng bạn. Khi bạn chia sẻ mã, người khác có thể dùng camera trong Viora để quét mã và kết nối với bạn.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 28),
+
+                        // Scan QR Button
+                        SizedBox(
+                          width: 180,
+                          height: 46,
+                          child: ElevatedButton.icon(
+                            onPressed: () => context.push('/qr-scan'),
+                            icon: const Icon(CupertinoIcons.qrcode_viewfinder, color: Colors.white, size: 20),
+                            label: const Text(
+                              'Quét QR',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF38BDF8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(26),
+                              ),
+                              elevation: 4,
+                              shadowColor: const Color(0xFF38BDF8).withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  );
+                },
+                loading: () => Center(
+                  child: CircularProgressIndicator(color: colorScheme.primary),
+                ),
+                error: (e, _) => AppErrorWidget(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(profileProvider(currentUserId)),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

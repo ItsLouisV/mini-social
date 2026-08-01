@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart' as mlkit;
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -152,17 +154,31 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
       String? qrResult;
 
       if (kIsWeb) {
-        // Web Platform: Use native Web BarcodeDetector
+        // Web Platform: Dùng native Web BarcodeDetector
         qrResult = await decodeQrFromWebImage(image);
       } else {
-        // Mobile / Native Platform: Use MobileScanner analyzeImage
-        try {
-          final BarcodeCapture? capture = await _controller.analyzeImage(image.path);
-          if (capture != null && capture.barcodes.isNotEmpty) {
-            qrResult = capture.barcodes.first.rawValue;
+        // Native Platform: Dùng Google ML Kit làm engine chính (chính xác hơn)
+        qrResult = await _decodeQrWithMlKit(image.path);
+
+        // Fallback: Dùng MobileScanner analyzeImage nếu ML Kit thất bại
+        if (qrResult == null) {
+          try {
+            await _controller.stop();
+            await Future.delayed(const Duration(milliseconds: 300));
+            final BarcodeCapture? capture = await _controller.analyzeImage(image.path);
+            if (capture != null && capture.barcodes.isNotEmpty) {
+              qrResult = capture.barcodes.first.rawValue;
+            }
+          } catch (e) {
+            debugPrint('analyzeImage fallback error: $e');
+          } finally {
+            // Khởi động lại camera sau khi phân tích xong
+            if (mounted) {
+              try {
+                await _controller.start();
+              } catch (_) {}
+            }
           }
-        } catch (e) {
-          debugPrint('analyzeImage native error: $e');
         }
       }
 
@@ -180,6 +196,23 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
       }
       _showToast('Không thể phân tích ảnh: $e');
     }
+  }
+
+  /// Nhận diện QR code từ ảnh bằng Google ML Kit (hoạt động tốt nhất với ảnh tĩnh)
+  Future<String?> _decodeQrWithMlKit(String imagePath) async {
+    final barcodeScanner = mlkit.BarcodeScanner(formats: [mlkit.BarcodeFormat.qrCode]);
+    try {
+      final inputImage = mlkit.InputImage.fromFilePath(imagePath);
+      final List<mlkit.Barcode> barcodes = await barcodeScanner.processImage(inputImage);
+      if (barcodes.isNotEmpty) {
+        return barcodes.first.rawValue;
+      }
+    } catch (e) {
+      debugPrint('ML Kit barcode scan error: $e');
+    } finally {
+      await barcodeScanner.close();
+    }
+    return null;
   }
 
   @override
@@ -226,30 +259,61 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
                     ),
                   ),
 
-                  // Torch Flashlight Toggle
-                  ValueListenableBuilder(
-                    valueListenable: _controller,
-                    builder: (context, state, child) {
-                      final torchState = state.torchState;
-                      final isTorchOn = torchState == TorchState.on;
+                  // Torch Flashlight Toggle (chỉ hiển thị trên native, không phải web)
+                  if (!kIsWeb)
+                    ValueListenableBuilder(
+                      valueListenable: _controller,
+                      builder: (context, state, child) {
+                        final torchState = state.torchState;
+                        final isTorchOn = torchState == TorchState.on;
+                        final isUnavailable = torchState == TorchState.unavailable;
 
-                      return IconButton(
-                        onPressed: () => _controller.toggleTorch(),
-                        icon: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: isTorchOn ? Colors.amber : Colors.black.withValues(alpha: 0.5),
-                            shape: BoxShape.circle,
+                        return GestureDetector(
+                          onTap: isUnavailable
+                              ? null
+                              : () async {
+                                  HapticFeedback.lightImpact();
+                                  await _controller.toggleTorch();
+                                },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeInOut,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: isUnavailable
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : isTorchOn
+                                      ? Colors.amber
+                                      : Colors.black.withValues(alpha: 0.5),
+                              shape: BoxShape.circle,
+                              boxShadow: isTorchOn
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.amber.withValues(alpha: 0.6),
+                                        blurRadius: 16,
+                                        spreadRadius: 2,
+                                      )
+                                    ]
+                                  : [],
+                            ),
+                            child: Icon(
+                              isUnavailable
+                                  ? CupertinoIcons.bolt_slash
+                                  : isTorchOn
+                                      ? CupertinoIcons.bolt_fill
+                                      : CupertinoIcons.bolt,
+                              color: isUnavailable
+                                  ? Colors.white38
+                                  : Colors.white,
+                              size: 20,
+                            ),
                           ),
-                          child: Icon(
-                            isTorchOn ? CupertinoIcons.bolt_fill : CupertinoIcons.bolt_slash_fill,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    )
+                  else
+                    // Placeholder để giữ layout cân bằng trên web
+                    const SizedBox(width: 44),
                 ],
               ),
             ),
