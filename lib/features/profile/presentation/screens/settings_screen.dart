@@ -83,6 +83,13 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       _Divider(color: theme.dividerColor),
                       _IosRow(
+                        iconBg: Colors.purple,
+                        icon: CupertinoIcons.qrcode_viewfinder,
+                        title: 'Quét mã QR',
+                        onTap: () => context.push('/qr-scan'),
+                      ),
+                      _Divider(color: theme.dividerColor),
+                      _IosRow(
                         iconBg: Colors.orange,
                         icon: CupertinoIcons.person_2_fill,
                         title: 'Bạn bè',
@@ -302,6 +309,16 @@ class _ProfileBanner extends StatelessWidget {
                     ],
                   ),
                 ),
+                IconButton(
+                  onPressed: () => context.push('/my-qr'),
+                  tooltip: 'Mã QR của tôi',
+                  icon: const Icon(
+                    CupertinoIcons.qrcode,
+                    size: 22,
+                    color: Color(0xFF38BDF8),
+                  ),
+                ),
+                const SizedBox(width: 2),
                 Icon(
                   CupertinoIcons.chevron_forward,
                   size: 16,

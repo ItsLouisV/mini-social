@@ -223,7 +223,7 @@ class PostRepository {
       'user_id': userId,
       'caption': finalCaption,
       'privacy': privacy,
-      if (moderationScore != null) 'moderation_score': moderationScore,
+      if (moderationScore != null) 'ai_moderation_score': moderationScore,
       if (moderationStatus != null) 'moderation_status': moderationStatus,
     };
 
@@ -631,7 +631,7 @@ class PostRepository {
     final updateData = <String, dynamic>{
       'caption': caption,
       'privacy': privacy,
-      if (moderationScore != null) 'moderation_score': moderationScore,
+      if (moderationScore != null) 'ai_moderation_score': moderationScore,
       if (moderationStatus != null) 'moderation_status': moderationStatus,
     };
     try {

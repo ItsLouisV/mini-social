@@ -79,6 +79,8 @@ class PostModel {
   final bool isLiked;
   final String privacy;
   final String layoutType;
+  final int? aiModerationScore;
+  final String? moderationStatus;
 
   const PostModel({
     required this.id,
@@ -92,6 +94,8 @@ class PostModel {
     this.isLiked = false,
     this.privacy = 'public',
     this.layoutType = 'grid',
+    this.aiModerationScore,
+    this.moderationStatus,
   });
 
   factory PostModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
@@ -126,6 +130,8 @@ class PostModel {
       isLiked: isLiked,
       privacy: json['privacy'] as String? ?? 'public',
       layoutType: extractedLayout,
+      aiModerationScore: (json['ai_moderation_score'] ?? json['moderation_score'] as num?)?.toInt(),
+      moderationStatus: json['moderation_status'] as String?,
     );
   }
 
@@ -138,6 +144,8 @@ class PostModel {
         'created_at': createdAt.toIso8601String(),
         'privacy': privacy,
         'layout_type': layoutType,
+        'ai_moderation_score': aiModerationScore,
+        'moderation_status': moderationStatus,
       };
 
   PostModel copyWith({

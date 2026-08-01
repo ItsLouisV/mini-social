@@ -34,6 +34,8 @@ import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/social/presentation/screens/follow_list_screen.dart';
 import '../../features/social/presentation/screens/friends_list_screen.dart';
 import '../../features/social/presentation/screens/notification_screen.dart';
+import '../../features/social/presentation/screens/my_qr_code_screen.dart';
+import '../../features/social/presentation/screens/qr_scanner_screen.dart';
 import '../../features/social/providers/follow_provider.dart';
 import '../../features/call/presentation/screens/call_screens.dart';
 import '../../features/feed/providers/feed_provider.dart';
@@ -183,6 +185,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, __) =>
             const CupertinoPage(child: LanguageSettingsScreen()),
+      ),
+      GoRoute(
+        path: '/my-qr',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: MyQrCodeScreen()),
+      ),
+      GoRoute(
+        path: '/qr-scan',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: QrScannerScreen()),
       ),
       GoRoute(
         path: '/create',
