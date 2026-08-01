@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -23,115 +24,6 @@ class MyQrCodeScreen extends ConsumerStatefulWidget {
 
 class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
   final GlobalKey _qrCardKey = GlobalKey();
-
-  void _showShareOptions(BuildContext context, ProfileModel profile, String qrPayload) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text('Mã QR của ${profile.displayName}'),
-        message: const Text('Chọn thao tác chia sẻ hoặc lưu mã QR'),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              ctx.pop();
-              _shareText(qrPayload, profile.displayName);
-            },
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(CupertinoIcons.share, size: 20),
-                SizedBox(width: 8),
-                Text('Chia sẻ (Share)'),
-              ],
-            ),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              ctx.pop();
-              Clipboard.setData(ClipboardData(text: qrPayload));
-              if (mounted) {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Row(
-                      children: [
-                        Icon(CupertinoIcons.checkmark_circle_fill, color: Colors.white, size: 20),
-                        SizedBox(width: 10),
-                        Text('Đã sao chép liên kết mã QR cá nhân!'),
-                      ],
-                    ),
-                    backgroundColor: Colors.green.shade700,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
-            },
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(CupertinoIcons.doc_on_doc, size: 20),
-                SizedBox(width: 8),
-                Text('Sao chép liên kết (Copy Link)'),
-              ],
-            ),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () async {
-              ctx.pop();
-              await _saveQrImage(context, profile);
-            },
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(CupertinoIcons.arrow_down_to_line, size: 20),
-                SizedBox(width: 8),
-                Text('Lưu hình ảnh (Save Image)'),
-              ],
-            ),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => ctx.pop(),
-          isDefaultAction: true,
-          child: const Text('Hủy'),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _shareText(String qrPayload, String displayName) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await Share.share('Kết nối với $displayName trên Viora: $qrPayload');
-    } catch (_) {
-      // Fallback if plugin channel throws MissingPluginException or isn't available
-      await Clipboard.setData(ClipboardData(text: qrPayload));
-      if (mounted) {
-        messenger.hideCurrentSnackBar();
-        messenger.showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(CupertinoIcons.checkmark_circle_fill, color: Colors.white, size: 20),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text('Đã tự động sao chép liên kết mã QR cá nhân!'),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-  }
 
   Future<void> _saveQrImage(BuildContext context, ProfileModel profile) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -263,19 +155,22 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
                         ],
                       ),
 
-                      // Share Action Button in Header
+                      // Direct Image Share Button in Header with FontAwesome arrowUpFromBracket
                       profileAsync.maybeWhen(
                         data: (profile) {
-                          final qrPayload = 'viora://profile/${profile.id}';
                           return IconButton(
-                            onPressed: () => _showShareOptions(context, profile, qrPayload),
+                            onPressed: () => _saveQrImage(context, profile),
                             icon: Container(
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.15),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(CupertinoIcons.share, color: Colors.white, size: 20),
+                              child: const FaIcon(
+                                FontAwesomeIcons.arrowUpFromBracket,
+                                color: Colors.white,
+                                size: 17,
+                              ),
                             ),
                           );
                         },

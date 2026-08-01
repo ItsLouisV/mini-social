@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/theme_provider.dart';
@@ -98,7 +99,7 @@ class SettingsScreen extends ConsumerWidget {
                       _Divider(color: theme.dividerColor),
                       _IosRow(
                         iconBg: Colors.teal,
-                        icon: CupertinoIcons.device_phone_portrait,
+                        customIcon: const FaIcon(FontAwesomeIcons.mobileButton, color: Colors.white, size: 15),
                         title: 'Thiết bị đăng nhập',
                         onTap: () => context.push('/settings/devices'),
                       ),
@@ -142,7 +143,7 @@ class SettingsScreen extends ConsumerWidget {
                       _Divider(color: theme.dividerColor),
                       _IosRow(
                         iconBg: Colors.purple,
-                        icon: CupertinoIcons.globe,
+                        customIcon: const FaIcon(FontAwesomeIcons.language, color: Colors.white, size: 15),
                         title: AppTranslations.tr(ref, 'language'),
                         showChevron: false,
                         trailing: Row(
@@ -171,7 +172,7 @@ class SettingsScreen extends ConsumerWidget {
                     children: [
                       _IosRow(
                         iconBg: Colors.lightBlue,
-                        icon: CupertinoIcons.question_circle_fill,
+                        customIcon: const FaIcon(FontAwesomeIcons.gear, color: Colors.white, size: 15),
                         title: AppTranslations.tr(ref, 'settings'),
                         onTap: () {},
                       ),
@@ -395,7 +396,8 @@ class _Divider extends StatelessWidget {
 }
 
 class _IosRow extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? customIcon;
   final Color iconBg;
   final String title;
   final Widget? trailing;
@@ -403,7 +405,8 @@ class _IosRow extends StatelessWidget {
   final VoidCallback? onTap;
 
   const _IosRow({
-    required this.icon,
+    this.icon,
+    this.customIcon,
     required this.iconBg,
     required this.title,
     this.trailing,
@@ -431,7 +434,9 @@ class _IosRow extends StatelessWidget {
                 color: iconBg,
                 borderRadius: BorderRadius.circular(7),
               ),
-              child: Icon(icon, color: Colors.white, size: 17),
+              child: Center(
+                child: customIcon ?? (icon != null ? Icon(icon, color: Colors.white, size: 17) : const SizedBox()),
+              ),
             ),
             const SizedBox(width: 14),
 

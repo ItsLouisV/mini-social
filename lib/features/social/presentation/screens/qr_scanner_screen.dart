@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../auth/providers/auth_provider.dart';
+import '../../utils/qr_image_decoder.dart';
 import '../widgets/qr_profile_bottom_sheet.dart';
 
 class QrScannerScreen extends ConsumerStatefulWidget {
@@ -24,20 +26,22 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
   );
 
   late AnimationController _animController;
-  late Animation<double> _laserAnimation;
+  late Animation<double> _zoomAnimation;
 
   bool _isProcessing = false;
+  bool _isDetected = false;
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
+    // Breathing zoom animation controller (Idle state)
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
 
-    _laserAnimation = Tween<double>(begin: 0.05, end: 0.95).animate(
+    _zoomAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
     );
   }
@@ -87,6 +91,13 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
       return;
     }
 
+    // Trigger visual snap-lock & checkmark verification animation
+    if (mounted) {
+      setState(() => _isDetected = true);
+    }
+
+    await Future.delayed(const Duration(milliseconds: 450));
+
     // Nếu quét mã QR của chính mình
     if (currentUserId != null && extractedUserId == currentUserId) {
       if (mounted) {
@@ -130,20 +141,43 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
   }
 
   Future<void> _pickImageFromGallery() async {
+    if (_isProcessing) return;
+
     try {
       final XFile? image = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (image == null) return;
 
-      final BarcodeCapture? capture = await _controller.analyzeImage(image.path);
-      if (capture != null && capture.barcodes.isNotEmpty) {
-        final rawValue = capture.barcodes.first.rawValue;
-        if (rawValue != null && rawValue.isNotEmpty) {
-          _processQrCode(rawValue.trim());
-          return;
+      setState(() => _isProcessing = true);
+
+      String? qrResult;
+
+      if (kIsWeb) {
+        // Web Platform: Use native Web BarcodeDetector
+        qrResult = await decodeQrFromWebImage(image);
+      } else {
+        // Mobile / Native Platform: Use MobileScanner analyzeImage
+        try {
+          final BarcodeCapture? capture = await _controller.analyzeImage(image.path);
+          if (capture != null && capture.barcodes.isNotEmpty) {
+            qrResult = capture.barcodes.first.rawValue;
+          }
+        } catch (e) {
+          debugPrint('analyzeImage native error: $e');
         }
       }
-      _showToast('Không tìm thấy mã QR hợp lệ trong ảnh');
+
+      if (qrResult != null && qrResult.trim().isNotEmpty) {
+        _processQrCode(qrResult.trim());
+      } else {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+        }
+        _showToast('Không tìm thấy mã QR hợp lệ trong ảnh');
+      }
     } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
       _showToast('Không thể phân tích ảnh: $e');
     }
   }
@@ -160,7 +194,7 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
             onDetect: _handleBarcode,
           ),
 
-          // 2. Scanner Dark Overlay & Animated Laser Frame
+          // 2. Scanner Dark Overlay & Gentle Breathing / Lock Check Animation Frame
           _buildScannerOverlay(context),
 
           // 3. Top Action Bar
@@ -229,12 +263,15 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
             child: Center(
               child: Column(
                 children: [
-                  const Text(
-                    'Di chuyển ống kính đến mã QR của bạn bè',
+                  Text(
+                    _isDetected
+                        ? 'Đã xác nhận mã QR! Đang kết nối...'
+                        : 'Di chuyển ống kính đến mã QR của bạn bè',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: _isDetected ? const Color(0xFF10B981) : Colors.white70,
                       fontSize: 13,
-                      shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                      fontWeight: _isDetected ? FontWeight.bold : FontWeight.normal,
+                      shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -286,115 +323,107 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
   }
 
   Widget _buildScannerOverlay(BuildContext context) {
-    final scanAreaSize = MediaQuery.of(context).size.width * 0.74;
+    final baseScanAreaSize = MediaQuery.of(context).size.width * 0.74;
+    final activeColor = _isDetected ? const Color(0xFF10B981) : const Color(0xFF38BDF8);
 
-    return Stack(
-      children: [
-        // Outer dark vignette mask
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            Colors.black.withValues(alpha: 0.65),
-            BlendMode.srcOut,
-          ),
-          child: Stack(
-            children: [
-              Container(
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  backgroundBlendMode: BlendMode.dstOut,
-                ),
+    return AnimatedBuilder(
+      animation: _zoomAnimation,
+      builder: (context, child) {
+        final currentScale = _isDetected ? 0.55 : _zoomAnimation.value;
+        final currentSize = baseScanAreaSize * currentScale;
+
+        return Stack(
+          children: [
+            // Outer dark vignette mask with synchronized tight hole cut-out
+            ColorFiltered(
+              colorFilter: ColorFilter.mode(
+                Colors.black.withValues(alpha: 0.65),
+                BlendMode.srcOut,
               ),
-              Align(
-                alignment: Alignment.center,
-                child: Container(
-                  width: scanAreaSize,
-                  height: scanAreaSize,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
+              child: Stack(
+                children: [
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      backgroundBlendMode: BlendMode.dstOut,
+                    ),
                   ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Centered Animated Laser Scanner Box
-        Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: scanAreaSize,
-            height: scanAreaSize,
-            child: Stack(
-              children: [
-                // Futuristic Corner Brackets
-                CustomPaint(
-                  size: Size(scanAreaSize, scanAreaSize),
-                  painter: _ScannerCornerPainter(
-                    color: const Color(0xFF38BDF8),
-                    cornerLength: 38,
-                    strokeWidth: 4,
-                    borderRadius: 24,
-                  ),
-                ),
-
-                // Smooth Animated Laser Beam Line
-                AnimatedBuilder(
-                  animation: _laserAnimation,
-                  builder: (context, child) {
-                    final topOffset = _laserAnimation.value * (scanAreaSize - 20);
-                    return Positioned(
-                      top: topOffset,
-                      left: 12,
-                      right: 12,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Laser beam trailing glow
-                          Container(
-                            height: 20,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  const Color(0xFF38BDF8).withValues(alpha: 0.0),
-                                  const Color(0xFF38BDF8).withValues(alpha: 0.35),
-                                ],
-                              ),
-                            ),
-                          ),
-                          // Laser core glowing line
-                          Container(
-                            height: 3,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(3),
-                              gradient: const LinearGradient(
-                                colors: [
-                                  Color(0xFF38BDF8),
-                                  Color(0xFF818CF8),
-                                  Color(0xFF38BDF8),
-                                ],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF38BDF8).withValues(alpha: 0.9),
-                                  blurRadius: 14,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                  Align(
+                    alignment: Alignment.center,
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: _isDetected ? 350 : 0),
+                      curve: Curves.easeOutBack,
+                      width: currentSize,
+                      height: currentSize,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(_isDetected ? 14 : 24),
                       ),
-                    );
-                  },
-                ),
-              ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
-      ],
+
+            // Centered Scanner Box: Snaps TIGHTLY around QR code on detection
+            Align(
+              alignment: Alignment.center,
+              child: AnimatedContainer(
+                duration: Duration(milliseconds: _isDetected ? 350 : 0),
+                curve: Curves.easeOutBack,
+                width: currentSize,
+                height: currentSize,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Futuristic Corner Brackets (Cyan idle, Emerald green detected)
+                    CustomPaint(
+                      size: Size(currentSize, currentSize),
+                      painter: _ScannerCornerPainter(
+                        color: activeColor,
+                        cornerLength: _isDetected ? 26 : 42,
+                        strokeWidth: _isDetected ? 4.0 : 4.5,
+                        borderRadius: _isDetected ? 14 : 24,
+                      ),
+                    ),
+
+                    // Verification Checkmark Seal (Shown when QR code is detected)
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 250),
+                      opacity: _isDetected ? 1.0 : 0.0,
+                      child: AnimatedScale(
+                        duration: const Duration(milliseconds: 350),
+                        scale: _isDetected ? 1.0 : 0.3,
+                        curve: Curves.elasticOut,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                            border: Border.all(color: const Color(0xFF10B981), width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.6),
+                                blurRadius: 20,
+                                spreadRadius: 3,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.checkmark_seal_fill,
+                            color: Color(0xFF10B981),
+                            size: 44,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -410,8 +439,8 @@ class _ScannerCornerPainter extends CustomPainter {
 
   _ScannerCornerPainter({
     required this.color,
-    this.cornerLength = 38.0,
-    this.strokeWidth = 4.0,
+    this.cornerLength = 42.0,
+    this.strokeWidth = 4.5,
     this.borderRadius = 24.0,
   });
 
@@ -464,5 +493,6 @@ class _ScannerCornerPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _ScannerCornerPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
