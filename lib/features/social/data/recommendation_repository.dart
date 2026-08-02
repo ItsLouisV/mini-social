@@ -66,36 +66,84 @@ class RecommendationRepository {
 
       if (res.data != null && res.data['posts'] != null) {
         final List list = res.data['posts'] as List;
-        return list.map((item) {
-          final map = Map<String, dynamic>.from(item as Map);
+        if (list.isNotEmpty) {
+          final postIds = list.map((item) => (item['id'] ?? item['postId'] ?? item['post_id']).toString()).toList();
           
-          final authorMap = map['user'] != null
-              ? Map<String, dynamic>.from(map['user'] as Map)
-              : null;
-          
-          final mediaList = (map['media'] as List?)
-                  ?.map((m) => PostMedia.fromJson(Map<String, dynamic>.from(m as Map)))
-                  .toList() ??
-              [];
+          Map<String, Map<String, dynamic>> extraMap = {};
+          try {
+            final extraRes = await _client.from('posts').select('id, is_ai_generated, moderation_status').inFilter('id', postIds);
+            extraMap = {for (var e in (extraRes as List)) e['id'] as String: Map<String, dynamic>.from(e as Map)};
+          } catch (e) {
+            debugPrint('Warning fetching extra post flags: $e');
+          }
 
-          final createdAtRaw = map['createdAt'] ?? map['created_at'];
-          final createdAt = createdAtRaw != null
-              ? DateTime.parse(createdAtRaw.toString())
-              : DateTime.now();
+          final filteredEdge = list.map((item) {
+            final map = Map<String, dynamic>.from(item as Map);
+            final pid = (map['id'] ?? map['post_id'] ?? '').toString();
+            final extra = extraMap[pid];
 
-          return PostModel(
-            id: (map['id'] ?? '') as String,
-            userId: (map['userId'] ?? map['user_id'] ?? '') as String,
-            caption: map['caption'] as String?,
-            media: mediaList,
-            likesCount: (map['likesCount'] ?? map['likes_count'] ?? 0) as int,
-            commentsCount: (map['commentsCount'] ?? map['comments_count'] ?? 0) as int,
-            createdAt: createdAt,
-            author: authorMap != null ? ProfileModel.fromJson(authorMap) : null,
-            isLiked: (map['isLiked'] ?? map['is_liked'] ?? false) as bool,
-            privacy: (map['privacy'] ?? 'public') as String,
-          );
-        }).toList();
+            final authorMap = map['user'] != null
+                ? Map<String, dynamic>.from(map['user'] as Map)
+                : null;
+            
+            final mediaList = (map['media'] as List?)
+                    ?.map((m) => PostMedia.fromJson(Map<String, dynamic>.from(m as Map)))
+                    .toList() ??
+                [];
+
+            final createdAtRaw = map['createdAt'] ?? map['created_at'];
+            final createdAt = createdAtRaw != null
+                ? DateTime.parse(createdAtRaw.toString())
+                : DateTime.now();
+
+            final isAi = extra != null && extra['is_ai_generated'] != null
+                ? (extra['is_ai_generated'] as bool? ?? false)
+                : (map['is_ai_generated'] == true || map['isAiGenerated'] == true);
+
+            final modStatus = extra != null && extra['moderation_status'] != null
+                ? extra['moderation_status'] as String?
+                : (map['moderationStatus'] ?? map['moderation_status']) as String?;
+
+            return PostModel(
+              id: pid,
+              userId: (map['userId'] ?? map['user_id'] ?? '') as String,
+              caption: map['caption'] as String?,
+              media: mediaList,
+              likesCount: (map['likesCount'] ?? map['likes_count'] ?? 0) as int,
+              commentsCount: (map['commentsCount'] ?? map['comments_count'] ?? 0) as int,
+              createdAt: createdAt,
+              author: authorMap != null ? ProfileModel.fromJson(authorMap) : null,
+              isLiked: (map['isLiked'] ?? map['is_liked'] ?? false) as bool,
+              privacy: (map['privacy'] ?? 'public') as String,
+              moderationStatus: modStatus,
+              isAiGenerated: isAi,
+            );
+          }).where((post) {
+            final status = post.moderationStatus ?? 'published';
+            if (status == 'hidden' || status == 'removed') {
+              if (post.userId != userId) return false;
+            }
+            if (post.userId != userId && status != 'published') {
+              return false;
+            }
+            return true;
+          }).toList();
+          final filteredPosts = filteredEdge;
+
+          // Sắp xếp: bài của bạn bè/followers lên đầu, bài chính chủ đứng sau
+          final List<PostModel> friendAndFollowerPostsEdge = [];
+          final List<PostModel> ownPostsEdge = [];
+
+          for (final post in filteredPosts) {
+            if (post.userId == userId) {
+              ownPostsEdge.add(post);
+            } else {
+              friendAndFollowerPostsEdge.add(post);
+            }
+          }
+
+          return [...friendAndFollowerPostsEdge, ...ownPostsEdge];
+        }
       }
     } catch (e) {
       debugPrint('Edge function recommendation error, using RPC fallback: $e');
@@ -127,9 +175,27 @@ class RecommendationRepository {
       final likesRes = await _client.from('likes').select('post_id').eq('user_id', userId).inFilter('post_id', postIds);
       final likedSet = {for (var l in likesRes) l['post_id'] as String};
 
-      return rpcRes.map((r) {
+      Map<String, Map<String, dynamic>> extraMap = {};
+      try {
+        final extraRes = await _client.from('posts').select('id, is_ai_generated, moderation_status').inFilter('id', postIds);
+        extraMap = {for (var e in (extraRes as List)) e['id'] as String: Map<String, dynamic>.from(e as Map)};
+      } catch (e) {
+        debugPrint('Warning fetching extra post flags in RPC fallback: $e');
+      }
+
+      final filteredPostsRpc = rpcRes.map((r) {
         final pid = r['post_id'] as String;
         final uid = r['user_id'] as String;
+        final extra = extraMap[pid];
+
+        final isAi = extra != null && extra['is_ai_generated'] != null
+            ? (extra['is_ai_generated'] as bool? ?? false)
+            : (r['is_ai_generated'] == true);
+
+        final modStatus = extra != null && extra['moderation_status'] != null
+            ? extra['moderation_status'] as String?
+            : r['moderation_status'] as String?;
+
         return PostModel(
           id: pid,
           userId: uid,
@@ -141,8 +207,32 @@ class RecommendationRepository {
           author: authorMap[uid],
           isLiked: likedSet.contains(pid),
           privacy: r['privacy'] as String? ?? 'public',
+          moderationStatus: modStatus,
+          isAiGenerated: isAi,
         );
+      }).where((post) {
+        final status = post.moderationStatus ?? 'published';
+        if (status == 'hidden' || status == 'removed') {
+          if (post.userId != userId) return false;
+        }
+        if (post.userId != userId && status != 'published') {
+          return false;
+        }
+        return true;
       }).toList();
+
+      final List<PostModel> friendAndFollowerPosts = [];
+      final List<PostModel> ownPosts = [];
+
+      for (final post in filteredPostsRpc) {
+        if (post.userId == userId) {
+          ownPosts.add(post);
+        } else {
+          friendAndFollowerPosts.add(post);
+        }
+      }
+
+      return [...friendAndFollowerPosts, ...ownPosts];
     } catch (e) {
       debugPrint('RPC recommendation error: $e');
       return [];

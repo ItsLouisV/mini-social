@@ -255,7 +255,18 @@ class AIRepository {
             createdAt: createdAt,
             author: authorMap[uid],
             privacy: (map['privacy'] ?? 'public') as String,
+            moderationStatus: (map['moderation_status'] ?? map['moderationStatus']) as String?,
+            isAiGenerated: (map['is_ai_generated'] ?? map['isAiGenerated'] ?? false) as bool,
           );
+        }).where((post) {
+          final currentUserId = _client.auth.currentUser?.id;
+          final status = post.moderationStatus ?? 'published';
+          if (post.userId != currentUserId) {
+            if (status != 'published' || status == 'hidden' || status == 'removed') {
+              return false;
+            }
+          }
+          return true;
         }).toList();
       }
     } catch (e) {

@@ -142,3 +142,47 @@ final recommendedFeedProvider = FutureProvider.family<List<PostModel>, String>((
   if (userId.isEmpty) return [];
   return ref.watch(recommendationRepositoryProvider).getRecommendedFeed(userId: userId);
 });
+
+// ── Shell UI State (Header visibility & TabBar compact mode) ──
+
+class ShellUiState {
+  final bool isHeaderVisible;
+  final bool isTabBarCompact;
+
+  const ShellUiState({
+    this.isHeaderVisible = true,
+    this.isTabBarCompact = false,
+  });
+
+  ShellUiState copyWith({
+    bool? isHeaderVisible,
+    bool? isTabBarCompact,
+  }) {
+    return ShellUiState(
+      isHeaderVisible: isHeaderVisible ?? this.isHeaderVisible,
+      isTabBarCompact: isTabBarCompact ?? this.isTabBarCompact,
+    );
+  }
+}
+
+class ShellUiStateNotifier extends StateNotifier<ShellUiState> {
+  ShellUiStateNotifier() : super(const ShellUiState());
+
+  void setCompactMode() {
+    if (state.isHeaderVisible || !state.isTabBarCompact) {
+      state = const ShellUiState(isHeaderVisible: false, isTabBarCompact: true);
+    }
+  }
+
+  void setExpandedMode() {
+    if (!state.isHeaderVisible || state.isTabBarCompact) {
+      state = const ShellUiState(isHeaderVisible: true, isTabBarCompact: false);
+    }
+  }
+}
+
+final shellUiStateProvider =
+    StateNotifierProvider<ShellUiStateNotifier, ShellUiState>((ref) {
+  return ShellUiStateNotifier();
+});
+

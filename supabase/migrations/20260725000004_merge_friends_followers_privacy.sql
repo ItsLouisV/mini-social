@@ -48,9 +48,9 @@ BEGIN
         (
             -- Score 1: Connection Score
             (CASE 
-                WHEN po.user_id = p_user_id THEN 50.0
                 WHEN po.user_id IN (SELECT friend_id FROM my_friends) THEN 40.0
-                WHEN po.user_id IN (SELECT following_id FROM my_follows) THEN 25.0
+                WHEN po.user_id IN (SELECT following_id FROM my_follows) THEN 30.0
+                WHEN po.user_id = p_user_id THEN 15.0
                 ELSE 10.0
             END)
             -- Score 2: Engagement Score

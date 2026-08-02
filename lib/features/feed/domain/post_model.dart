@@ -133,8 +133,11 @@ class PostModel {
       privacy: json['privacy'] as String? ?? 'public',
       layoutType: extractedLayout,
       aiModerationScore: (json['ai_moderation_score'] ?? json['moderation_score'] as num?)?.toInt(),
-      moderationStatus: json['moderation_status'] as String?,
-      isAiGenerated: json['is_ai_generated'] as bool? ?? false,
+      moderationStatus: (json['moderation_status'] ?? json['moderationStatus']) as String?,
+      isAiGenerated: json['is_ai_generated'] == true ||
+          json['isAiGenerated'] == true ||
+          json['is_ai_generated'].toString() == 'true' ||
+          json['is_ai_generated'].toString() == '1',
     );
   }
 

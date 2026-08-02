@@ -1,6 +1,8 @@
+import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import '../constants/app_colors.dart';
@@ -438,12 +440,12 @@ class _MainShellState extends ConsumerState<MainShell> {
       context.push('/create');
       return;
     }
-    // Map visual index → branch index (skip the "+" slot)
+    // Chuyển tab hoặc bấm tab -> mở rộng lại header & tabbar
+    ref.read(shellUiStateProvider.notifier).setExpandedMode();
+
     final branchIndex = index > 2 ? index - 1 : index;
     if (branchIndex == widget.navigationShell.currentIndex) {
-      // Đang ở tab hiện tại → bấm lại
       if (branchIndex == 0) {
-        // Tab Home: cuộn về đầu + làm mới feed
         final scrollController = ref.read(feedScrollControllerProvider);
         if (scrollController.hasClients) {
           scrollController.animateTo(
@@ -452,7 +454,6 @@ class _MainShellState extends ConsumerState<MainShell> {
             curve: Curves.easeOutCubic,
           );
         }
-        // Làm mới dữ liệu feed sau khi scroll xong
         Future.delayed(const Duration(milliseconds: 300), () {
           ref.read(postLocalStatesProvider.notifier).clearAll();
           ref.invalidate(feedPostsProvider);
@@ -465,10 +466,36 @@ class _MainShellState extends ConsumerState<MainShell> {
     }
   }
 
-  // Convert branch index → visual tab index
   int get _visualIndex {
     final branch = widget.navigationShell.currentIndex;
     return branch >= 2 ? branch + 1 : branch;
+  }
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    final metrics = notification.metrics;
+    final pixels = metrics.pixels;
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      if (pixels <= 10) {
+        ref.read(shellUiStateProvider.notifier).setExpandedMode();
+      } else if (delta > 3) {
+        // Vuốt lên để xem bài (scroll xuống) -> ẩn header, thu gọn tabbar
+        ref.read(shellUiStateProvider.notifier).setCompactMode();
+      } else if (delta < -15) {
+        // Vuốt xuống nhanh trong khi drag -> hiện lại header & tabbar
+        ref.read(shellUiStateProvider.notifier).setExpandedMode();
+      }
+    } else if (notification is ScrollEndNotification) {
+      final velocity = notification.dragDetails?.primaryVelocity ?? 0;
+      if (pixels <= 10) {
+        ref.read(shellUiStateProvider.notifier).setExpandedMode();
+      } else if (velocity > 550) {
+        // Vuốt xuống nhanh với vận tốc mạnh (primaryVelocity > 0) -> hiển thị lại
+        ref.read(shellUiStateProvider.notifier).setExpandedMode();
+      }
+    }
+    return false;
   }
 
   @override
@@ -476,7 +503,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     final unreadNotifCount = ref.watch(unreadNotificationsCountProvider);
     final unreadMsgAsync = ref.watch(unreadMessagesCountProvider);
     final unreadMsgCount = unreadMsgAsync.valueOrNull ?? 0;
-    
+    final shellUiState = ref.watch(shellUiStateProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return NotificationListener<OpenDrawerNotification>(
@@ -484,16 +511,30 @@ class _MainShellState extends ConsumerState<MainShell> {
         _scaffoldKey.currentState?.openDrawer();
         return true;
       },
-      child: Scaffold(
-        key: _scaffoldKey,
-        drawer: const FeedDrawer(),
-        body: widget.navigationShell,
-        bottomNavigationBar: _IosTabBar(
-          visualIndex: _visualIndex,
-          unreadNotifCount: unreadNotifCount,
-          unreadMsgCount: unreadMsgCount,
-          isDark: isDark,
-          onTap: _onTap,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onScrollNotification,
+        child: Scaffold(
+          key: _scaffoldKey,
+          drawer: const FeedDrawer(),
+          extendBody: true,
+          body: Stack(
+            children: [
+              widget.navigationShell,
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _IosTabBar(
+                  visualIndex: _visualIndex,
+                  unreadNotifCount: unreadNotifCount,
+                  unreadMsgCount: unreadMsgCount,
+                  isDark: isDark,
+                  isCompact: shellUiState.isTabBarCompact,
+                  onTap: _onTap,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -501,13 +542,14 @@ class _MainShellState extends ConsumerState<MainShell> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// iOS-style frosted-glass tab bar
+// Floating Frosted-Glass Glassmorphism Tab Bar
 // ─────────────────────────────────────────────────────────────────────────────
 class _IosTabBar extends StatelessWidget {
   final int visualIndex;
   final int unreadNotifCount;
   final int unreadMsgCount;
   final bool isDark;
+  final bool isCompact;
   final void Function(int) onTap;
 
   const _IosTabBar({
@@ -515,104 +557,173 @@ class _IosTabBar extends StatelessWidget {
     required this.unreadNotifCount,
     required this.unreadMsgCount,
     required this.isDark,
+    required this.isCompact,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final barBg = theme.colorScheme.surface.withValues(alpha: 0.92);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: barBg,
-        border: Border(
-          top: BorderSide(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.10)
-                : Colors.black.withValues(alpha: 0.14),
-            width: 0.5,
-          ),
-        ),
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeInOutCubic,
+      padding: EdgeInsets.only(
+        left: isCompact ? 64 : 36,
+        right: isCompact ? 64 : 36,
+        bottom: isCompact ? 10 : (bottomInset > 0 ? bottomInset : 14),
       ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 50,
-          child: Row(
-            children: [
-              _TabItem(
-                visualIdx: 0,
-                currentVisualIdx: visualIndex,
-                icon: CupertinoIcons.house,
-                activeIcon: CupertinoIcons.house_fill,
-                label: '',
-                onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(isCompact ? 20 : 28),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeInOutCubic,
+            height: isCompact ? 38 : 52,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF0F1012).withValues(alpha: 0.18)
+                  : Colors.white.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(isCompact ? 20 : 28),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.18)
+                    : Colors.black.withValues(alpha: 0.08),
+                width: 1.0,
               ),
-              _TabItem(
-                visualIdx: 1,
-                currentVisualIdx: visualIndex,
-                icon: CupertinoIcons.bubble_left,
-                activeIcon: CupertinoIcons.bubble_left_fill,
-                label: 'Tin nhắn',
-                badge: unreadMsgCount > 0 ? '$unreadMsgCount' : null,
-                onTap: onTap,
-              ),
-              // ── Centre create button ──
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => onTap(2),
-                  behavior: HitTestBehavior.opaque,
-                  child: Center(
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            theme.colorScheme.primary,
-                            theme.colorScheme.secondary,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.colorScheme.primary
-                                .withValues(alpha: 0.35),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.plus,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
                 ),
-              ),
-              _TabItem(
-                visualIdx: 3,
-                currentVisualIdx: visualIndex,
-                icon: CupertinoIcons.bell,
-                activeIcon: CupertinoIcons.bell_fill,
-                label: 'Thông báo',
-                badge: unreadNotifCount > 0 ? '$unreadNotifCount' : null,
-                onTap: onTap,
-              ),
-              _TabItem(
-                visualIdx: 4,
-                currentVisualIdx: visualIndex,
-                icon: CupertinoIcons.person,
-                activeIcon: CupertinoIcons.person_fill,
-                label: 'Cài đặt',
-                onTap: onTap,
-              ),
-            ],
+              ],
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final totalWidth = constraints.maxWidth;
+                final slotWidth = totalWidth / 5;
+                // Kích thước nền elip dài hơn & bo góc cùng phong cách với TabBar
+                final pillWidth = isCompact ? 74.0 : 80.0;
+                final pillHeight = isCompact ? 30.0 : 40.0;
+                final pillRadius = isCompact ? 16.0 : 22.0;
+
+                final indicatorLeft = (slotWidth * visualIndex) + (slotWidth - pillWidth) / 2;
+                final indicatorTop = (constraints.maxHeight - pillHeight) / 2;
+
+                return Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [
+                    // ── 1. Nền Elip Trượt Qua Trượt Lại (Sliding Active Indicator) ──
+                    if (visualIndex != 2)
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.fastOutSlowIn,
+                        left: indicatorLeft,
+                        top: indicatorTop,
+                        width: pillWidth,
+                        height: pillHeight,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 280),
+                          curve: Curves.easeInOutCubic,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(pillRadius),
+                          ),
+                        ),
+                      ),
+
+                    // ── 2. Hàng Tab Icons ──
+                    Row(
+                      children: [
+                        _TabItem(
+                          visualIdx: 0,
+                          currentVisualIdx: visualIndex,
+                          isCompact: isCompact,
+                          faIcon: FontAwesomeIcons.house,
+                          faActiveIcon: FontAwesomeIcons.house,
+                          icon: CupertinoIcons.house,
+                          activeIcon: CupertinoIcons.house_fill,
+                          label: '',
+                          onTap: onTap,
+                        ),
+                        _TabItem(
+                          visualIdx: 1,
+                          currentVisualIdx: visualIndex,
+                          isCompact: isCompact,
+                          icon: CupertinoIcons.bubble_left,
+                          activeIcon: CupertinoIcons.bubble_left_fill,
+                          label: 'Tin nhắn',
+                          badge: unreadMsgCount > 0 ? '$unreadMsgCount' : null,
+                          onTap: onTap,
+                        ),
+                        // ── Centre create button ──
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => onTap(2),
+                            behavior: HitTestBehavior.opaque,
+                            child: Center(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 280),
+                                curve: Curves.easeInOutCubic,
+                                width: isCompact ? 28 : 36,
+                                height: isCompact ? 28 : 36,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      theme.colorScheme.primary,
+                                      theme.colorScheme.secondary,
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(isCompact ? 8 : 11),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: theme.colorScheme.primary
+                                          .withValues(alpha: 0.35),
+                                      blurRadius: isCompact ? 4 : 7,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  CupertinoIcons.plus,
+                                  color: Colors.white,
+                                  size: isCompact ? 15 : 20,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _TabItem(
+                          visualIdx: 3,
+                          currentVisualIdx: visualIndex,
+                          isCompact: isCompact,
+                          icon: CupertinoIcons.bell,
+                          activeIcon: CupertinoIcons.bell_fill,
+                          label: 'Thông báo',
+                          badge: unreadNotifCount > 0 ? '$unreadNotifCount' : null,
+                          onTap: onTap,
+                        ),
+                        _TabItem(
+                          visualIdx: 4,
+                          currentVisualIdx: visualIndex,
+                          isCompact: isCompact,
+                          icon: CupertinoIcons.person,
+                          activeIcon: CupertinoIcons.person_fill,
+                          label: 'Cài đặt',
+                          onTap: onTap,
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -623,6 +734,9 @@ class _IosTabBar extends StatelessWidget {
 class _TabItem extends StatelessWidget {
   final int visualIdx;
   final int currentVisualIdx;
+  final bool isCompact;
+  final dynamic faIcon;
+  final dynamic faActiveIcon;
   final IconData icon;
   final IconData activeIcon;
   final String label;
@@ -632,10 +746,13 @@ class _TabItem extends StatelessWidget {
   const _TabItem({
     required this.visualIdx,
     required this.currentVisualIdx,
+    required this.isCompact,
     required this.icon,
     required this.activeIcon,
     required this.label,
     required this.onTap,
+    this.faIcon,
+    this.faActiveIcon,
     this.badge,
   });
 
@@ -643,61 +760,72 @@ class _TabItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isActive = visualIdx == currentVisualIdx;
     final color = isActive ? AppColors.primary : AppColors.textHint;
+    final iconSize = isCompact ? 16.0 : 21.0;
+
+    Widget iconWidget;
+    if (faIcon != null && faActiveIcon != null) {
+      iconWidget = FaIcon(
+        isActive ? faActiveIcon : faIcon,
+        key: ValueKey(isActive),
+        color: color,
+        size: iconSize - 2,
+      );
+    } else {
+      iconWidget = Icon(
+        isActive ? activeIcon : icon,
+        key: ValueKey(isActive),
+        color: color,
+        size: iconSize,
+      );
+    }
 
     return Expanded(
       child: GestureDetector(
         onTap: () => onTap(visualIdx),
         behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  transitionBuilder: (child, anim) => ScaleTransition(
-                    scale: anim,
-                    child: FadeTransition(opacity: anim, child: child),
-                  ),
-                  child: Icon(
-                    isActive ? activeIcon : icon,
-                    key: ValueKey(isActive),
-                    color: color,
-                    size: 25,
-                  ),
+        child: Center(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                transitionBuilder: (child, anim) => ScaleTransition(
+                  scale: anim,
+                  child: FadeTransition(opacity: anim, child: child),
                 ),
-                if (badge != null)
-                  Positioned(
-                    right: -9,
-                    top: -4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          width: 1.5,
-                        ),
+                child: iconWidget,
+              ),
+              if (badge != null)
+                Positioned(
+                  right: isCompact ? -7 : -9,
+                  top: isCompact ? -3 : -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        width: 1.5,
                       ),
-                      child: Text(
-                        badge!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          height: 1.2,
-                        ),
+                    ),
+                    child: Text(
+                      badge!,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isCompact ? 9 : 10,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
                       ),
                     ),
                   ),
-              ],
-            ),
-          ],
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+

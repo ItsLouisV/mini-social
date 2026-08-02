@@ -645,11 +645,13 @@ class PostRepository {
     List<XFile>? newMedia,
     int? moderationScore,
     String? moderationStatus,
+    bool? isAiGenerated,
   }) async {
     final userId = currentUserId!;
     final updateData = <String, dynamic>{
       'caption': caption,
       'privacy': privacy,
+      if (isAiGenerated != null) 'is_ai_generated': isAiGenerated,
       if (moderationScore != null) 'ai_moderation_score': moderationScore,
       if (moderationStatus != null) 'moderation_status': moderationStatus,
     };

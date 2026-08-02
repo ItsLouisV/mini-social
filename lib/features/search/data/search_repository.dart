@@ -55,7 +55,15 @@ class SearchRepository {
           .order('created_at', ascending: false)
           .limit(30);
 
-      final list = (data as List).map((e) => PostModel.fromJson(e)).toList();
+      final list = (data as List).map((e) => PostModel.fromJson(e)).where((post) {
+        final status = post.moderationStatus ?? 'published';
+        if (post.userId != _currentUserId) {
+          if (status != 'published' || status == 'hidden' || status == 'removed') {
+            return false;
+          }
+        }
+        return true;
+      }).toList();
       return list;
     } catch (e) {
       // Fallback nếu cột deleted_at chưa được tạo trên db môi trường sản xuất
@@ -67,7 +75,15 @@ class SearchRepository {
           .order('created_at', ascending: false)
           .limit(30);
 
-      final list = (data as List).map((e) => PostModel.fromJson(e)).toList();
+      final list = (data as List).map((e) => PostModel.fromJson(e)).where((post) {
+        final status = post.moderationStatus ?? 'published';
+        if (post.userId != _currentUserId) {
+          if (status != 'published' || status == 'hidden' || status == 'removed') {
+            return false;
+          }
+        }
+        return true;
+      }).toList();
       return list;
     }
   }

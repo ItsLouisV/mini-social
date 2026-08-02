@@ -76,6 +76,31 @@ final userPostsProvider =
     FutureProvider.family<UserPostsData, String>(
         (ref, userId) async {
   ref.watch(profileRefreshProvider);
+  final supabase = ref.watch(supabaseServiceProvider).client;
+
+  final channel = supabase.channel('public:user_posts_$userId');
+  try {
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'posts',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'user_id',
+        value: userId,
+      ),
+      callback: (payload) {
+        ref.invalidateSelf();
+      },
+    ).subscribe();
+  } catch (_) {}
+
+  ref.onDispose(() {
+    try {
+      channel.unsubscribe();
+    } catch (_) {}
+  });
+
   return ref.watch(profileRepositoryProvider).getUserPosts(userId);
 });
 

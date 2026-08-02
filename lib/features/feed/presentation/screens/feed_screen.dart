@@ -24,148 +24,175 @@ class FeedScreen extends ConsumerWidget {
     final feedAsync = ref.watch(feedPostsProvider);
     final currentUserId = ref.watch(currentUserIdProvider);
     final scrollController = ref.watch(feedScrollControllerProvider);
+    final shellUiState = ref.watch(shellUiStateProvider);
+    final isHeaderVisible = shellUiState.isHeaderVisible;
     final theme = Theme.of(context);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: NestedScrollView(
-        controller: scrollController,
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
-            pinned: true,
-            floating: true,
-            snap: true,
-            forceElevated: innerBoxIsScrolled,
-            backgroundColor:
-                theme.scaffoldBackgroundColor.withValues(alpha: 0.92),
-            elevation: 0,
-            scrolledUnderElevation: 0.5,
-            shadowColor: theme.dividerColor.withValues(alpha: 0.3),
-            surfaceTintColor: Colors.transparent,
-            toolbarHeight: 52,
-            title: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // ── Animated Header Bar (gấp/mở mượt mà khi vuốt feed) ──
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeInOutCubic,
+              height: isHeaderVisible ? 52.0 : 0.0,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: isHeaderVisible ? 1.0 : 0.0,
+                child: OverflowBox(
+                  minHeight: 0,
+                  maxHeight: 52,
+                  alignment: Alignment.topCenter,
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.95),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: theme.dividerColor.withValues(alpha: 0.15),
+                          width: 0.5,
+                        ),
                       ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'assets/images/logo.png',
-                      fit: BoxFit.cover,
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            CupertinoIcons.bars,
+                            color: theme.textTheme.bodyLarge?.color,
+                          ),
+                          onPressed: () =>
+                              const OpenDrawerNotification().dispatch(context),
+                        ),
+                        const SizedBox(width: 4),
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Viora',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(
+                            CupertinoIcons.search,
+                            color: theme.textTheme.bodyLarge?.color,
+                          ),
+                          onPressed: () => context.push('/search'),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Text(
-                  'Viora',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
+              ),
             ),
-            leading: IconButton(
-              icon: Icon(
-                CupertinoIcons.bars,
-                color: theme.textTheme.bodyLarge?.color,
-              ),
-              onPressed: () =>
-                  const OpenDrawerNotification().dispatch(context),
-            ),
-            actions: [
-              IconButton(
-                icon: Icon(
-                  CupertinoIcons.search,
-                  color: theme.textTheme.bodyLarge?.color,
-                ),
-                onPressed: () => context.push('/search'),
-              ),
-              const SizedBox(width: 4),
-            ],
-          ),
-        ],
-        body: feedAsync.when(
-          data: (posts) {
-            if (posts.isEmpty) {
-              return const EmptyStateWidget(
-                icon: CupertinoIcons.doc_text,
-                title: 'Feed trống',
-                subtitle: 'Hãy theo dõi thêm người để xem bài viết của họ',
-              );
-            }
 
-            final showPymk = currentUserId != null && currentUserId.isNotEmpty;
-            final pymkPosition = posts.length >= 2 ? 3 : posts.length + 1;
-            final totalItemCount = posts.length + 1 + (showPymk ? 1 : 0);
+            // ── Feed Content Body ──
+            Expanded(
+              child: feedAsync.when(
+                data: (posts) {
+                  if (posts.isEmpty) {
+                    return const EmptyStateWidget(
+                      icon: CupertinoIcons.doc_text,
+                      title: 'Feed trống',
+                      subtitle: 'Hãy theo dõi thêm người để xem bài viết của họ',
+                    );
+                  }
 
-            return CustomScrollView(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              slivers: [
-                CupertinoSliverRefreshControl(
-                  refreshTriggerPullDistance: 70.0,
-                  refreshIndicatorExtent: 44.0,
-                  onRefresh: () async {
+                  final showPymk = currentUserId != null && currentUserId.isNotEmpty;
+                  final pymkPosition = posts.length >= 2 ? 3 : posts.length + 1;
+                  final totalItemCount = posts.length + 2 + (showPymk ? 1 : 0);
+
+                  return CustomScrollView(
+                    controller: scrollController,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    slivers: [
+                      CupertinoSliverRefreshControl(
+                        refreshTriggerPullDistance: 70.0,
+                        refreshIndicatorExtent: 44.0,
+                        onRefresh: () async {
+                          ref.read(postLocalStatesProvider.notifier).clearAll();
+                          ref.invalidate(feedPostsProvider);
+                          if (currentUserId != null) {
+                            ref.invalidate(pymkProvider(currentUserId));
+                          }
+                        },
+                        builder: (ctx, mode, pulledExtent, triggerDistance, indicatorExtent) {
+                          return _FeedRefreshHeader(
+                            mode: mode,
+                            pulledExtent: pulledExtent,
+                            triggerDistance: triggerDistance,
+                          );
+                        },
+                      ),
+                      SliverList.builder(
+                        itemCount: totalItemCount,
+                        itemBuilder: (context, index) {
+                          if (index == totalItemCount - 1) {
+                            return const SizedBox(height: 80); // Bottom padding cho floating tabbar
+                          }
+                          if (index == 0) {
+                            return _buildCreatePostHeaderBar(context, ref);
+                          }
+
+                          if (showPymk && index == pymkPosition) {
+                            return PeopleYouMayKnowCarousel(currentUserId: currentUserId);
+                          }
+
+                          final postIndex = (showPymk && index > pymkPosition) ? index - 2 : index - 1;
+                          if (postIndex < 0 || postIndex >= posts.length) {
+                            return const SizedBox.shrink();
+                          }
+
+                          return PostCard(
+                            post: posts[postIndex],
+                            currentUserId: currentUserId ?? '',
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
+                loading: () => _buildShimmer(context),
+                error: (e, _) => AppErrorWidget(
+                  message: e.toString(),
+                  onRetry: () {
                     ref.read(postLocalStatesProvider.notifier).clearAll();
                     ref.invalidate(feedPostsProvider);
-                    if (currentUserId != null) {
-                      ref.invalidate(pymkProvider(currentUserId));
-                    }
-                  },
-                  builder: (ctx, mode, pulledExtent, triggerDistance, indicatorExtent) {
-                    return _FeedRefreshHeader(
-                      mode: mode,
-                      pulledExtent: pulledExtent,
-                      triggerDistance: triggerDistance,
-                    );
                   },
                 ),
-                SliverList.builder(
-                  itemCount: totalItemCount,
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return _buildCreatePostHeaderBar(context, ref);
-                    }
-
-                    if (showPymk && index == pymkPosition) {
-                      return PeopleYouMayKnowCarousel(currentUserId: currentUserId);
-                    }
-
-                    final postIndex = (showPymk && index > pymkPosition) ? index - 2 : index - 1;
-                    if (postIndex < 0 || postIndex >= posts.length) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return PostCard(
-                      post: posts[postIndex],
-                      currentUserId: currentUserId ?? '',
-                    );
-                  },
-                ),
-              ],
-            );
-          },
-          loading: () => _buildShimmer(context),
-          error: (e, _) => AppErrorWidget(
-            message: e.toString(),
-            onRetry: () {
-              ref.read(postLocalStatesProvider.notifier).clearAll();
-              ref.invalidate(feedPostsProvider);
-            },
-          ),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -56,6 +56,9 @@ class _PostPublishPreviewScreenState
   void initState() {
     super.initState();
     _privacy = widget.initialPrivacy;
+    if (widget.editPost != null) {
+      _isAiLabelEnabled = widget.editPost!.isAiGenerated;
+    }
   }
 
   bool _isVideo(XFile file) {
@@ -169,6 +172,7 @@ class _PostPublishPreviewScreenState
               newMedia: widget.media,
               moderationScore: modResult.riskScore,
               moderationStatus: modStatus,
+              isAiGenerated: _isAiLabelEnabled,
             );
         ref.invalidate(feedPostsProvider);
       } else {
