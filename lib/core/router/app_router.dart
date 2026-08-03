@@ -564,30 +564,59 @@ class _IosTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final mq = MediaQuery.of(context);
+    final bottomInset = mq.padding.bottom;
+    final screenWidth = mq.size.width;
+
+    // ── Responsive scale ─────────────────────────────────────────────
+    // Reference thiết kế: 390px (iPhone 14 Pro).
+    // clamp: 0.72 (iPhone SE ~320px) → 1.5 (desktop/tablet wide)
+    final scale = (screenWidth / 390.0).clamp(0.72, 1.5);
+
+    // Padding ngang (thu nhỏ ở compact để tabbar đủ chỗ)
+    final hPadExpanded = (28.0 * scale).clamp(12.0, 60.0);
+    final hPadCompact  = (54.0 * scale).clamp(24.0, 90.0);
+
+    // Chiều cao tabbar
+    final barHeightExpanded = (58.0 * scale).clamp(48.0, 76.0);
+    final barHeightCompact  = (43.0 * scale).clamp(36.0, 58.0);
+
+    // Bo góc ngoài
+    final outerRadiusExpanded = (28.0 * scale).clamp(18.0, 40.0);
+    final outerRadiusCompact  = (20.0 * scale).clamp(14.0, 30.0);
+
+    // Nút + ở giữa
+    final fabSizeExpanded     = (36.0 * scale).clamp(28.0, 52.0);
+    final fabSizeCompact      = (28.0 * scale).clamp(22.0, 40.0);
+    final fabRadiusExpanded   = (11.0 * scale).clamp(7.0,  16.0);
+    final fabRadiusCompact    = (8.0  * scale).clamp(5.0,  12.0);
+    final fabIconSizeExpanded = (20.0 * scale).clamp(15.0, 28.0);
+    final fabIconSizeCompact  = (15.0 * scale).clamp(12.0, 22.0);
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeInOutCubic,
       padding: EdgeInsets.only(
-        left: isCompact ? 54 : 28,
-        right: isCompact ? 54 : 28,
+        left:   isCompact ? hPadCompact  : hPadExpanded,
+        right:  isCompact ? hPadCompact  : hPadExpanded,
         bottom: isCompact ? 10 : (bottomInset > 0 ? bottomInset : 14),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(isCompact ? 20 : 28),
+        borderRadius: BorderRadius.circular(
+            isCompact ? outerRadiusCompact : outerRadiusExpanded),
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 280),
             curve: Curves.easeInOutCubic,
-            height: isCompact ? 43 : 58,
+            height: isCompact ? barHeightCompact : barHeightExpanded,
             padding: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
               color: isDark
                   ? const Color(0xFF0F1012).withValues(alpha: 0.18)
                   : Colors.white.withValues(alpha: 0.28),
-              borderRadius: BorderRadius.circular(isCompact ? 20 : 28),
+              borderRadius: BorderRadius.circular(
+                  isCompact ? outerRadiusCompact : outerRadiusExpanded),
               border: Border.all(
                 color: isDark
                     ? Colors.white.withValues(alpha: 0.18)
@@ -606,13 +635,21 @@ class _IosTabBar extends StatelessWidget {
               builder: (context, constraints) {
                 final totalWidth = constraints.maxWidth;
                 final slotWidth = totalWidth / 5;
-                // Kích thước nền elip dài hơn & bo góc cùng phong cách với TabBar
-                final pillWidth = isCompact ? 70.0 : 78.0;
-                final pillHeight = isCompact ? 32.0 : 42.0;
-                final pillRadius = isCompact ? 16.0 : 22.0;
 
-                final indicatorLeft = (slotWidth * visualIndex) + (slotWidth - pillWidth) / 2;
-                final indicatorTop = (constraints.maxHeight - pillHeight) / 2;
+                // Pill indicator — co giãn theo slot, không vượt quá slot
+                final pillWidth = (slotWidth * (isCompact ? 0.85 : 0.90))
+                    .clamp(40.0, slotWidth);
+                final pillHeight = isCompact
+                    ? (barHeightCompact  * 0.72).clamp(22.0, 38.0)
+                    : (barHeightExpanded * 0.70).clamp(28.0, 48.0);
+                final pillRadius = isCompact
+                    ? (outerRadiusCompact  * 0.80).clamp(10.0, 24.0)
+                    : (outerRadiusExpanded * 0.78).clamp(14.0, 30.0);
+
+                final indicatorLeft =
+                    (slotWidth * visualIndex) + (slotWidth - pillWidth) / 2;
+                final indicatorTop =
+                    (constraints.maxHeight - pillHeight) / 2;
 
                 return Stack(
                   alignment: Alignment.centerLeft,
@@ -630,7 +667,8 @@ class _IosTabBar extends StatelessWidget {
                           duration: const Duration(milliseconds: 280),
                           curve: Curves.easeInOutCubic,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withValues(alpha: 0.16),
+                            color: theme.colorScheme.primary
+                                .withValues(alpha: 0.16),
                             borderRadius: BorderRadius.circular(pillRadius),
                           ),
                         ),
@@ -643,6 +681,7 @@ class _IosTabBar extends StatelessWidget {
                           visualIdx: 0,
                           currentVisualIdx: visualIndex,
                           isCompact: isCompact,
+                          scale: scale,
                           faIcon: FontAwesomeIcons.house,
                           faActiveIcon: FontAwesomeIcons.house,
                           icon: CupertinoIcons.house,
@@ -654,6 +693,7 @@ class _IosTabBar extends StatelessWidget {
                           visualIdx: 1,
                           currentVisualIdx: visualIndex,
                           isCompact: isCompact,
+                          scale: scale,
                           icon: CupertinoIcons.bubble_left,
                           activeIcon: CupertinoIcons.bubble_left_fill,
                           label: 'Tin nhắn',
@@ -669,8 +709,8 @@ class _IosTabBar extends StatelessWidget {
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 280),
                                 curve: Curves.easeInOutCubic,
-                                width: isCompact ? 28 : 36,
-                                height: isCompact ? 28 : 36,
+                                width:  isCompact ? fabSizeCompact  : fabSizeExpanded,
+                                height: isCompact ? fabSizeCompact  : fabSizeExpanded,
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
@@ -680,7 +720,10 @@ class _IosTabBar extends StatelessWidget {
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
-                                  borderRadius: BorderRadius.circular(isCompact ? 8 : 11),
+                                  borderRadius: BorderRadius.circular(
+                                      isCompact
+                                          ? fabRadiusCompact
+                                          : fabRadiusExpanded),
                                   boxShadow: [
                                     BoxShadow(
                                       color: theme.colorScheme.primary
@@ -693,7 +736,9 @@ class _IosTabBar extends StatelessWidget {
                                 child: Icon(
                                   CupertinoIcons.plus,
                                   color: Colors.white,
-                                  size: isCompact ? 15 : 20,
+                                  size: isCompact
+                                      ? fabIconSizeCompact
+                                      : fabIconSizeExpanded,
                                 ),
                               ),
                             ),
@@ -703,16 +748,19 @@ class _IosTabBar extends StatelessWidget {
                           visualIdx: 3,
                           currentVisualIdx: visualIndex,
                           isCompact: isCompact,
+                          scale: scale,
                           icon: CupertinoIcons.bell,
                           activeIcon: CupertinoIcons.bell_fill,
                           label: 'Thông báo',
-                          badge: unreadNotifCount > 0 ? '$unreadNotifCount' : null,
+                          badge:
+                              unreadNotifCount > 0 ? '$unreadNotifCount' : null,
                           onTap: onTap,
                         ),
                         _TabItem(
                           visualIdx: 4,
                           currentVisualIdx: visualIndex,
                           isCompact: isCompact,
+                          scale: scale,
                           icon: CupertinoIcons.person,
                           activeIcon: CupertinoIcons.person_fill,
                           label: 'Cài đặt',
@@ -735,6 +783,7 @@ class _TabItem extends StatelessWidget {
   final int visualIdx;
   final int currentVisualIdx;
   final bool isCompact;
+  final double scale;
   final dynamic faIcon;
   final dynamic faActiveIcon;
   final IconData icon;
@@ -747,6 +796,7 @@ class _TabItem extends StatelessWidget {
     required this.visualIdx,
     required this.currentVisualIdx,
     required this.isCompact,
+    required this.scale,
     required this.icon,
     required this.activeIcon,
     required this.label,
@@ -760,7 +810,10 @@ class _TabItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isActive = visualIdx == currentVisualIdx;
     final color = isActive ? AppColors.primary : AppColors.textHint;
-    final iconSize = isCompact ? 16.0 : 21.0;
+    // Icon size co giãn theo scale, clamp để không quá nhỏ / quá lớn
+    final iconSize = isCompact
+        ? (16.0 * scale).clamp(13.0, 22.0)
+        : (21.0 * scale).clamp(17.0, 28.0);
 
     Widget iconWidget;
     if (faIcon != null && faActiveIcon != null) {
