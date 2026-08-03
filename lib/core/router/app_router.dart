@@ -570,8 +570,8 @@ class _IosTabBar extends StatelessWidget {
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeInOutCubic,
       padding: EdgeInsets.only(
-        left: isCompact ? 64 : 36,
-        right: isCompact ? 64 : 36,
+        left: isCompact ? 54 : 28,
+        right: isCompact ? 54 : 28,
         bottom: isCompact ? 10 : (bottomInset > 0 ? bottomInset : 14),
       ),
       child: ClipRRect(
@@ -581,7 +581,7 @@ class _IosTabBar extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 280),
             curve: Curves.easeInOutCubic,
-            height: isCompact ? 38 : 52,
+            height: isCompact ? 43 : 58,
             padding: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
               color: isDark
@@ -607,8 +607,8 @@ class _IosTabBar extends StatelessWidget {
                 final totalWidth = constraints.maxWidth;
                 final slotWidth = totalWidth / 5;
                 // Kích thước nền elip dài hơn & bo góc cùng phong cách với TabBar
-                final pillWidth = isCompact ? 74.0 : 80.0;
-                final pillHeight = isCompact ? 30.0 : 40.0;
+                final pillWidth = isCompact ? 70.0 : 78.0;
+                final pillHeight = isCompact ? 32.0 : 42.0;
                 final pillRadius = isCompact ? 16.0 : 22.0;
 
                 final indicatorLeft = (slotWidth * visualIndex) + (slotWidth - pillWidth) / 2;
