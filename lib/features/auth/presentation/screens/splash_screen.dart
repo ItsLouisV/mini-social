@@ -143,14 +143,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(55),
                           child: Image.asset(
-                            'assets/images/logo.png',
+                            'assets/images/logo-viora.jpg',
                             fit: BoxFit.cover,
                           ),
                         ),
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        'MiniSocial',
+                        'Viora',
                         style: AppTextStyles.displayLarge.copyWith(
                           fontSize: 36,
                           fontWeight: FontWeight.w900,
@@ -160,7 +160,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Kết nối & Chia sẻ khoảnh khắc',
+                        'Connect - Share - Inspire',
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
                           fontWeight: FontWeight.w500,

@@ -806,7 +806,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             padding: const EdgeInsets.all(3),
                             child: ClipOval(
                               child: Image.asset(
-                                'assets/images/logo.png',
+                                'assets/images/logo-viora.jpg',
                                 fit: BoxFit.cover,
                               ),
                             ),

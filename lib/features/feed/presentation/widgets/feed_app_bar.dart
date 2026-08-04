@@ -43,13 +43,13 @@ class FeedAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Image.asset(
-                'assets/images/logo.png',
+                'assets/images/logo-viora.jpg',
                 fit: BoxFit.cover,
               ),
             ),
           ),
           const SizedBox(width: 10),
-          const Text('MiniSocial', style: AppTextStyles.headlineMedium),
+          const Text('Viora', style: AppTextStyles.headlineMedium),
         ],
       ),
       actions: [

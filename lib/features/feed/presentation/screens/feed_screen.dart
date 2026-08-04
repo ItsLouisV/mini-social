@@ -85,7 +85,7 @@ class FeedScreen extends ConsumerWidget {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: Image.asset(
-                              'assets/images/logo.png',
+                              'assets/images/logo-viora.jpg',
                               fit: BoxFit.cover,
                             ),
                           ),
@@ -369,7 +369,7 @@ class _FeedRefreshHeaderState extends State<_FeedRefreshHeader>
             child: ClipRRect(
               borderRadius: BorderRadius.circular(13),
               child: Image.asset(
-                'assets/images/logo.png',
+                'assets/images/logo-viora.jpg',
                 fit: BoxFit.cover,
               ),
             ),
