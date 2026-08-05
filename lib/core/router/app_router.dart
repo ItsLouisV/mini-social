@@ -593,44 +593,45 @@ class _IosTabBar extends StatelessWidget {
     final fabIconSizeExpanded = (20.0 * scale).clamp(15.0, 28.0);
     final fabIconSizeCompact  = (15.0 * scale).clamp(12.0, 22.0);
 
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeInOutCubic,
+    return Padding(
       padding: EdgeInsets.only(
-        left:   isCompact ? hPadCompact  : hPadExpanded,
-        right:  isCompact ? hPadCompact  : hPadExpanded,
-        bottom: isCompact ? 10 : (bottomInset > 0 ? bottomInset : 14),
+        left: hPadExpanded,
+        right: hPadExpanded,
+        bottom: bottomInset > 0 ? bottomInset : 14,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(
-            isCompact ? outerRadiusCompact : outerRadiusExpanded),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeInOutCubic,
-            height: isCompact ? barHeightCompact : barHeightExpanded,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF0F1012).withValues(alpha: 0.18)
-                  : Colors.white.withValues(alpha: 0.28),
-              borderRadius: BorderRadius.circular(
-                  isCompact ? outerRadiusCompact : outerRadiusExpanded),
-              border: Border.all(
+      child: AnimatedScale(
+        scale: isCompact ? 0.85 : 1.0,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeInOutCubic,
+        alignment: Alignment.center,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(outerRadiusExpanded),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeInOutCubic,
+              height: barHeightExpanded,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.18)
-                    : Colors.black.withValues(alpha: 0.08),
-                width: 1.0,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
+                    ? const Color(0xFF0A0B0E).withValues(alpha: 0.08)
+                    : Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(outerRadiusExpanded),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : Colors.white.withValues(alpha: 0.35),
+                  width: 0.8,
                 ),
-              ],
-            ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.06),
+                    blurRadius: 24,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final totalWidth = constraints.maxWidth;
@@ -775,8 +776,9 @@ class _IosTabBar extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _TabItem extends StatelessWidget {

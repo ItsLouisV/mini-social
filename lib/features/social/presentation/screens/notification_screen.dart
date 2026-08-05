@@ -8,6 +8,7 @@ import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../social/providers/follow_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../../shared/widgets/skeletons/tile_skeleton_loading.dart';
 
 class NotificationScreen extends ConsumerWidget {
   const NotificationScreen({super.key});
@@ -16,7 +17,6 @@ class NotificationScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationsAsync = ref.watch(notificationsProvider);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -68,8 +68,8 @@ class NotificationScreen extends ConsumerWidget {
                 ),
               );
             },
-            loading: () => SliverFillRemaining(
-              child: _buildShimmer(context, isDark),
+            loading: () => const SliverFillRemaining(
+              child: TileSkeletonLoading(hasSearchBar: false, itemCount: 8),
             ),
             error: (e, _) => SliverFillRemaining(
               child: AppErrorWidget(
@@ -79,57 +79,6 @@ class NotificationScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildShimmer(BuildContext context, bool isDark) {
-    final baseColor = isDark ? const Color(0xFF262635) : const Color(0xFFEBEBF0);
-    
-    return ListView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: 8,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemBuilder: (_, __) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: baseColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    height: 14,
-                    decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(4)),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 150,
-                    height: 14,
-                    decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(4)),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 60,
-                    height: 12,
-                    decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(4)),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

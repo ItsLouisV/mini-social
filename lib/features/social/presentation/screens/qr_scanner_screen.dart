@@ -8,6 +8,7 @@ import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../utils/qr_image_decoder.dart';
 import '../widgets/qr_profile_bottom_sheet.dart';
@@ -118,28 +119,7 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
 
   void _showToast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(CupertinoIcons.exclamationmark_triangle_fill, color: Colors.white, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.orange.shade800,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    ToastService.showWarning(context, message);
   }
 
   Future<void> _pickImageFromGallery() async {

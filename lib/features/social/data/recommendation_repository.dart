@@ -142,7 +142,8 @@ class RecommendationRepository {
             }
           }
 
-          return [...friendAndFollowerPostsEdge, ...ownPostsEdge];
+          final mergedList = [...friendAndFollowerPostsEdge, ...ownPostsEdge];
+          return _applyAuthorDiversityInterleaver(mergedList, userId);
         }
       }
     } catch (e) {
@@ -232,7 +233,8 @@ class RecommendationRepository {
         }
       }
 
-      return [...friendAndFollowerPosts, ...ownPosts];
+      final mergedList = [...friendAndFollowerPosts, ...ownPosts];
+      return _applyAuthorDiversityInterleaver(mergedList, userId);
     } catch (e) {
       debugPrint('RPC recommendation error: $e');
       return [];
@@ -329,9 +331,44 @@ class RecommendationRepository {
       } catch (_) {}
     }
   }
+
+  /// Thuật toán Author Diversity Interleaver (Bộ lọc đa dạng tác giả)
+  /// Ngăn không cho xuất hiện quá 2 bài viết liên tiếp của cùng 1 người trên Feed
+  List<PostModel> _applyAuthorDiversityInterleaver(List<PostModel> posts, String currentUserId) {
+    if (posts.length <= 2) return posts;
+
+    final result = <PostModel>[];
+    final remaining = List<PostModel>.from(posts);
+
+    while (remaining.isNotEmpty) {
+      int candidateIndex = -1;
+
+      for (int i = 0; i < remaining.length; i++) {
+        final candidate = remaining[i];
+        if (result.length >= 2) {
+          final last1 = result[result.length - 1].userId;
+          final last2 = result[result.length - 2].userId;
+          if (candidate.userId == last1 && candidate.userId == last2) {
+            continue; // Bỏ qua bài viết nếu 2 bài liền trước đã thuộc về cùng 1 tác giả
+          }
+        }
+        candidateIndex = i;
+        break;
+      }
+
+      if (candidateIndex == -1) {
+        candidateIndex = 0; // Fallback lấy bài kế tiếp nếu không còn lựa chọn
+      }
+
+      result.add(remaining.removeAt(candidateIndex));
+    }
+
+    return result;
+  }
 }
 
 final recommendationRepositoryProvider = Provider<RecommendationRepository>((ref) {
   final supabaseService = ref.watch(supabaseServiceProvider);
   return RecommendationRepository(supabaseService);
 });
+

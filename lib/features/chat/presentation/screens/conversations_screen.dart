@@ -17,6 +17,8 @@ import '../widgets/new_message_modal.dart';
 import '../widgets/passcode_dialog.dart';
 import '../../../../core/services/connectivity_service.dart';
 
+import '../../../../shared/widgets/skeletons/tile_skeleton_loading.dart';
+
 class ConversationsScreen extends ConsumerStatefulWidget {
   const ConversationsScreen({super.key});
 
@@ -231,7 +233,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
           );
         },
         loading: () =>
-            const Center(child: CupertinoActivityIndicator()),
+            const TileSkeletonLoading(hasSearchBar: true, itemCount: 8),
         error: (e, _) => AppErrorWidget(
           message: e.toString(),
           onRetry: () => ref.invalidate(conversationsProvider),

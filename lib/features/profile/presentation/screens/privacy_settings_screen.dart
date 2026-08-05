@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/services/logger_service.dart';
 import '../../../../shared/widgets/app_avatar.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../domain/profile_model.dart';
 import '../../providers/profile_provider.dart';
@@ -154,12 +155,7 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
     } catch (e) {
       CoreLogger.error('Failed to toggle private profile: $e', tag: 'PrivacySettings');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        ToastService.showError(context, 'Lỗi: ${e.toString()}');
       }
     } finally {
       if (mounted) setState(() => _updatingPrivate = false);
@@ -248,21 +244,11 @@ class _BlockedUsersPage extends ConsumerWidget {
       ref.invalidate(blockedUsersProvider);
       ref.invalidate(chatBlockedUserIdsProvider);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đã bỏ chặn tin nhắn từ ${user.displayName}'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ToastService.showSuccess(context, 'Đã bỏ chặn tin nhắn từ ${user.displayName}');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi bỏ chặn: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        ToastService.showError(context, 'Lỗi bỏ chặn: $e');
       }
     }
   }
@@ -332,21 +318,11 @@ class _MutedUsersPage extends ConsumerWidget {
       await ref.read(profileRepositoryProvider).unmuteUser(user.id);
       ref.invalidate(mutedUsersProvider);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đã bỏ ẩn bài của ${user.displayName}'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ToastService.showSuccess(context, 'Đã bỏ ẩn bài của ${user.displayName}');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi bỏ ẩn: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        ToastService.showError(context, 'Lỗi bỏ ẩn: $e');
       }
     }
   }

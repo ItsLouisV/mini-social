@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/social/data/ai_repository.dart';
 import '../../core/constants/app_text_styles.dart';
+import 'app_toast.dart';
 
 class ReportOption {
   final String label;
@@ -547,11 +548,9 @@ class _ReportBottomSheetState extends ConsumerState<ReportBottomSheet> {
       if (success) {
         if (mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cảm ơn bạn đã báo cáo. Chúng tôi sẽ xem xét nội dung này sớm nhất.'),
-              backgroundColor: Colors.green,
-            ),
+          ToastService.showSuccess(
+            context,
+            'Cảm ơn bạn đã báo cáo. Chúng tôi sẽ xem xét nội dung này sớm nhất.',
           );
         }
       } else {
@@ -559,11 +558,9 @@ class _ReportBottomSheetState extends ConsumerState<ReportBottomSheet> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        ToastService.showError(
+          context,
+          'Lỗi: ${e.toString()}',
         );
       }
     } finally {

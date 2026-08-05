@@ -10,6 +10,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../shared/widgets/app_avatar.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/domain/profile_model.dart';
@@ -50,28 +51,11 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
         }
 
         if (mounted) {
-          messenger.hideCurrentSnackBar();
-          messenger.showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(CupertinoIcons.checkmark_circle_fill, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      shareSuccess
-                          ? 'Đã xuất ảnh mã QR thành công!'
-                          : 'Đã tạo ảnh QR & sao chép liên kết vào bộ nhớ tạm!',
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.blue.shade700,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              margin: const EdgeInsets.all(16),
-              duration: const Duration(seconds: 3),
-            ),
+          ToastService.showSuccess(
+            context,
+            shareSuccess
+                ? 'Đã xuất ảnh mã QR thành công!'
+                : 'Đã tạo ảnh QR & sao chép liên kết vào bộ nhớ tạm!',
           );
         }
       }

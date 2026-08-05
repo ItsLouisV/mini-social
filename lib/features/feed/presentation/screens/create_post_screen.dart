@@ -16,6 +16,7 @@ import '../../../../core/localization/app_translations.dart';
 import '../../../../core/utils/image_utils.dart';
 import '../../../../core/utils/image_compressor.dart';
 import '../../../../shared/widgets/app_avatar.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
 import '../../../social/providers/follow_list_provider.dart';
@@ -74,9 +75,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   void _showMaxMediaSnackBar() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Tối đa 6 ảnh/video')),
-    );
+    ToastService.showWarning(context, 'Tối đa 6 ảnh/video');
   }
 
   Future<void> _pickMedia() async {
@@ -141,9 +140,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         _media.isEmpty &&
         _selectedMusic == null &&
         _selectedFeeling == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Hãy viết gì đó hoặc thêm nội dung bài viết')),
-      );
+      ToastService.showWarning(context, 'Hãy viết gì đó hoặc thêm nội dung bài viết');
       return;
     }
 
@@ -198,29 +195,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       debugPrint('Error generating AI caption: $e');
       if (mounted) {
         final errorMsg = e.toString().replaceAll('Exception: ', '').replaceAll('PostgrestException: ', '');
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(CupertinoIcons.exclamationmark_shield_fill, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    errorMsg.contains('nhạy cảm') || errorMsg.contains('18+')
-                        ? errorMsg
-                        : 'Không thể tạo caption AI: $errorMsg',
-                    style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 4),
-          ),
+        ToastService.showError(
+          context,
+          errorMsg.contains('nhạy cảm') || errorMsg.contains('18+')
+              ? errorMsg
+              : 'Không thể tạo caption AI: $errorMsg',
         );
       }
     } finally {

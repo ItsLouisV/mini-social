@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/localization/app_translations.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
@@ -177,9 +178,7 @@ class PostActions extends ConsumerWidget {
                         interactionType: 'share',
                       );
                     }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Đã sao chép liên kết chia sẻ bài viết!')),
-                    );
+                    ToastService.showInfo(context, 'Đã sao chép liên kết chia sẻ bài viết!');
                   },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),

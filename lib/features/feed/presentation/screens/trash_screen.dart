@@ -8,6 +8,7 @@ import '../../../../core/localization/app_translations.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
@@ -227,15 +228,11 @@ class TrashScreen extends ConsumerWidget {
                     ref.invalidate(trashedPostsProvider);
                     ref.invalidate(feedPostsProvider);
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('OK')),
-                      );
+                      ToastService.showSuccess(context, 'Đã khôi phục bài viết!');
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e')),
-                      );
+                      ToastService.showError(context, 'Lỗi khôi phục: $e');
                     }
                   }
                 },
@@ -281,15 +278,11 @@ class TrashScreen extends ConsumerWidget {
                 ref.invalidate(trashedPostsProvider);
                 ref.invalidate(feedPostsProvider);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Đã xóa vĩnh viễn bài viết.')),
-                  );
+                  ToastService.showSuccess(context, 'Đã xóa vĩnh viễn bài viết.');
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Lỗi xóa vĩnh viễn: $e')),
-                  );
+                  ToastService.showError(context, 'Lỗi xóa vĩnh viễn: $e');
                 }
               }
             },

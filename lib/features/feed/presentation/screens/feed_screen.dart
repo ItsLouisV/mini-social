@@ -3,7 +3,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shimmer/shimmer.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/notifications.dart';
@@ -16,7 +15,10 @@ import '../../providers/feed_provider.dart';
 import '../widgets/people_you_may_know_carousel.dart';
 import '../widgets/post_card.dart';
 
+import '../../../../shared/widgets/skeletons/feed_skeleton_loading.dart';
+
 class FeedScreen extends ConsumerWidget {
+
   const FeedScreen({super.key});
 
   @override
@@ -182,7 +184,7 @@ class FeedScreen extends ConsumerWidget {
                     ],
                   );
                 },
-                loading: () => _buildShimmer(context),
+                loading: () => const FeedSkeletonLoading(),
                 error: (e, _) => AppErrorWidget(
                   message: e.toString(),
                   onRetry: () {
@@ -198,23 +200,6 @@ class FeedScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildShimmer(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      highlightColor: Theme.of(context).colorScheme.surface,
-      child: ListView.builder(
-        itemCount: 4,
-        itemBuilder: (_, __) => Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          height: 320,
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      ),
-    );
-  }
   Widget _buildCreatePostHeaderBar(BuildContext context, WidgetRef ref) {
     final currentUserId = ref.watch(currentUserIdProvider);
     final profileAsync = ref.watch(profileProvider(currentUserId ?? ''));

@@ -145,7 +145,7 @@ class _PostPublishPreviewScreenState
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Bài viết bị từ chối (Điểm vi phạm AI: ${modResult.riskScore}/100).\n${modResult.reason.isNotEmpty ? modResult.reason : "Chứa nội dung nhạy cảm / 18+ không phù hợp tiêu chuẩn."}',
+                      'Bài viết bị từ chối (Điểm vi phạm: ${modResult.riskScore}/100).\n${modResult.reason.isNotEmpty ? modResult.reason : "Chứa nội dung nhạy cảm / 18+ không phù hợp tiêu chuẩn."}',
                       style: const TextStyle(fontSize: 13),
                     ),
                   ),

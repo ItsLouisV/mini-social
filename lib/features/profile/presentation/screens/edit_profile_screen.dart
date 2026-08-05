@@ -13,6 +13,7 @@ import '../../../../core/utils/image_utils.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/app_text_field.dart';
+import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../providers/profile_provider.dart';
 
@@ -547,22 +548,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(profileProvider(userId));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Hồ sơ đã được cập nhật!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ToastService.showSuccess(context, 'Hồ sơ đã được cập nhật!');
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        ToastService.showError(context, 'Lỗi: ${e.toString()}');
         debugPrint('Edit profile error: $e');
       }
     } finally {
