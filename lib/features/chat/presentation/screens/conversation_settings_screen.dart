@@ -1008,7 +1008,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              if (m.isAdmin)
+                              if (m.isOwner)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
@@ -1083,8 +1083,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
             CupertinoActionSheetAction(
               onPressed: () async {
                 Navigator.pop(ctx);
-                await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, 'co_admin');
+                await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, 'admin');
                 ref.invalidate(groupMembersProvider(conv.id));
+                ref.invalidate(conversationsProvider);
                 if (context.mounted) {
                   ToastService.showSuccess(context, 'Đã thăng cấp làm Phó nhóm');
                 }
@@ -1097,6 +1098,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                 Navigator.pop(ctx);
                 await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, 'member');
                 ref.invalidate(groupMembersProvider(conv.id));
+                ref.invalidate(conversationsProvider);
                 if (context.mounted) {
                   ToastService.showInfo(context, 'Đã gỡ quyền Phó nhóm');
                 }
@@ -1370,8 +1372,8 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
             // ── 3. Horizontal Selected Chips ────────────────────────────────
             if (_selectedFriends.isNotEmpty) ...[
               Container(
-                height: 72,
-                padding: const EdgeInsets.symmetric(vertical: 6),
+                height: 80,
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1383,6 +1385,7 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                       child: Stack(
                         children: [
                           Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               AppAvatar(
                                 imageUrl: friend.avatarUrl,

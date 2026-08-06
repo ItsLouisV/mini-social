@@ -6,10 +6,12 @@ import 'package:go_router/go_router.dart';
 
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../../core/localization/app_translations.dart';
+import '../../../../core/constants/app_svg_icons.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../profile/providers/profile_provider.dart';
 import '../../domain/conversation_model.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
@@ -64,10 +66,10 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
         ),
         actions: [
           PopupMenuButton<String>(
-            icon: Icon(
-              CupertinoIcons.square_pencil,
-              color: theme.colorScheme.primary,
-              size: 22,
+            icon: AppSvgIcons.svg(
+              AppSvgIcons.plusSquare,
+              width: 24,
+              height: 24,
             ),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             offset: const Offset(0, 42),
@@ -339,6 +341,27 @@ class _ConversationTile extends ConsumerWidget {
     final isHidden = (currentUserId != null) && conv.isHidden(currentUserId!);
     final titleColor = theme.textTheme.titleMedium?.color;
     final hintColor = theme.hintColor;
+
+    final lastSenderProfile = (conv.isGroup &&
+            conv.lastMessageSenderId != null &&
+            conv.lastMessageSenderId != currentUserId)
+        ? ref.watch(profileProvider(conv.lastMessageSenderId!)).valueOrNull
+        : null;
+    final lastSenderName =
+        lastSenderProfile?.displayName ?? lastSenderProfile?.fullName;
+
+    String displayLastMessage;
+    if (conv.lastMessage != null) {
+      if (conv.lastMessageSenderId == currentUserId) {
+        displayLastMessage = 'Bạn: ${conv.lastMessage}';
+      } else if (conv.isGroup && lastSenderName != null) {
+        displayLastMessage = '$lastSenderName: ${conv.lastMessage}';
+      } else {
+        displayLastMessage = conv.lastMessage!;
+      }
+    } else {
+      displayLastMessage = 'Bắt đầu cuộc trò chuyện';
+    }
 
     return Slidable(
       key: ValueKey(conv.id),
@@ -633,11 +656,7 @@ class _ConversationTile extends ConsumerWidget {
                         )
                       else
                         Text(
-                          (conv.lastMessage != null)
-                              ? (conv.lastMessageSenderId == currentUserId
-                                  ? 'Bạn: ${conv.lastMessage}'
-                                  : conv.lastMessage!)
-                              : 'Bắt đầu cuộc trò chuyện',
+                          displayLastMessage,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

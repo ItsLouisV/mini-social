@@ -33,9 +33,9 @@ class ConversationMemberModel {
     this.profile,
   });
 
-  bool get isOwner => role == 'owner';
-  bool get isAdmin => role == 'admin' || role == 'owner';
-  bool get isCoAdmin => role == 'admin';
+  bool get isOwner => role == 'owner' || role == 'creator';
+  bool get isCoAdmin => role == 'admin' || role == 'co_admin';
+  bool get isAdmin => isOwner || isCoAdmin;
   bool get isMember => role == 'member';
 
   factory ConversationMemberModel.fromJson(Map<String, dynamic> json) {

@@ -16,6 +16,7 @@ import '../../../profile/providers/profile_provider.dart';
 import '../../../social/data/ai_repository.dart';
 import '../../domain/message_model.dart';
 import '../../providers/chat_provider.dart';
+import '../../../../shared/widgets/app_avatar.dart';
 import 'full_screen_image_viewer.dart';
 import 'message_context_menu_route.dart';
 import 'message_popup_menu_content.dart';
@@ -24,6 +25,8 @@ import 'voice_message_bubble.dart';
 class MessageBubble extends ConsumerStatefulWidget {
   final MessageModel message;
   final bool isMine;
+  final bool isGroup;
+  final bool showSenderInfo;
   final bool showInlineTime;
   final bool showSeen;
   final VoidCallback? onSwipeToReply;
@@ -40,6 +43,8 @@ class MessageBubble extends ConsumerStatefulWidget {
     super.key,
     required this.message,
     required this.isMine,
+    this.isGroup = false,
+    this.showSenderInfo = true,
     this.showInlineTime = false,
     this.showSeen = false,
     this.onSwipeToReply,
@@ -280,10 +285,10 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                     topLeft: const Radius.circular(18),
                     topRight: const Radius.circular(18),
                     bottomLeft: message.isImage
-                        ? const Radius.circular(12)
+                        ? const Radius.circular(10)
                         : Radius.zero,
                     bottomRight: message.isImage
-                        ? const Radius.circular(12)
+                        ? const Radius.circular(10)
                         : Radius.zero,
                   ),
                 ),
@@ -608,6 +613,45 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
     final message = widget.message;
     final isHighlighted = widget.isHighlighted;
 
+    final senderProfile = (!isMine && widget.isGroup && widget.showSenderInfo)
+        ? ref.watch(profileProvider(message.senderId)).valueOrNull
+        : null;
+    final senderName = senderProfile?.displayName ??
+        senderProfile?.fullName ??
+        widget.otherUserName;
+    final senderAvatarUrl = senderProfile?.avatarUrl;
+
+    final groupMembers = (!isMine && widget.isGroup)
+        ? ref.watch(groupMembersProvider(message.conversationId)).valueOrNull
+        : null;
+    final senderMember = groupMembers?.firstWhere(
+      (m) => m.userId == message.senderId,
+      orElse: () => ConversationMemberModel(
+        id: '',
+        conversationId: message.conversationId,
+        userId: message.senderId,
+      ),
+    );
+
+    final replyThemeColor = getChatThemePrimaryColor(themeName);
+    Color senderNameColor = replyThemeColor;
+    Widget? roleBadge;
+    if (senderMember != null) {
+      if (senderMember.isOwner) {
+        senderNameColor = const Color(0xFFFF9500);
+        roleBadge = const Padding(
+          padding: EdgeInsets.only(left: 4),
+          child: Text('👑', style: TextStyle(fontSize: 10)),
+        );
+      } else if (senderMember.isCoAdmin) {
+        senderNameColor = const Color(0xFF5856D6);
+        roleBadge = const Padding(
+          padding: EdgeInsets.only(left: 4),
+          child: Text('⭐', style: TextStyle(fontSize: 10)),
+        );
+      }
+    }
+
     final themeState = ref.watch(chatThemeColorProvider);
     final themeName = themeState[message.conversationId] ?? 'blue';
     final myBubbleColor = getChatThemeColor(themeName, isDark: isDark);
@@ -652,12 +696,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                   : (message.isImage && !hasCaption
                       ? Colors.transparent
                       : (isMine ? myBubbleColor : theirBubbleColor))),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(isMine ? 18 : 4),
-            bottomRight: Radius.circular(isMine ? 4 : 18),
-          ),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isHighlighted
                 ? theme.colorScheme.primary
@@ -666,16 +705,33 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
           ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(isMine ? 18 : 4),
-            bottomRight: Radius.circular(isMine ? 4 : 18),
-          ),
+          borderRadius: BorderRadius.circular(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (!isMine && widget.isGroup && widget.showSenderInfo)
+                Padding(
+                  padding: const EdgeInsets.only(left: 14, right: 14, top: 8, bottom: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          senderName,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: senderNameColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (roleBadge != null) roleBadge,
+                    ],
+                  ),
+                ),
               if (message.replyToMessage != null)
                 Container(
                   decoration: BoxDecoration(
@@ -979,8 +1035,19 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
             child: Row(
               mainAxisAlignment:
                   isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (!isMine && widget.isGroup) ...[
+                  if (widget.showSenderInfo)
+                    AppAvatar(
+                      imageUrl: senderAvatarUrl,
+                      name: senderName,
+                      radius: 14,
+                    )
+                  else
+                    const SizedBox(width: 28),
+                  const SizedBox(width: 6),
+                ],
                 if (message.isVanish && isMine) ...[
                   _VanishTimerIndicator(
                     message: message,
