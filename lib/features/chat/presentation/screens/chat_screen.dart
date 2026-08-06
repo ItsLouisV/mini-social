@@ -1062,18 +1062,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     });
 
-    // Lấy thông tin người kia
+    // Lấy thông tin cuộc trò chuyện
     final convAsync = ref.watch(conversationsProvider);
-    final otherUser = convAsync.whenData((convs) {
+    final conversation = convAsync.whenData((convs) {
       try {
-        return convs
-            .firstWhere((c) => c.id == widget.conversationId)
-            .otherUser;
+        return convs.firstWhere((c) => c.id == widget.conversationId);
       } catch (_) {
         return null;
       }
     }).valueOrNull;
-    final otherUserName = otherUser?.displayName ?? 'Chat';
+
+    final isGroup = conversation?.isGroup ?? false;
+    final otherUser = conversation?.otherUser;
+
+    final titleName = isGroup
+        ? (conversation?.name?.isNotEmpty == true ? conversation!.name! : 'Nhóm trò chuyện')
+        : (otherUser?.displayName ?? 'Chat');
+
+    final displayAvatarUrl = isGroup
+        ? conversation?.avatarUrl
+        : otherUser?.avatarUrl;
+
+    final otherUserName = titleName;
+
     // Dùng chat_blocks (bảng riêng, độc lập với blocks của profile/feed)
     final isBlocked = ref.watch(isChatBlockedProvider(otherUser?.id ?? ''));
     final isBlockedBy = ref.watch(isChatBlockedByProvider(otherUser?.id ?? '')).valueOrNull ?? false;
@@ -1142,7 +1153,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             Flexible(
               child: GestureDetector(
                 onTap: () {
-                  if (otherUser != null) {
+                  if (isGroup) {
+                    context.push('/chat/${widget.conversationId}/settings');
+                  } else if (otherUser != null) {
                     context.push('/profile/${otherUser.id}');
                   }
                 },
@@ -1150,14 +1163,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     AppAvatar(
-                      imageUrl: otherUser?.avatarUrl,
-                      name: otherUser?.displayName,
+                      imageUrl: displayAvatarUrl,
+                      name: titleName,
                       radius: 18,
                     ),
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        otherUserName,
+                        titleName,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           fontSize: 16,
@@ -1698,7 +1711,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         msg.senderId == currentUserId ? 'Bạn' : otherUserName;
     final replyContent = msg.isText
         ? msg.content
-        : (msg.isImage ? 'Hình ảnh' : 'Cuộc gọi');
+        : (msg.isVoice ? 'Tin nhắn thoại' : (msg.isImage ? 'Hình ảnh' : 'Cuộc gọi'));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

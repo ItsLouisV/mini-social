@@ -10,14 +10,14 @@ enum ToastPosition { top, bottom, center }
 /// Loại thông báo Toast
 enum ToastType { success, error, warning, info, custom }
 
-/// Service quản lý Toast thông báo toàn ứng dụng sử dụng Flutter OverlayEntry
+/// Service quản lý Toast thông báo toàn ứng dụng sử dụng Flutter OverlayEntry với hiệu ứng Apple Dynamic Island
 class ToastService {
   ToastService._();
 
   static OverlayEntry? _currentEntry;
-  static Timer? _dismissTimer;
+  static GlobalKey<_ToastOverlayWidgetState>? _currentKey;
 
-  /// Hiển thị Toast với đầy đủ cấu hình tùy chỉnh
+  /// Hiển thị Toast với phong cách Apple Dynamic Island (Phóng to khi vào & Thu nhỏ khi ẩn)
   static void show(
     BuildContext context, {
     required String message,
@@ -27,19 +27,22 @@ class ToastService {
     Duration duration = const Duration(milliseconds: 2800),
     IconData? customIcon,
     Color? customColor,
-    double borderRadius = 20.0,
-    double blurSigma = 15.0,
+    double borderRadius = 24.0,
+    double blurSigma = 18.0,
     VoidCallback? onTap,
     bool enableSwipeToDismiss = true,
   }) {
-    // Ẩn Toast cũ nếu đang hiển thị
-    dismiss();
+    // Ẩn Toast cũ ngay lập tức nếu đang hiển thị
+    dismissImmediately();
 
     final overlayState = Overlay.of(context, rootOverlay: true);
+    final key = GlobalKey<_ToastOverlayWidgetState>();
+    _currentKey = key;
 
     late OverlayEntry entry;
     entry = OverlayEntry(
       builder: (ctx) => _ToastOverlayWidget(
+        key: key,
         message: message,
         title: title,
         type: type,
@@ -51,27 +54,35 @@ class ToastService {
         blurSigma: blurSigma,
         onTap: onTap,
         enableSwipeToDismiss: enableSwipeToDismiss,
-        onDismiss: () => dismiss(),
+        onRemoveEntry: () {
+          if (_currentEntry == entry) {
+            entry.remove();
+            _currentEntry = null;
+            _currentKey = null;
+          }
+        },
       ),
     );
 
     _currentEntry = entry;
     overlayState.insert(entry);
-
-    // Tự động tắt sau khoảng thời gian chỉ định
-    _dismissTimer = Timer(duration, () {
-      dismiss();
-    });
   }
 
-  /// Tắt Toast hiện tại ngay lập tức
+  /// Tắt Toast hiện tại với hiệu ứng thu nhỏ Apple
   static void dismiss() {
-    _dismissTimer?.cancel();
-    _dismissTimer = null;
+    if (_currentKey?.currentState != null) {
+      _currentKey!.currentState!.dismissWithAnimation();
+    } else {
+      dismissImmediately();
+    }
+  }
 
+  /// Xóa ngay lập tức không cần animation
+  static void dismissImmediately() {
     if (_currentEntry != null) {
       _currentEntry?.remove();
       _currentEntry = null;
+      _currentKey = null;
     }
   }
 
@@ -159,7 +170,7 @@ class ToastService {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stateful Widget điều khiển Animation Fade In / Out, Slide & Blur
+// Stateful Widget điều khiển Animation Apple Dynamic Island (Scale & Slide & Blur)
 // ─────────────────────────────────────────────────────────────────────────────
 class _ToastOverlayWidget extends StatefulWidget {
   final String message;
@@ -173,16 +184,17 @@ class _ToastOverlayWidget extends StatefulWidget {
   final double blurSigma;
   final VoidCallback? onTap;
   final bool enableSwipeToDismiss;
-  final VoidCallback onDismiss;
+  final VoidCallback onRemoveEntry;
 
   const _ToastOverlayWidget({
+    super.key,
     required this.message,
     required this.type,
     required this.position,
     required this.duration,
     required this.borderRadius,
     required this.blurSigma,
-    required this.onDismiss,
+    required this.onRemoveEntry,
     this.title,
     this.customIcon,
     this.customColor,
@@ -200,38 +212,40 @@ class _ToastOverlayWidgetState extends State<_ToastOverlayWidget>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _scaleAnimation;
+  Timer? _timer;
+  bool _isDismissing = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
-      reverseDuration: const Duration(milliseconds: 280),
+      duration: const Duration(milliseconds: 450),
+      reverseDuration: const Duration(milliseconds: 320),
     );
 
     _fadeAnimation = CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
+      curve: const Interval(0.0, 0.8, curve: Curves.easeOut),
+      reverseCurve: const Interval(0.2, 1.0, curve: Curves.easeIn),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.88, end: 1.0).animate(
+    // Hiệu ứng Apple Dynamic Island: Phóng từ viên nhộng rảnh đỉnh (0.2) từ top trượt ra banner (1.0)
+    _scaleAnimation = Tween<double>(begin: 0.2, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: Curves.easeOutBack,
-        reverseCurve: Curves.easeInCubic,
+        curve: Curves.easeOutBack, // Phóng to bung nảy kiểu iOS
+        reverseCurve: Curves.easeInBack, // Thu nhỏ thu gọn lại kiểu iOS
       ),
     );
 
-    // Xตั้ง vị trí xuất phát cho Slide animation
     Offset startOffset;
     switch (widget.position) {
       case ToastPosition.top:
-        startOffset = const Offset(0, -0.4);
+        startOffset = const Offset(0, -1.0);
         break;
       case ToastPosition.bottom:
-        startOffset = const Offset(0, 0.4);
+        startOffset = const Offset(0, 1.0);
         break;
       case ToastPosition.center:
         startOffset = const Offset(0, 0.1);
@@ -250,17 +264,30 @@ class _ToastOverlayWidgetState extends State<_ToastOverlayWidget>
     );
 
     _controller.forward();
+
+    // Tự động kích hoạt hiệu ứng thu nhỏ ẩn đi khi hết thời gian
+    _timer = Timer(widget.duration, () {
+      if (mounted) dismissWithAnimation();
+    });
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  void _handleDismiss() async {
-    await _controller.reverse();
-    widget.onDismiss();
+  Future<void> dismissWithAnimation() async {
+    if (_isDismissing) return;
+    _isDismissing = true;
+    _timer?.cancel();
+    try {
+      await _controller.reverse();
+    } catch (_) {}
+    if (mounted) {
+      widget.onRemoveEntry();
+    }
   }
 
   @override
@@ -298,12 +325,12 @@ class _ToastOverlayWidgetState extends State<_ToastOverlayWidget>
 
     // Màu nền glassmorphism theo Dark/Light Mode
     final bgColor = isDark
-        ? const Color(0xFF1E1E2A).withValues(alpha: 0.82)
-        : Colors.white.withValues(alpha: 0.88);
+        ? const Color(0xFF1C1C28).withValues(alpha: 0.86)
+        : Colors.white.withValues(alpha: 0.90);
 
     final borderColor = isDark
-        ? Colors.white.withValues(alpha: 0.14)
-        : Colors.black.withValues(alpha: 0.08);
+        ? Colors.white.withValues(alpha: 0.16)
+        : Colors.black.withValues(alpha: 0.10);
 
     final textColor = isDark ? Colors.white : Colors.black87;
     final subtitleColor = isDark ? const Color(0xFFA0A0AB) : const Color(0xFF6E6E73);
@@ -344,6 +371,9 @@ class _ToastOverlayWidgetState extends State<_ToastOverlayWidget>
             position: _slideAnimation,
             child: ScaleTransition(
               scale: _scaleAnimation,
+              alignment: widget.position == ToastPosition.bottom
+                  ? Alignment.bottomCenter
+                  : Alignment.topCenter,
               child: child,
             ),
           ),
@@ -352,7 +382,7 @@ class _ToastOverlayWidgetState extends State<_ToastOverlayWidget>
       child: GestureDetector(
         onTap: () {
           widget.onTap?.call();
-          _handleDismiss();
+          dismissWithAnimation();
         },
         child: Container(
           constraints: const BoxConstraints(maxWidth: 420),
@@ -360,9 +390,9 @@ class _ToastOverlayWidgetState extends State<_ToastOverlayWidget>
             borderRadius: BorderRadius.circular(widget.borderRadius),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.15),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
@@ -378,7 +408,7 @@ class _ToastOverlayWidgetState extends State<_ToastOverlayWidget>
                 decoration: BoxDecoration(
                   color: bgColor,
                   borderRadius: BorderRadius.circular(widget.borderRadius),
-                  border: Border.all(color: borderColor, width: 0.8),
+                  border: Border.all(color: borderColor, width: 0.9),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -438,7 +468,7 @@ class _ToastOverlayWidgetState extends State<_ToastOverlayWidget>
 
                     // Nút x / Đóng
                     GestureDetector(
-                      onTap: _handleDismiss,
+                      onTap: dismissWithAnimation,
                       child: Padding(
                         padding: const EdgeInsets.all(4.0),
                         child: Icon(
@@ -464,7 +494,7 @@ class _ToastOverlayWidgetState extends State<_ToastOverlayWidget>
         direction: widget.position == ToastPosition.bottom
             ? DismissDirection.down
             : DismissDirection.up,
-        onDismissed: (_) => widget.onDismiss(),
+        onDismissed: (_) => widget.onRemoveEntry(),
         child: content,
       );
     }

@@ -1,7 +1,7 @@
 -- Migration: 20260806010000_conversations_refactor.sql
 -- Description: Refactor conversations table, create conversation_members, migrate data and drop deprecated columns.
 
--- 1. Add new columns to public.conversations if not exist
+-- 1. Add new columns to public.conversations if not exist & drop NOT NULL on participant columns
 alter table public.conversations 
   add column if not exists type text default 'direct',
   add column if not exists name text,
@@ -9,6 +9,10 @@ alter table public.conversations
   add column if not exists created_by uuid references profiles(id) on delete set null,
   add column if not exists last_message_id uuid references messages(id) on delete set null,
   add column if not exists last_message_sender_id uuid references profiles(id) on delete set null;
+
+alter table public.conversations 
+  alter column participant_1 drop not null,
+  alter column participant_2 drop not null;
 
 -- 2. Migrate existing group data from old columns (is_group, group_name, group_avatar_url, group_admin_id)
 do $$ 
@@ -211,7 +215,8 @@ drop policy if exists "Users can view conversations" on public.conversations;
 create policy "Users can view conversations"
 on public.conversations for select
 using (
-  participant_1 = auth.uid()
+  created_by = auth.uid()
+  or participant_1 = auth.uid()
   or participant_2 = auth.uid()
   or public.is_conversation_member(id)
 );
@@ -225,7 +230,8 @@ drop policy if exists "Users can update conversations" on public.conversations;
 create policy "Users can update conversations"
 on public.conversations for update
 using (
-  participant_1 = auth.uid()
+  created_by = auth.uid()
+  or participant_1 = auth.uid()
   or participant_2 = auth.uid()
   or public.is_conversation_member(id)
 );
@@ -234,7 +240,8 @@ drop policy if exists "Users can delete conversations" on public.conversations;
 create policy "Users can delete conversations"
 on public.conversations for delete
 using (
-  participant_1 = auth.uid()
+  created_by = auth.uid()
+  or participant_1 = auth.uid()
   or participant_2 = auth.uid()
   or public.is_conversation_admin(id)
 );

@@ -141,9 +141,11 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
                           Text(
                             widget.replyingToMessage!.isText
                                 ? (widget.replyingToMessage!.content ?? '')
-                                : (widget.replyingToMessage!.isImage
-                                    ? '[Hình ảnh]'
-                                    : '[Cuộc gọi]'),
+                                : (widget.replyingToMessage!.isVoice
+                                    ? '[Tin nhắn thoại]'
+                                    : (widget.replyingToMessage!.isImage
+                                        ? '[Hình ảnh]'
+                                        : '[Cuộc gọi]')),
                             style: TextStyle(
                               fontSize: 12,
                               color: isDark ? Colors.white70 : Colors.black54,

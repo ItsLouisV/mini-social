@@ -52,7 +52,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     // Fetch shared media images from the conversation history
     final messagesAsync = ref.watch(realtimeMessagesProvider(widget.conversationId));
     final mediaMessages = messagesAsync.valueOrNull?.messages
-            .where((m) => m.isImage || m.mediaUrls.isNotEmpty)
+            .where((m) => m.isImage)
             .toList() ??
         [];
 
@@ -90,6 +90,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
           final chatTitle = isGroup ? (conv.groupName ?? 'Nhóm trò chuyện') : otherUserName;
           final otherUserUsername = otherUser?.username ?? '';
           final avatarUrl = isGroup ? conv.groupAvatarUrl : otherUser?.avatarUrl;
+
+          final membersAsync = ref.watch(groupMembersProvider(widget.conversationId));
+          final memberCount = membersAsync.valueOrNull?.length ?? (conv.members?.length ?? 0);
 
           final isPinned = conv.isPinned(currentUserId);
           final isMuted = muteState[widget.conversationId] ?? false;
@@ -190,7 +193,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                     const SizedBox(height: 4),
                     Text(
                       isGroup
-                          ? 'Nhóm trò chuyện • ${conv.memberIds?.length ?? 0} thành viên'
+                          ? 'Nhóm trò chuyện • $memberCount thành viên'
                           : (otherUserUsername.isNotEmpty ? '@$otherUserUsername' : 'Đang hoạt động'),
                       style: TextStyle(
                         fontSize: 13,
@@ -1237,7 +1240,10 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final friendsAsync = ref.watch(friendsListProvider(widget.currentUserId));
-    final existingMemberIds = Set<String>.from(widget.conv.memberIds ?? []);
+    final membersAsync = ref.watch(groupMembersProvider(widget.conv.id));
+    final existingMemberIds = membersAsync.valueOrNull?.map((m) => m.userId).toSet() ??
+        widget.conv.members?.map((m) => m.userId).toSet() ??
+        <String>{};
 
     final cardBgColor = isDark ? const Color(0xFF252536) : const Color(0xFFF4F6FB);
     final canAdd = _selectedFriends.isNotEmpty && !_isAdding;

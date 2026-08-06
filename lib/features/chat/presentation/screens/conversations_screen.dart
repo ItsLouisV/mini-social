@@ -621,7 +621,7 @@ class _ConversationTile extends ConsumerWidget {
                       if (isSearching)
                         Text(
                           conv.isGroup
-                              ? '${conv.memberIds?.length ?? 0} thành viên'
+                              ? '${conv.members?.length ?? 0} thành viên'
                               : (conv.otherUser?.username != null ? '@${conv.otherUser!.username}' : ''),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

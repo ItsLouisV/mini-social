@@ -7,6 +7,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/services/logger_service.dart';
+import '../../../../core/services/toast_service.dart';
 import '../../../../core/utils/validators.dart';
 import '../../providers/auth_provider.dart';
 
@@ -610,12 +611,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     setState(() => _isLoading = true);
     try {
       await ref.read(authRepositoryProvider).signIn(
-            email: _emailController.text.trim(),
+            emailOrUsername: _emailController.text.trim(),
             password: _passwordController.text,
           );
     } catch (e, stack) {
       CoreLogger.error('Lỗi đăng nhập: $e', stackTrace: stack, tag: 'Auth');
-      if (mounted) _showToast(_parseError(e.toString()), isError: true);
+      if (mounted) ToastService.showError(context, _parseError(e.toString()), title: 'Đăng nhập thất bại');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -627,7 +628,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       await ref.read(authRepositoryProvider).signInWithGoogle();
     } catch (e, stack) {
       CoreLogger.error('Google login error: $e', stackTrace: stack, tag: 'Auth');
-      if (mounted) _showToast('Đăng nhập bằng Google thất bại', isError: true);
+      if (mounted) ToastService.showError(context, 'Đăng nhập bằng Google thất bại');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -639,59 +640,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       await ref.read(authRepositoryProvider).signInWithApple();
     } catch (e, stack) {
       CoreLogger.error('Apple login error: $e', stackTrace: stack, tag: 'Auth');
-      if (mounted) _showToast('Đăng nhập bằng Apple thất bại', isError: true);
+      if (mounted) ToastService.showError(context, 'Đăng nhập bằng Apple thất bại');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showToast(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isError
-                  ? CupertinoIcons.exclamationmark_triangle_fill
-                  : CupertinoIcons.checkmark_alt_circle_fill,
-              color: Colors.white,
-              size: 18,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: isError ? const Color(0xFF1E1B2E) : const Color(0xFF10B981),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: isError
-                ? _Design.error.withValues(alpha: 0.5)
-                : const Color(0xFF10B981),
-            width: 1,
-          ),
-        ),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        elevation: 8,
-      ),
-    );
-  }
-
   String _parseError(String error) {
     if (error.contains('Invalid login credentials')) {
-      return 'Email hoặc mật khẩu không đúng!';
+      return 'Email/Username hoặc mật khẩu không đúng!';
     } else if (error.contains('Email not confirmed')) {
       return 'Email chưa được xác nhận. Vui lòng kiểm tra hộp thư!';
+    } else if (error.contains('Tên người dùng không tồn tại')) {
+      return 'Username không tồn tại!';
     }
     return 'Đăng nhập thất bại. Vui lòng thử lại sau!';
   }
@@ -884,11 +845,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                     // ── Form Fields ─────────────────────────────
                                     _ModernGlassInput(
                                       key: _emailKey,
-                                      label: 'Email',
-                                      hint: 'nhap@email.com',
-                                      icon: CupertinoIcons.mail_solid,
+                                      label: 'Email or Username',
+                                      hint: 'Email or Username...',
+                                      icon: CupertinoIcons.person_fill,
                                       controller: _emailController,
-                                      validator: Validators.email,
+                                      validator: Validators.emailOrUsername,
                                       keyboardType: TextInputType.emailAddress,
                                     ),
 

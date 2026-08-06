@@ -39,7 +39,7 @@ class _SharedMediaScreenState extends ConsumerState<SharedMediaScreen> with Sing
     final allMessages = messagesAsync.valueOrNull?.messages ?? [];
 
     final imageMessages = allMessages
-        .where((m) => m.isImage || m.mediaUrls.isNotEmpty)
+        .where((m) => m.isImage)
         .toList();
 
     // Currently the app doesn't have video upload, so this is empty by default

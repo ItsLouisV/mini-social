@@ -24,11 +24,57 @@ class AuthRepository {
   }
 
   Future<AuthResponse> signIn({
-    required String email,
+    required String emailOrUsername,
     required String password,
   }) async {
+    final input = emailOrUsername.trim();
+    String targetEmail = input;
+
+    // Nếu không chứa ký tự '@', coi đây là username và tra cứu email tương ứng
+    if (!input.contains('@')) {
+      try {
+        final res = await _client.rpc('get_email_by_username', params: {
+          'p_username': input,
+        });
+
+        if (res != null && (res as String).isNotEmpty) {
+          targetEmail = res;
+        } else {
+          // Fallback query trực tiếp bảng profiles
+          final profileData = await _client
+              .from('profiles')
+              .select('email')
+              .ilike('username', input)
+              .maybeSingle();
+
+          if (profileData == null ||
+              profileData['email'] == null ||
+              (profileData['email'] as String).trim().isEmpty) {
+            throw const AuthException('Tên người dùng không tồn tại!');
+          }
+          targetEmail = profileData['email'] as String;
+        }
+      } catch (e) {
+        if (e is AuthException) rethrow;
+
+        // Fallback trực tiếp bảng profiles
+        final profileData = await _client
+            .from('profiles')
+            .select('email')
+            .ilike('username', input)
+            .maybeSingle();
+
+        if (profileData == null ||
+            profileData['email'] == null ||
+            (profileData['email'] as String).trim().isEmpty) {
+          throw const AuthException('Tên người dùng không tồn tại!');
+        }
+        targetEmail = profileData['email'] as String;
+      }
+    }
+
     return await _client.auth.signInWithPassword(
-      email: email,
+      email: targetEmail,
       password: password,
     );
   }

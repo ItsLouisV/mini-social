@@ -40,6 +40,8 @@ class ChatRepository {
       final myMemberState = ConversationMemberModel.fromJson(row);
 
       ProfileModel? otherUser;
+      List<ConversationMemberModel>? groupMembers;
+
       if (convJson['type'] == 'direct' || convJson['type'] == null) {
         final p1 = convJson['participant_1'] as String?;
         final p2 = convJson['participant_2'] as String?;
@@ -54,6 +56,16 @@ class ChatRepository {
             otherUser = ProfileModel.fromJson(profileData);
           } catch (_) {}
         }
+      } else if (convJson['type'] == 'group') {
+        try {
+          final mData = await _client
+              .from('conversation_members')
+              .select('*, profile:profiles(*)')
+              .eq('conversation_id', convJson['id'] as String);
+          groupMembers = (mData as List)
+              .map((m) => ConversationMemberModel.fromJson(m))
+              .toList();
+        } catch (_) {}
       }
 
       conversations.add(
@@ -61,6 +73,7 @@ class ChatRepository {
           convJson,
           myMemberState: myMemberState,
           otherUser: otherUser,
+          members: groupMembers,
         ),
       );
     }
@@ -186,7 +199,6 @@ class ChatRepository {
     );
   }
 
-  /// Tạo cuộc trò chuyện nhóm (Group Chat)
   Future<ConversationModel> createGroupConversation({
     required String name,
     XFile? avatar,
@@ -202,31 +214,32 @@ class ChatRepository {
         final fileName = '$userId/group_avatars/${_uuid.v4()}.$ext';
         final compressedBytes = await ImageCompressor.compressXFile(avatar);
         await _client.storage.from(SupabaseConstants.messagesBucket).uploadBinary(
-              fileName,
-              compressedBytes,
-              fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg'),
-            );
+          fileName,
+          compressedBytes,
+          fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg'),
+        );
         avatarUrl = _client.storage.from(SupabaseConstants.messagesBucket).getPublicUrl(fileName);
       } catch (e, stack) {
         debugPrint('❌ [ChatRepository] Lỗi tải lên ảnh nhóm: $e\n$stack');
       }
     }
 
-    final created = await _client
-        .from(SupabaseConstants.conversationsTable)
-        .insert({
-          'type': 'group',
-          'name': name,
-          'avatar_url': avatarUrl,
-          'created_by': userId,
-          'last_message': 'Đã tạo nhóm $name',
-          'last_message_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .select()
-        .single();
+    final convId = _uuid.v4();
 
-    final convId = created['id'] as String;
+    // 1. Chèn bản ghi nhóm. KHÔNG còn cần participant_1/participant_2 —
+    // conversation_members là nguồn dữ liệu thành viên duy nhất cho group.
+    await _client.from(SupabaseConstants.conversationsTable).insert({
+      'id': convId,
+      'type': 'group',
+      'name': name,
+      'avatar_url': avatarUrl,
+      'created_by': userId,
+      'last_message': 'Đã tạo nhóm $name',
+      'last_message_at': DateTime.now().toUtc().toIso8601String(),
+    });
 
+    // 2. Chèn thành viên. KHÔNG được nuốt lỗi ở đây — nếu thất bại, group
+    // sẽ "mồ côi" (không ai là thành viên), nên phải rollback + throw.
     try {
       final memberRows = allMembers.map((mId) {
         return {
@@ -239,32 +252,49 @@ class ChatRepository {
 
       await _client.from('conversation_members').insert(memberRows);
     } catch (e, stack) {
-      debugPrint('❌ [ChatRepository] Lỗi chèn bảng conversation_members: $e\n$stack');
+      debugPrint('❌ [ChatRepository] Lỗi chèn conversation_members, rollback: $e\n$stack');
+      // Rollback: xoá conversation vừa tạo để không để lại "group ma"
+      await _client.from(SupabaseConstants.conversationsTable).delete().eq('id', convId);
+      throw Exception('Không thể tạo nhóm, vui lòng thử lại.');
     }
 
+    // 3. Giờ đã là member thật sự trong conversation_members, RLS select() hợp lệ
+    final created = await _client
+      .from(SupabaseConstants.conversationsTable)
+      .select()
+      .eq('id', convId)
+      .single();
+
     try {
-      await sendMessage(
-        convId,
-        'Đã tạo nhóm "$name"',
-        messageType: 'system',
-      );
+      await sendMessage(convId, 'Đã tạo nhóm "$name"', messageType: 'system');
     } catch (e, stack) {
       debugPrint('❌ [ChatRepository] Lỗi chèn tin nhắn hệ thống tạo nhóm: $e\n$stack');
     }
 
-    for (final mId in memberIds) {
-      if (mId == userId) continue;
+    // Gửi thông báo song song thay vì tuần tự
+    final notifyTargets = memberIds.where((mId) => mId != userId).toList();
+    await Future.wait(notifyTargets.map((mId) async {
       try {
-        await _client.from(SupabaseConstants.notificationsTable).insert({
-          'receiver_id': mId,
-          'sender_id': userId,
-          'type': 'friend_request',
-          'content': 'Đã thêm bạn vào nhóm "$name"',
-        });
+        try {
+          await _client.from(SupabaseConstants.notificationsTable).insert({
+            'receiver_id': mId,
+            'sender_id': userId,
+            'type': 'group_added',
+            'content': 'Đã thêm bạn vào nhóm "$name"',
+          });
+        } catch (enumErr) {
+          // Fallback nếu Postgres DB chưa add value 'group_added' vào notification_type enum
+          await _client.from(SupabaseConstants.notificationsTable).insert({
+            'receiver_id': mId,
+            'sender_id': userId,
+            'type': 'other',
+            'content': 'Đã thêm bạn vào nhóm "$name"',
+          });
+        }
       } catch (e, stack) {
         debugPrint('❌ [ChatRepository] Lỗi gửi thông báo tới member $mId: $e\n$stack');
       }
-    }
+    }));
 
     return ConversationModel.fromJson(created);
   }

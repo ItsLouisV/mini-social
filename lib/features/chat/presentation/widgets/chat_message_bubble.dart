@@ -325,9 +325,11 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                             Text(
                               message.replyToMessage!.isText
                                   ? (message.replyToMessage!.content ?? '')
-                                  : (message.replyToMessage!.isImage
-                                      ? 'Hình ảnh'
-                                      : 'Cuộc gọi'),
+                                  : (message.replyToMessage!.isVoice
+                                      ? 'Tin nhắn thoại'
+                                      : (message.replyToMessage!.isImage
+                                          ? 'Hình ảnh'
+                                          : 'Cuộc gọi')),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: isMine
@@ -735,9 +737,11 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                               Text(
                                 message.replyToMessage!.isText
                                     ? (message.replyToMessage!.content ?? '')
-                                    : (message.replyToMessage!.isImage
-                                        ? 'Hình ảnh'
-                                        : 'Cuộc gọi'),
+                                    : (message.replyToMessage!.isVoice
+                                        ? 'Tin nhắn thoại'
+                                        : (message.replyToMessage!.isImage
+                                            ? 'Hình ảnh'
+                                            : 'Cuộc gọi')),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: isMine

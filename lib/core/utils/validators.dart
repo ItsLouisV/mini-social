@@ -9,6 +9,19 @@ class Validators {
     return null;
   }
 
+  static String? emailOrUsername(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Vui lòng nhập Email hoặc Username';
+    }
+    final trimmed = value.trim();
+    if (trimmed.contains('@')) {
+      return email(trimmed);
+    } else {
+      if (trimmed.length < 3) return 'Username phải có ít nhất 3 ký tự';
+    }
+    return null;
+  }
+
   static String? password(String? value) {
     if (value == null || value.isEmpty) return 'Vui lòng nhập mật khẩu';
     if (value.length < 6) return 'Mật khẩu phải có ít nhất 6 ký tự';
