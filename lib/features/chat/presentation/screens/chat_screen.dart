@@ -14,8 +14,13 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:realtime_client/realtime_client.dart';
+import 'package:realtime_client/src/types.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/extensions/date_extension.dart';
+import '../../../../core/services/supabase_service.dart';
+import '../../../../core/services/upstash_redis_service.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
@@ -27,6 +32,7 @@ import '../widgets/full_screen_image_viewer.dart';
 import '../widgets/voice_message_bubble.dart';
 import '../widgets/voice_recorder_bar.dart';
 import '../widgets/elastic_scroll_to_bottom_button.dart';
+import '../widgets/chat_pinned_banner.dart';
 import '../../presentation/widgets/message_popup_menu_content.dart';
 import '../../presentation/widgets/message_context_menu_route.dart';
 import '../../../social/data/ai_repository.dart';
@@ -160,7 +166,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   XFile? _pendingImage;
   Uint8List? _pendingImagePreviewBytes;
   MessageModel? _replyingToMessage;
-  bool _pinnedListExpanded = false;
 
   // Cache kết quả grouping để không tính lại trong mỗi build()
   List<MessageModel> _cachedMessages = [];
@@ -172,6 +177,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // Trạng thái hiển thị nút cuộn xuống đáy
   bool _showScrollToBottomBtn = false;
+
+  // Realtime Typing Indicator State
+  RealtimeChannel? _typingChannel;
+  bool _isOtherUserTyping = false;
+  Timer? _typingTimer;
+  DateTime? _lastTypingSentTime;
 
   double _pullUpDistance = 0.0;
   bool _hasCrossedVanishThreshold = false;
@@ -457,8 +468,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(chatRepositoryProvider).markAsSeen(widget.conversationId);
+    _messageController.addListener(_onTextChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(chatRepositoryProvider).markAsSeen(widget.conversationId);
+      if (mounted) {
+        ref.invalidate(conversationsProvider);
+        ref.invalidate(unreadMessagesCountProvider);
+        _subscribeTypingChannel();
+      }
     });
 
     // Load thêm khi scroll lên đỉnh (tin cũ hơn)
@@ -467,6 +485,119 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _focusNode.addListener(() {
       if (mounted) setState(() {});
     });
+  }
+
+  void _subscribeTypingChannel() {
+    try {
+      final client = ref.read(supabaseServiceProvider).client;
+      final currentUserId = ref.read(currentUserIdProvider);
+
+      _typingChannel = client.channel('typing:${widget.conversationId}');
+      _typingChannel!.onBroadcast(
+        event: 'typing',
+        callback: (payload) {
+          final senderId = payload['userId'] as String?;
+          final isTyping = payload['isTyping'] as bool? ?? true;
+          if (senderId != null && senderId != currentUserId) {
+            if (mounted) {
+              if (isTyping) {
+                setState(() => _isOtherUserTyping = true);
+                _typingTimer?.cancel();
+                _typingTimer = Timer(const Duration(milliseconds: 3500), () {
+                  if (mounted) setState(() => _isOtherUserTyping = false);
+                });
+              } else {
+                _typingTimer?.cancel();
+                setState(() => _isOtherUserTyping = false);
+              }
+            }
+          }
+        },
+      ).subscribe();
+    } catch (e) {
+      debugPrint('⚠️ [ChatScreen] Lỗi subscribe typing channel: $e');
+    }
+  }
+
+  void _onTextChanged() {
+    final text = _messageController.text.trim();
+    final currentUserId = ref.read(currentUserIdProvider);
+    if (currentUserId == null) return;
+
+    if (text.isEmpty) {
+      try {
+        _typingChannel?.send(
+          type: RealtimeListenTypes.broadcast,
+          event: 'typing',
+          payload: {'userId': currentUserId, 'isTyping': false},
+        );
+      } catch (_) {}
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastTypingSentTime == null ||
+        now.difference(_lastTypingSentTime!).inMilliseconds > 1500) {
+      _lastTypingSentTime = now;
+
+      // 1. Set TTL 3s in Upstash Redis
+      ref
+          .read(upstashRedisServiceProvider)
+          .setUserTyping(widget.conversationId, currentUserId);
+
+      // 2. Broadcast realtime event
+      try {
+        _typingChannel?.send(
+          type: RealtimeListenTypes.broadcast,
+          event: 'typing',
+          payload: {'userId': currentUserId, 'isTyping': true},
+        );
+      } catch (_) {}
+    }
+  }
+
+  Widget _buildTypingBubble(ThemeData theme, String senderName, String? avatarUrl) {
+    final isDark = theme.brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          AppAvatar(
+            imageUrl: avatarUrl,
+            name: senderName,
+            radius: 12,
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF2C2C2E).withValues(alpha: 0.9)
+                  : const Color(0xFFE9E9EB).withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$senderName đang nhập',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const _BouncingDots(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onPositionChange() {
@@ -514,6 +645,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
+    _messageController.removeListener(_onTextChanged);
+    _typingTimer?.cancel();
+    _typingChannel?.unsubscribe();
     _messageController.dispose();
     _focusNode.dispose();
     _itemPositionsListener.itemPositions.removeListener(_onPositionChange);
@@ -912,6 +1046,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           curr.messages.isNotEmpty &&
           (prev.messages.isEmpty ||
               curr.messages.first.id != prev.messages.first.id)) {
+        ref.read(chatRepositoryProvider).markAsSeen(widget.conversationId).then((_) {
+          if (mounted) {
+            ref.invalidate(conversationsProvider);
+            ref.invalidate(unreadMessagesCountProvider);
+          }
+        });
         final positions = _itemPositionsListener.itemPositions.value;
         final isNearBottom =
             positions.isEmpty || positions.any((p) => p.index == 0);
@@ -1085,8 +1225,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         child: Column(
           children: [
             if (pinnedMessages.isNotEmpty)
-              _buildPinnedMessagesBar(
-                  theme, pinnedMessages, currentUserId, otherUserName, hasWallpaper),
+              ChatPinnedBanner(
+                conversationId: widget.conversationId,
+                pinnedList: pinnedMessages,
+                currentUserId: currentUserId,
+                otherUserName: otherUserName,
+                hasWallpaper: hasWallpaper,
+                onJumpToMessage: (pin) => _jumpToPinnedMessage(pin),
+                onUnpinMessage: (messageId) async {
+                  try {
+                    await ref
+                        .read(chatRepositoryProvider)
+                        .unpinMessage(widget.conversationId, messageId);
+                    ref.invalidate(pinnedMessagesProvider(widget.conversationId));
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Bỏ ghim thất bại: $e')),
+                      );
+                    }
+                  }
+                },
+              ),
             Expanded(
               child: Stack(
                 children: [
@@ -1252,6 +1412,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ],
               ),
             ),
+            if (_isOtherUserTyping)
+              _buildTypingBubble(theme, otherUserName, otherUser?.avatarUrl),
             _buildInput(theme, hasWallpaper, isBlocked, isBlockedBy),
           ],
         ),
@@ -1415,198 +1577,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  // ── Pinned Messages Bar ───────────────────────────────────────────────────────
 
-  Widget _buildPinnedMessagesBar(
-    ThemeData theme,
-    List<PinnedMessageModel> pinnedList,
-    String currentUserId,
-    String otherUserName,
-    bool hasWallpaper,
-  ) {
-    final isDark = theme.brightness == Brightness.dark;
-    final latestPin = pinnedList.first;
-    final latestMsg = latestPin.message;
-
-    if (latestMsg == null) return const SizedBox.shrink();
-
-    String contentSnippet = latestMsg.isText
-        ? (latestMsg.content ?? '')
-        : latestMsg.isImage
-            ? '[Hình ảnh]'
-            : latestMsg.isCall
-                ? '[Cuộc gọi]'
-                : '[Tin nhắn]';
-
-    final senderName =
-        latestMsg.senderId == currentUserId ? 'Bạn' : otherUserName;
-    final barBgColor = hasWallpaper
-        ? theme.scaffoldBackgroundColor.withValues(alpha: 0.75)
-        : (isDark ? theme.colorScheme.surface : const Color(0xFFE8F4FD));
-    final textStyle = TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w500,
-      color: isDark ? Colors.white : const Color(0xFF0068FF),
-    );
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: () {
-            if (pinnedList.length > 1) {
-              setState(() => _pinnedListExpanded = !_pinnedListExpanded);
-            } else {
-              _jumpToPinnedMessage(latestPin);
-            }
-          },
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: barBgColor,
-              border: Border(
-                bottom: BorderSide(
-                  color: theme.dividerColor.withValues(alpha: 0.15),
-                  width: 0.5,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  CupertinoIcons.pin_fill,
-                  size: 16,
-                  color: isDark ? Colors.white70 : const Color(0xFF0068FF),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Ghim: $senderName: $contentSnippet',
-                    style: textStyle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (pinnedList.length > 1)
-                  Icon(
-                    _pinnedListExpanded
-                        ? CupertinoIcons.chevron_up
-                        : CupertinoIcons.chevron_down,
-                    size: 16,
-                    color: theme.hintColor,
-                  )
-                else
-                  GestureDetector(
-                    onTap: () async {
-                      try {
-                        await ref
-                            .read(chatRepositoryProvider)
-                            .unpinMessage(
-                                widget.conversationId, latestPin.messageId);
-                        ref.invalidate(
-                            pinnedMessagesProvider(widget.conversationId));
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Bỏ ghim thất bại: $e')),
-                          );
-                        }
-                      }
-                    },
-                    child: Icon(
-                      CupertinoIcons.xmark,
-                      size: 14,
-                      color: theme.hintColor,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-
-        // Expanded list khi có nhiều pin
-        if (_pinnedListExpanded && pinnedList.length > 1)
-          Container(
-            constraints: const BoxConstraints(maxHeight: 200),
-            color: hasWallpaper
-                ? theme.scaffoldBackgroundColor.withValues(alpha: 0.85)
-                : (isDark ? const Color(0xFF2C2C2E) : Colors.white),
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: pinnedList.length,
-              separatorBuilder: (_, __) => Divider(
-                height: 0.5,
-                thickness: 0.5,
-                color: theme.dividerColor.withValues(alpha: 0.2),
-              ),
-              itemBuilder: (context, index) {
-                final pin = pinnedList[index];
-                final msg = pin.message;
-                if (msg == null) return const SizedBox.shrink();
-
-                final pinSnippet = msg.isText
-                    ? (msg.content ?? '')
-                    : msg.isImage
-                        ? '[Hình ảnh]'
-                        : '[Cuộc gọi]';
-                final pinSender =
-                    msg.senderId == currentUserId ? 'Bạn' : otherUserName;
-
-                return ListTile(
-                  dense: true,
-                  leading: Icon(
-                    CupertinoIcons.pin,
-                    size: 14,
-                    color: theme.colorScheme.primary,
-                  ),
-                  title: Text(
-                    '$pinSender: $pinSnippet',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.onSurface),
-                  ),
-                  onTap: () => _jumpToPinnedMessage(pin),
-                  trailing: GestureDetector(
-                    onTap: () async {
-                      try {
-                        await ref
-                            .read(chatRepositoryProvider)
-                            .unpinMessage(
-                                widget.conversationId, pin.messageId);
-                        ref.invalidate(
-                            pinnedMessagesProvider(widget.conversationId));
-                        if (pinnedList.length <= 2) {
-                          setState(() => _pinnedListExpanded = false);
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Bỏ ghim thất bại: $e')),
-                          );
-                        }
-                      }
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      child: Icon(
-                        CupertinoIcons.trash,
-                        size: 14,
-                        color:
-                            theme.colorScheme.error.withValues(alpha: 0.8),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-      ],
-    );
-  }
 
   // ── Image Preview ─────────────────────────────────────────────────────────────
 
@@ -4026,6 +3997,67 @@ class _VanishBackgroundState extends State<_VanishBackground>
                 child: const Text(
                   '👻',
                   style: TextStyle(fontSize: 36),
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+
+// ── Bouncing Dots Typing Animation ────────────────────────────────────────────
+
+class _BouncingDots extends StatefulWidget {
+  const _BouncingDots();
+
+  @override
+  State<_BouncingDots> createState() => _BouncingDotsState();
+}
+
+class _BouncingDotsState extends State<_BouncingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final val = _controller.value;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (index) {
+            final delay = index * 0.2;
+            final dVal = (val - delay) % 1.0;
+            final offsetY =
+                (dVal < 0.5) ? -4.0 * (1 - (dVal * 2 - 1).abs()) : 0.0;
+
+            return Transform.translate(
+              offset: Offset(0, offsetY),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  shape: BoxShape.circle,
                 ),
               ),
             );

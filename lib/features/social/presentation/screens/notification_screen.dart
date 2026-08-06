@@ -104,7 +104,7 @@ class _NotificationTile extends ConsumerWidget {
     final senderName = sender?['full_name'] as String? ??
         sender?['username'] as String? ??
         notification['sender_name'] as String? ??
-        (type == 'moderation' ? 'Hệ thống MiniSocial' : 'Người dùng');
+        (type == 'moderation' ? 'Hệ thống' : 'Người dùng');
     final senderAvatar = sender?['avatar_url'] as String?;
 
     String actionText = '';

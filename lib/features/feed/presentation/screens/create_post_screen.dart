@@ -322,7 +322,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           try {
             final nominatimRes = await http.get(
               Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lon'),
-              headers: {'User-Agent': 'MiniSocialApp/1.0'},
+              headers: {'User-Agent': 'VioraApp/1.0'},
             ).timeout(const Duration(seconds: 3));
 
             if (nominatimRes.statusCode == 200) {
@@ -681,7 +681,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
     _showCustomFullScreenModal(
       title: 'Gắn thẻ người khác',
-      subtitle: 'Chọn bạn bè của bạn trên MiniSocial',
+      subtitle: 'Chọn bạn bè của bạn trên Viora',
       heightFactor: 0.92,
       bodyBuilder: (ctx, setModalState) {
         if (currentUserId == null || currentUserId.isEmpty) {
@@ -733,7 +733,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                             padding: const EdgeInsets.all(20.0),
                             child: Text(
                               friendsList.isEmpty
-                                  ? 'Bạn chưa có bạn bè nào để gắn thẻ.\nHãy kết bạn trên MiniSocial!'
+                                  ? 'Bạn chưa có bạn bè nào để gắn thẻ.\nHãy kết bạn trên Viora!'
                                   : 'Không tìm thấy bạn bè phù hợp.',
                               textAlign: TextAlign.center,
                               style: TextStyle(color: Theme.of(context).hintColor),

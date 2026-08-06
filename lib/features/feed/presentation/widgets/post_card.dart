@@ -730,7 +730,7 @@ void _showWhySeeThisPostDialog(BuildContext context, PostModel post) {
         title: const Text('Tại sao tôi nhìn thấy bài viết này?'),
         content: Text(
           '• Bài viết này được cài đặt chế độ là "${post.privacy == 'public' ? 'Công khai' : 'Bạn bè/Follower'}".\n\n'
-          '• Bạn đang theo dõi ${post.author?.displayName ?? 'tác giả này'} hoặc bài viết được chia sẻ công khai trên MiniSocial.',
+          '• Bạn đang theo dõi ${post.author?.displayName ?? 'tác giả này'} hoặc bài viết được chia sẻ công khai trên Viora.',
         ),
         actions: [
           TextButton(

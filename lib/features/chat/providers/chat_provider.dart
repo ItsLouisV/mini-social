@@ -15,14 +15,46 @@ import '../domain/conversation_model.dart';
 import '../domain/message_model.dart';
 import '../domain/pinned_message_model.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/services/upstash_redis_service.dart';
 import '../../../core/services/connectivity_service.dart';
 import 'hidden_chat_provider.dart' show secureStorageProvider;
+import '../domain/conversation_member_model.dart';
+
+// ── Service Providers ─────────────────────────────────────────────────────────
+
+final upstashRedisServiceProvider = Provider<UpstashRedisService>((ref) {
+  return UpstashRedisService();
+});
 
 // ── Repository Provider ───────────────────────────────────────────────────────
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
-  return ChatRepository(ref.watch(supabaseServiceProvider));
+  final supabaseService = ref.watch(supabaseServiceProvider);
+  final redisService = ref.watch(upstashRedisServiceProvider);
+  return ChatRepository(supabaseService, redisService);
 });
+
+// ── Upstash Redis Presence & Typing Providers ──────────────────────────────────
+
+final userOnlineStatusProvider = FutureProvider.family<bool, String>((ref, userId) async {
+  final redis = ref.watch(upstashRedisServiceProvider);
+  return redis.isUserOnline(userId);
+});
+
+final userTypingStatusProvider = FutureProvider.family<bool, Map<String, String>>((ref, params) async {
+  final redis = ref.watch(upstashRedisServiceProvider);
+  final convId = params['conversationId'] ?? '';
+  final userId = params['userId'] ?? '';
+  return redis.isUserTyping(convId, userId);
+});
+
+// ── Conversation Members Provider ─────────────────────────────────────────────
+
+final conversationMembersProvider = FutureProvider.family<List<ConversationMemberModel>, String>((ref, conversationId) {
+  return ref.watch(chatRepositoryProvider).getConversationMembers(conversationId);
+});
+
+final groupMembersProvider = conversationMembersProvider;
 
 // ── Conversations Provider (Offline-First) ────────────────────────────────────
 
@@ -719,16 +751,69 @@ class ChatMessagesNotifier
 
   /// Xóa tin nhắn thất bại
   Future<void> removeFailedMessage(String localId) async {
+    // Xóa theo localId nếu có trong local DB
     final local = ref.read(localChatRepositoryProvider);
-    if (local == null) return;
+    if (local != null) {
+      await local.removeFailedMessage(localId);
+    }
 
-    await local.removeFailedMessage(localId);
+    // Xóa theo messageId (tempId) trong state UI
+    removeOptimisticMessage(localId);
+  }
 
+  /// Optimistic message management (Gửi là hiển thị ngay trên UI)
+  void addOptimisticMessage(MessageModel msg) {
     final current = state.valueOrNull;
     if (current != null) {
-      state = AsyncData(current.copyWith(
-        failedMessages: local.getFailedMessages(arg),
-      ));
+      final updated = [msg, ...current.messages];
+      state = AsyncData(current.copyWith(messages: updated));
+    }
+  }
+
+  void updateOptimisticSuccess(String tempId, MessageModel serverMsg) {
+    final current = state.valueOrNull;
+    if (current != null) {
+      final updated = current.messages.map((m) {
+        if (m.id == tempId) {
+          return serverMsg.copyWith(isSending: false, isFailed: false);
+        }
+        return m;
+      }).toList();
+      state = AsyncData(current.copyWith(messages: updated));
+    }
+  }
+
+  void markOptimisticFailed(String tempId) {
+    final current = state.valueOrNull;
+    if (current != null) {
+      final updated = current.messages.map((m) {
+        if (m.id == tempId) {
+          return m.copyWith(isSending: false, isFailed: true);
+        }
+        return m;
+      }).toList();
+      state = AsyncData(current.copyWith(messages: updated));
+    }
+  }
+
+  void markOptimisticRetrying(String tempId) {
+    final current = state.valueOrNull;
+    if (current != null) {
+      final updated = current.messages.map((m) {
+        if (m.id == tempId) {
+          return m.copyWith(isSending: true, isFailed: false);
+        }
+        return m;
+      }).toList();
+      state = AsyncData(current.copyWith(messages: updated));
+    }
+  }
+
+  void removeOptimisticMessage(String tempId) {
+    final current = state.valueOrNull;
+    if (current != null) {
+      final updated = current.messages.where((m) => m.id != tempId).toList();
+      state = AsyncData(current.copyWith(messages: updated));
     }
   }
 }
@@ -740,13 +825,24 @@ final realtimeMessagesProvider = AsyncNotifierProvider.autoDispose
 
 // ── Total unread count ────────────────────────────────────────────────────────
 
-final unreadMessagesCountProvider = StreamProvider.autoDispose<int>((ref) {
-  return ref
+final unreadMessagesCountProvider = StreamProvider.autoDispose<int>((ref) async* {
+  final convs = ref.watch(conversationsProvider).valueOrNull ?? [];
+  int initialTotal = 0;
+  for (final c in convs) {
+    initialTotal += c.unreadCount;
+  }
+  yield initialTotal;
+
+  final countStream = ref
       .watch(chatRepositoryProvider)
       .watchTotalUnreadMessagesCount()
       .handleError((err) {
     print('Supabase watchTotalUnreadMessagesCount stream error (WebSocket disconnected): $err');
   });
+
+  await for (final count in countStream) {
+    yield count;
+  }
 });
 
 // ── Pinned Messages ───────────────────────────────────────────────────────────

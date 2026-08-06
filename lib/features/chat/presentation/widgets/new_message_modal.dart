@@ -11,6 +11,17 @@ import '../../providers/chat_provider.dart';
 class NewMessageModal extends ConsumerStatefulWidget {
   const NewMessageModal({super.key});
 
+  static Future<String?> show(BuildContext context) {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const NewMessageModal(),
+    );
+  }
+
   @override
   ConsumerState<NewMessageModal> createState() => _NewMessageModalState();
 }
@@ -51,18 +62,14 @@ class _NewMessageModalState extends ConsumerState<NewMessageModal> {
     final query = ref.watch(searchQueryProvider);
     final searchResults = ref.watch(searchResultsProvider(query));
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          child: Column(
+    return Container(
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: Column(
             children: [
               // Header
               Container(
@@ -151,7 +158,6 @@ class _NewMessageModalState extends ConsumerState<NewMessageModal> {
                             );
                           }
                           return ListView.builder(
-                            controller: scrollController,
                             itemCount: users.length,
                             itemBuilder: (context, index) {
                               final user = users[index];
@@ -181,8 +187,7 @@ class _NewMessageModalState extends ConsumerState<NewMessageModal> {
               ),
             ],
           ),
-        );
-      },
-    );
+        ),
+      );
   }
 }

@@ -51,7 +51,7 @@ class CoreLogger {
 
     developer.log(
       coloredMessage,
-      name: tag ?? 'MiniSocial',
+      name: tag ?? 'Viora',
       error: error,
       stackTrace: stackTrace,
       level: _getDeveloperLogLevel(level),

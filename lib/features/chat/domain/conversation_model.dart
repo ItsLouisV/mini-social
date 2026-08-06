@@ -1,122 +1,230 @@
 import '../../profile/domain/profile_model.dart';
+import 'conversation_member_model.dart';
 
 class ConversationModel {
   final String id;
-  final String participant1;
-  final String participant2;
+  final String type; // 'direct' | 'group'
+  final String? participant1;
+  final String? participant2;
+  final String? name; // Group name
+  final String? avatarUrl; // Group avatar
+  final String? createdBy;
+  final String? lastMessageId;
   final String? lastMessage;
   final DateTime? lastMessageAt;
-  final DateTime createdAt;
   final String? lastMessageSenderId;
-  final int p1UnreadCount;
-  final int p2UnreadCount;
-  final bool p1IsPinned;
-  final bool p2IsPinned;
-  final bool p1IsHidden;
-  final bool p2IsHidden;
-  final ProfileModel? otherUser; // populated on the fly
+  final DateTime createdAt;
+
+  // Custom states from conversation_members & profiles
+  final ConversationMemberModel? myMemberState;
+  final ProfileModel? otherUser; // For 1-1 chats
+  final List<ConversationMemberModel>? members; // Loaded for group details
+  final int? _legacyP2Unread;
+  final bool? _legacyP2Pinned;
+  final bool? _legacyP2Hidden;
 
   const ConversationModel({
     required this.id,
-    required this.participant1,
-    required this.participant2,
+    this.type = 'direct',
+    this.participant1,
+    this.participant2,
+    this.name,
+    this.avatarUrl,
+    this.createdBy,
+    this.lastMessageId,
     this.lastMessage,
     this.lastMessageAt,
-    required this.createdAt,
     this.lastMessageSenderId,
-    this.p1UnreadCount = 0,
-    this.p2UnreadCount = 0,
-    this.p1IsPinned = false,
-    this.p2IsPinned = false,
-    this.p1IsHidden = false,
-    this.p2IsHidden = false,
+    required this.createdAt,
+    this.myMemberState,
     this.otherUser,
-  });
+    this.members,
+    int? legacyP2Unread,
+    bool? legacyP2Pinned,
+    bool? legacyP2Hidden,
+  })  : _legacyP2Unread = legacyP2Unread,
+        _legacyP2Pinned = legacyP2Pinned,
+        _legacyP2Hidden = legacyP2Hidden;
 
-  factory ConversationModel.fromJson(Map<String, dynamic> json,
-      {ProfileModel? otherUser}) {
+  bool get isGroup => type == 'group';
+  bool get isDirect => type == 'direct';
+
+  // Backward compatible & clean helper getters for UI
+  String get groupName => name ?? 'Nhóm trò chuyện';
+  String? get groupAvatarUrl => avatarUrl;
+  String? get groupAdminId => createdBy;
+  List<String> get memberIds => members?.map((m) => m.userId).toList() ?? [];
+
+  int get unreadCount => myMemberState?.unreadCount ?? 0;
+  bool get isPinnedState => myMemberState?.isPinned ?? false;
+  bool get isHiddenState => myMemberState?.isHidden ?? false;
+  bool get isMuted => myMemberState?.isMuted ?? false;
+
+  int get p1UnreadCount => getUnreadCount(participant1);
+  int get p2UnreadCount => getUnreadCount(participant2);
+  bool get p1IsPinned => isPinned(participant1);
+  bool get p2IsPinned => isPinned(participant2);
+  bool get p1IsHidden => isHidden(participant1);
+  bool get p2IsHidden => isHidden(participant2);
+
+  int getUnreadCount([String? userId]) {
+    if (userId != null && userId == participant2 && _legacyP2Unread != null) {
+      return _legacyP2Unread!;
+    }
+    if (userId != null && myMemberState != null) {
+      if (myMemberState!.userId == userId) return myMemberState!.unreadCount;
+      return 0;
+    }
+    return unreadCount;
+  }
+
+  bool checkIsPinned([String? userId]) => isPinned(userId);
+  bool checkIsHidden([String? userId]) => isHidden(userId);
+
+  bool isPinned([String? userId]) {
+    if (userId != null && userId == participant2 && _legacyP2Pinned != null) {
+      return _legacyP2Pinned!;
+    }
+    if (userId != null && myMemberState != null) {
+      if (myMemberState!.userId == userId) return myMemberState!.isPinned;
+      return false;
+    }
+    return isPinnedState;
+  }
+
+  bool isHidden([String? userId]) {
+    if (userId != null && userId == participant2 && _legacyP2Hidden != null) {
+      return _legacyP2Hidden!;
+    }
+    if (userId != null && myMemberState != null) {
+      if (myMemberState!.userId == userId) return myMemberState!.isHidden;
+      return false;
+    }
+    return isHiddenState;
+  }
+
+  String getOtherUserId(String currentUserId) {
+    if (participant1 != null && participant2 != null) {
+      return participant1 == currentUserId ? participant2! : participant1!;
+    }
+    return '';
+  }
+
+  factory ConversationModel.fromJson(
+    Map<String, dynamic> json, {
+    ConversationMemberModel? myMemberState,
+    ProfileModel? otherUser,
+    List<ConversationMemberModel>? members,
+  }) {
+    // If conversation_members were joined in json
+    ConversationMemberModel? memberState = myMemberState;
+    if (memberState == null && json['conversation_members'] != null) {
+      final rawMembers = json['conversation_members'];
+      if (rawMembers is List && rawMembers.isNotEmpty) {
+        memberState = ConversationMemberModel.fromJson(
+          Map<String, dynamic>.from(rawMembers.first),
+        );
+      } else if (rawMembers is Map) {
+        memberState = ConversationMemberModel.fromJson(
+          Map<String, dynamic>.from(rawMembers),
+        );
+      }
+    }
+    if (memberState == null && (json['p1_unread_count'] != null || json['p1_is_pinned'] != null || json['p1_is_hidden'] != null)) {
+      memberState = ConversationMemberModel(
+        id: (json['id'] as String?) ?? '',
+        conversationId: (json['id'] as String?) ?? '',
+        userId: (json['participant_1'] as String?) ?? '',
+        unreadCount: (json['p1_unread_count'] as int?) ?? 0,
+        isPinned: (json['p1_is_pinned'] as bool?) ?? false,
+        isHidden: (json['p1_is_hidden'] as bool?) ?? false,
+      );
+    }
+
+    List<ConversationMemberModel>? parsedMembers = members;
+    if (parsedMembers == null && json['members_list'] != null && json['members_list'] is List) {
+      parsedMembers = (json['members_list'] as List)
+          .map((m) => ConversationMemberModel.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
+    }
+
+    String? senderId = json['last_message_sender_id'] as String?;
+    if (senderId == null && json['last_message_sender'] != null) {
+      if (json['last_message_sender'] is Map) {
+        senderId = json['last_message_sender']['sender_id'] as String?;
+      }
+    }
+
     return ConversationModel(
       id: json['id'] as String,
-      participant1: json['participant_1'] as String,
-      participant2: json['participant_2'] as String,
+      type: json['type'] as String? ?? (json['is_group'] == true ? 'group' : 'direct'),
+      participant1: json['participant_1'] as String?,
+      participant2: json['participant_2'] as String?,
+      name: (json['name'] ?? json['group_name']) as String?,
+      avatarUrl: (json['avatar_url'] ?? json['group_avatar_url']) as String?,
+      createdBy: (json['created_by'] ?? json['group_admin_id']) as String?,
+      lastMessageId: json['last_message_id'] as String?,
       lastMessage: json['last_message'] as String?,
       lastMessageAt: json['last_message_at'] != null
           ? DateTime.parse(json['last_message_at'] as String).toLocal()
           : null,
-      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
-      lastMessageSenderId: json['last_message_sender'] != null
-          ? (json['last_message_sender'] is Map ? json['last_message_sender']['sender_id'] as String? : null)
-          : null,
-      p1UnreadCount: json['p1_unread_count'] as int? ?? 0,
-      p2UnreadCount: json['p2_unread_count'] as int? ?? 0,
-      p1IsPinned: json['p1_is_pinned'] as bool? ?? false,
-      p2IsPinned: json['p2_is_pinned'] as bool? ?? false,
-      p1IsHidden: json['p1_is_hidden'] as bool? ?? false,
-      p2IsHidden: json['p2_is_hidden'] as bool? ?? false,
+      lastMessageSenderId: senderId,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String).toLocal()
+          : DateTime.now(),
+      myMemberState: memberState,
       otherUser: otherUser,
+      members: parsedMembers,
+      legacyP2Unread: json['p2_unread_count'] as int?,
+      legacyP2Pinned: json['p2_is_pinned'] as bool?,
+      legacyP2Hidden: json['p2_is_hidden'] as bool?,
     );
-  }
-
-  String getOtherUserId(String currentUserId) {
-    return participant1 == currentUserId ? participant2 : participant1;
-  }
-
-  int getUnreadCount(String currentUserId) {
-    return participant1 == currentUserId ? p1UnreadCount : p2UnreadCount;
-  }
-
-  bool isPinned(String currentUserId) {
-    return participant1 == currentUserId ? p1IsPinned : p2IsPinned;
-  }
-
-  bool isHidden(String currentUserId) {
-    return participant1 == currentUserId ? p1IsHidden : p2IsHidden;
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'type': type,
       'participant_1': participant1,
       'participant_2': participant2,
+      'name': name,
+      'avatar_url': avatarUrl,
+      'created_by': createdBy,
+      'last_message_id': lastMessageId,
       'last_message': lastMessage,
       'last_message_at': lastMessageAt?.toUtc().toIso8601String(),
+      'last_message_sender_id': lastMessageSenderId,
       'created_at': createdAt.toUtc().toIso8601String(),
-      'p1_unread_count': p1UnreadCount,
-      'p2_unread_count': p2UnreadCount,
-      'p1_is_pinned': p1IsPinned,
-      'p2_is_pinned': p2IsPinned,
-      'p1_is_hidden': p1IsHidden,
-      'p2_is_hidden': p2IsHidden,
     };
   }
 
   ConversationModel copyWith({
+    String? name,
+    String? avatarUrl,
     String? lastMessage,
     DateTime? lastMessageAt,
+    String? lastMessageId,
     String? lastMessageSenderId,
-    int? p1UnreadCount,
-    int? p2UnreadCount,
-    bool? p1IsPinned,
-    bool? p2IsPinned,
-    bool? p1IsHidden,
-    bool? p2IsHidden,
+    ConversationMemberModel? myMemberState,
     ProfileModel? otherUser,
+    List<ConversationMemberModel>? members,
   }) {
     return ConversationModel(
       id: id,
+      type: type,
       participant1: participant1,
       participant2: participant2,
+      name: name ?? this.name,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      createdBy: createdBy,
+      lastMessageId: lastMessageId ?? this.lastMessageId,
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
-      createdAt: createdAt,
       lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
-      p1UnreadCount: p1UnreadCount ?? this.p1UnreadCount,
-      p2UnreadCount: p2UnreadCount ?? this.p2UnreadCount,
-      p1IsPinned: p1IsPinned ?? this.p1IsPinned,
-      p2IsPinned: p2IsPinned ?? this.p2IsPinned,
-      p1IsHidden: p1IsHidden ?? this.p1IsHidden,
-      p2IsHidden: p2IsHidden ?? this.p2IsHidden,
+      createdAt: createdAt,
+      myMemberState: myMemberState ?? this.myMemberState,
       otherUser: otherUser ?? this.otherUser,
+      members: members ?? this.members,
     );
   }
 }

@@ -35,7 +35,7 @@ class FeedDrawer extends ConsumerWidget {
               radius: 36,
             ),
             accountName: Text(
-              user?.userMetadata?['full_name'] ?? 'MiniSocial User',
+              user?.userMetadata?['full_name'] ?? 'Viora User',
               style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
             ),
             accountEmail: Text(user?.email ?? '', style: const TextStyle(color: Colors.white70)),

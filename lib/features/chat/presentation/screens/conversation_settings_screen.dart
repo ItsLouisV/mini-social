@@ -9,10 +9,16 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 import '../widgets/full_screen_image_viewer.dart';
 
+import 'package:image_picker/image_picker.dart';
+import '../../../../core/constants/app_colors.dart';
 import '../../../../core/localization/app_translations.dart';
+import '../../../../core/services/toast_service.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../profile/domain/profile_model.dart';
 import '../../../profile/providers/profile_provider.dart';
+import '../../../social/providers/follow_list_provider.dart';
+import '../../domain/conversation_member_model.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
 import '../widgets/passcode_dialog.dart';
@@ -78,10 +84,12 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
             orElse: () => throw Exception('Conversation not found'),
           );
 
+          final isGroup = conv.isGroup == true;
           final otherUser = conv.otherUser;
           final otherUserName = otherUser?.displayName ?? 'Người dùng';
+          final chatTitle = isGroup ? (conv.groupName ?? 'Nhóm trò chuyện') : otherUserName;
           final otherUserUsername = otherUser?.username ?? '';
-          final avatarUrl = otherUser?.avatarUrl;
+          final avatarUrl = isGroup ? conv.groupAvatarUrl : otherUser?.avatarUrl;
 
           final isPinned = conv.isPinned(currentUserId);
           final isMuted = muteState[widget.conversationId] ?? false;
@@ -98,61 +106,95 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                   children: [
                     Stack(
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: activeThemeItem.color.withValues(alpha: 0.4),
-                              width: 3,
-                            ),
-                          ),
-                          child: AppAvatar(
-                            imageUrl: avatarUrl,
-                            name: otherUserName,
-                            radius: 48,
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 4,
-                          right: 4,
+                        GestureDetector(
+                          onTap: isGroup ? () => _pickAndChangeGroupAvatar(context, ref, conv) : null,
                           child: Container(
-                            width: 14,
-                            height: 14,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF34C759),
                               shape: BoxShape.circle,
-                              border: Border.all(color: bgColor, width: 2),
+                              border: Border.all(
+                                color: activeThemeItem.color.withValues(alpha: 0.4),
+                                width: 3,
+                              ),
+                            ),
+                            child: AppAvatar(
+                              imageUrl: avatarUrl,
+                              name: chatTitle,
+                              radius: 48,
                             ),
                           ),
                         ),
+                        if (isGroup)
+                          Positioned(
+                            bottom: 2,
+                            right: 2,
+                            child: GestureDetector(
+                              onTap: () => _pickAndChangeGroupAvatar(context, ref, conv),
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: bgColor, width: 2),
+                                  boxShadow: const [
+                                    BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                                  ],
+                                ),
+                                child: const Icon(CupertinoIcons.camera_fill, color: Colors.white, size: 14),
+                              ),
+                            ),
+                          )
+                        else
+                          Positioned(
+                            bottom: 4,
+                            right: 4,
+                            child: Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF34C759),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: bgColor, width: 2),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      otherUserName,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    if (otherUserUsername.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        '@$otherUserUsername',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: theme.hintColor,
-                          fontWeight: FontWeight.w500,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          chatTitle,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
                         ),
-                      ),
-                    ],
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Đang hoạt động',
+                        if (isGroup) ...[
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => _showRenameGroupDialog(context, ref, conv),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(CupertinoIcons.pencil, size: 14, color: AppColors.primary),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isGroup
+                          ? 'Nhóm trò chuyện • ${conv.memberIds?.length ?? 0} thành viên'
+                          : (otherUserUsername.isNotEmpty ? '@$otherUserUsername' : 'Đang hoạt động'),
                       style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF34C759),
+                        fontSize: 13,
+                        color: isGroup ? theme.hintColor : const Color(0xFF34C759),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -284,7 +326,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              if (isGroup) ...[
+                const SizedBox(height: 24),
+                _buildGroupMembersSection(context, ref, conv, currentUserId, cardBgColor, dividerColor),
+                const SizedBox(height: 24),
+              ],
 
               // ── Group 2: Personalizations ────────────────────────────────────────
               _buildSectionHeader('TÙY CHỈNH CHAT'),
@@ -444,6 +490,35 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               // ── Group 5: Danger Zone ─────────────────────────────────────────────
               _buildSectionHeader('HÀNH ĐỘNG'),
               Builder(builder: (context) {
+                if (isGroup) {
+                  final isGroupAdmin = conv.groupAdminId == currentUserId;
+                  return _buildCardContainer(
+                    cardBgColor,
+                    children: [
+                      if (isGroupAdmin)
+                        _buildListTile(
+                          context: context,
+                          icon: CupertinoIcons.trash,
+                          gradientColors: [Colors.red, Colors.deepOrange],
+                          title: 'Giải tán nhóm trò chuyện',
+                          titleColor: Colors.red,
+                          trailing: const SizedBox.shrink(),
+                          onTap: () => _confirmDissolveGroup(context, ref, conv),
+                        )
+                      else
+                        _buildListTile(
+                          context: context,
+                          icon: CupertinoIcons.arrow_right_square,
+                          gradientColors: [Colors.orange, Colors.redAccent],
+                          title: 'Rời khỏi nhóm',
+                          titleColor: Colors.redAccent,
+                          trailing: const SizedBox.shrink(),
+                          onTap: () => _confirmLeaveGroup(context, ref, conv),
+                        ),
+                    ],
+                  );
+                }
+
                 final isChatBlocked = ref.watch(isChatBlockedProvider(otherUser?.id ?? ''));
                 return _buildCardContainer(
                   cardBgColor,
@@ -801,5 +876,680 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
         ],
       ),
     );
+  }
+
+  void _showRenameGroupDialog(BuildContext context, WidgetRef ref, dynamic conv) {
+    final controller = TextEditingController(text: conv.groupName ?? '');
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Đổi tên nhóm'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: controller,
+            placeholder: 'Nhập tên nhóm mới...',
+            autofocus: true,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Hủy'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty) {
+                Navigator.pop(ctx);
+                await ref.read(chatRepositoryProvider).updateGroupName(conv.id, newName);
+                ref.invalidate(conversationsProvider);
+                if (context.mounted) {
+                  ToastService.showSuccess(context, 'Đã cập nhật tên nhóm mới');
+                }
+              }
+            },
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAndChangeGroupAvatar(BuildContext context, WidgetRef ref, dynamic conv) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+
+    ToastService.showInfo(context, 'Đang tải ảnh nhóm mới...');
+    try {
+      await ref.read(chatRepositoryProvider).updateGroupAvatar(conv.id, picked);
+      ref.invalidate(conversationsProvider);
+      if (context.mounted) {
+        ToastService.showSuccess(context, 'Đã đổi ảnh nhóm mới thành công!');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ToastService.showError(context, 'Lỗi đổi ảnh nhóm: $e');
+      }
+    }
+  }
+
+  Widget _buildGroupMembersSection(BuildContext context, WidgetRef ref, dynamic conv, String currentUserId, Color cardBgColor, Color dividerColor) {
+    final membersAsync = ref.watch(groupMembersProvider(conv.id));
+    final isGroupAdmin = conv.groupAdminId == currentUserId;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildSectionHeader('DANH SÁCH THÀNH VIÊN'),
+            Padding(
+              padding: const EdgeInsets.only(right: 8, bottom: 8),
+              child: GestureDetector(
+                onTap: () => _showAddMemberModal(context, ref, conv),
+                child: const Row(
+                  children: [
+                    Icon(CupertinoIcons.person_badge_plus, size: 14, color: AppColors.primary),
+                    SizedBox(width: 4),
+                    Text(
+                      'Thêm thành viên',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        _buildCardContainer(
+          cardBgColor,
+          children: [
+            membersAsync.when(
+              data: (members) {
+                if (members.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('Chưa có danh sách thành viên'),
+                  );
+                }
+                return Column(
+                  children: members.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final m = entry.value;
+                    final isMe = m.userId == currentUserId;
+
+                    return Column(
+                      children: [
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: AppAvatar(
+                            imageUrl: m.profile?.avatarUrl,
+                            name: m.profile?.displayName ?? 'Thành viên',
+                            radius: 20,
+                          ),
+                          title: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  isMe ? '${m.profile?.displayName ?? "Tôi"} (Tôi)' : (m.profile?.displayName ?? 'Thành viên'),
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              if (m.isAdmin)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text('👑 ', style: TextStyle(fontSize: 10)),
+                                      Text('Trưởng nhóm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber)),
+                                    ],
+                                  ),
+                                )
+                              else if (m.isCoAdmin)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.purple.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text('⭐ ', style: TextStyle(fontSize: 10)),
+                                      Text('Phó nhóm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.purple)),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            m.profile?.username != null && m.profile!.username.isNotEmpty ? '@${m.profile!.username}' : 'Thành viên nhóm',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                          trailing: (isGroupAdmin && !isMe)
+                              ? const Icon(CupertinoIcons.ellipsis, size: 18, color: Colors.grey)
+                              : null,
+                          onTap: (isGroupAdmin && !isMe)
+                              ? () => _showMemberActionSheet(context, ref, conv, m)
+                              : null,
+                        ),
+                        if (idx < members.length - 1)
+                          Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                      ],
+                    );
+                  }).toList(),
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.all(20),
+                child: CupertinoActivityIndicator(),
+              ),
+              error: (err, _) => Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Lỗi tải thành viên: $err'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _showMemberActionSheet(BuildContext context, WidgetRef ref, dynamic conv, ConversationMemberModel member) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text('Quản lý ${member.profile?.displayName ?? "thành viên"}'),
+        actions: [
+          if (!member.isCoAdmin)
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, 'co_admin');
+                ref.invalidate(groupMembersProvider(conv.id));
+                if (context.mounted) {
+                  ToastService.showSuccess(context, 'Đã thăng cấp làm Phó nhóm');
+                }
+              },
+              child: const Text('⭐ Thăng cấp làm Phó nhóm'),
+            )
+          else
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, 'member');
+                ref.invalidate(groupMembersProvider(conv.id));
+                if (context.mounted) {
+                  ToastService.showInfo(context, 'Đã gỡ quyền Phó nhóm');
+                }
+              },
+              child: const Text('Gỡ quyền Phó nhóm'),
+            ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(chatRepositoryProvider).removeGroupMember(conv.id, member.userId);
+              ref.invalidate(groupMembersProvider(conv.id));
+              ref.invalidate(conversationsProvider);
+              if (context.mounted) {
+                ToastService.showSuccess(context, 'Đã xóa thành viên khỏi nhóm');
+              }
+            },
+            child: const Text('🚫 Xóa khỏi nhóm'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Hủy'),
+        ),
+      ),
+    );
+  }
+
+  void _showAddMemberModal(BuildContext context, WidgetRef ref, dynamic conv) {
+    final currentUserId = ref.read(currentUserIdProvider);
+    if (currentUserId == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _AddMemberModalSheet(conv: conv, currentUserId: currentUserId),
+    );
+  }
+
+  void _confirmLeaveGroup(BuildContext context, WidgetRef ref, dynamic conv) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Rời khỏi nhóm?'),
+        content: const Text('Bạn có chắc chắn muốn rời khỏi nhóm trò chuyện này không?'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Hủy'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              final repo = ref.read(chatRepositoryProvider);
+              Navigator.pop(ctx);
+              ToastService.showInfo(context, 'Đang rời khỏi nhóm...');
+              try {
+                await repo.leaveGroup(conv.id);
+                if (context.mounted) {
+                  ref.invalidate(conversationsProvider);
+                  context.go('/chat');
+                  ToastService.showSuccess(context, 'Đã rời khỏi nhóm');
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ToastService.showError(context, 'Lỗi rời nhóm: $e');
+                }
+              }
+            },
+            child: const Text('Rời nhóm'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDissolveGroup(BuildContext context, WidgetRef ref, dynamic conv) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Giải tán nhóm trò chuyện?'),
+        content: const Text('Thao tác này sẽ xóa toàn bộ nhóm và tin nhắn đối với tất cả thành viên.'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Hủy'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              final repo = ref.read(chatRepositoryProvider);
+              Navigator.pop(ctx);
+              ToastService.showInfo(context, 'Đang giải tán nhóm...');
+              try {
+                await repo.dissolveGroup(conv.id);
+                if (context.mounted) {
+                  ref.invalidate(conversationsProvider);
+                  context.go('/chat');
+                  ToastService.showSuccess(context, 'Đã giải tán nhóm thành công');
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ToastService.showError(context, 'Lỗi giải tán nhóm: $e');
+                }
+              }
+            },
+            child: const Text('Giải tán'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AddMemberModalSheet extends ConsumerStatefulWidget {
+  final dynamic conv;
+  final String currentUserId;
+
+  const _AddMemberModalSheet({required this.conv, required this.currentUserId});
+
+  @override
+  ConsumerState<_AddMemberModalSheet> createState() => _AddMemberModalSheetState();
+}
+
+class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
+  final Set<ProfileModel> _selectedFriends = {};
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isAdding = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final friendsAsync = ref.watch(friendsListProvider(widget.currentUserId));
+    final existingMemberIds = Set<String>.from(widget.conv.memberIds ?? []);
+
+    final cardBgColor = isDark ? const Color(0xFF252536) : const Color(0xFFF4F6FB);
+    final canAdd = _selectedFriends.isNotEmpty && !_isAdding;
+
+    return Container(
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF181824) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // ── 1. Top Header Bar ─────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+              child: Row(
+                children: [
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Hủy',
+                          style: TextStyle(
+                            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'Thêm thành viên mới',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  _isAdding
+                      ? const SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: CupertinoActivityIndicator(),
+                        )
+                      : AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          decoration: BoxDecoration(
+                            gradient: canAdd
+                                ? const LinearGradient(
+                                    colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  )
+                                : null,
+                            color: canAdd
+                                ? null
+                                : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.withValues(alpha: 0.15)),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: canAdd
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(0xFF007AFF).withValues(alpha: 0.35),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    )
+                                  ]
+                                : null,
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: canAdd ? _handleAddMembers : null,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                                child: Text(
+                                  _selectedFriends.isNotEmpty ? 'Thêm (${_selectedFriends.length})' : 'Thêm',
+                                  style: TextStyle(
+                                    color: canAdd ? Colors.white : theme.hintColor.withValues(alpha: 0.5),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.2)),
+
+            // ── 2. Search Field ───────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: CupertinoSearchTextField(
+                  controller: _searchController,
+                  placeholder: 'Tìm kiếm bạn bè...',
+                  placeholderStyle: TextStyle(color: theme.hintColor, fontSize: 14),
+                  style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 15),
+                  backgroundColor: isDark ? const Color(0xFF252536) : const Color(0xFFF0F2F6),
+                  borderRadius: BorderRadius.circular(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+                ),
+              ),
+            ),
+
+            // ── 3. Horizontal Selected Chips ────────────────────────────────
+            if (_selectedFriends.isNotEmpty) ...[
+              Container(
+                height: 72,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _selectedFriends.length,
+                  itemBuilder: (context, idx) {
+                    final friend = _selectedFriends.elementAt(idx);
+                    return Container(
+                      margin: const EdgeInsets.only(right: 12),
+                      child: Stack(
+                        children: [
+                          Column(
+                            children: [
+                              AppAvatar(
+                                imageUrl: friend.avatarUrl,
+                                name: friend.displayName,
+                                radius: 22,
+                              ),
+                              const SizedBox(height: 3),
+                              SizedBox(
+                                width: 50,
+                                child: Text(
+                                  friend.displayName,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: theme.textTheme.bodyMedium?.color,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: () => setState(() => _selectedFriends.remove(friend)),
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(
+                                  color: Colors.redAccent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close, size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.15)),
+            ],
+
+            // ── 4. Friends List ───────────────────────────────────────────────
+            Expanded(
+              child: friendsAsync.when(
+                data: (friendsList) {
+                  final availableFriends = friendsList.where((f) {
+                    if (existingMemberIds.contains(f.id)) return false;
+                    if (_searchQuery.isEmpty) return true;
+                    final name = f.displayName.toLowerCase();
+                    final username = f.username.toLowerCase();
+                    return name.contains(_searchQuery) || username.contains(_searchQuery);
+                  }).toList();
+
+                  if (availableFriends.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(CupertinoIcons.person_3, size: 48, color: theme.hintColor.withValues(alpha: 0.4)),
+                          const SizedBox(height: 12),
+                          Text(
+                            _searchQuery.isNotEmpty ? 'Không tìm thấy bạn bè phù hợp' : 'Tất cả bạn bè đã ở trong nhóm',
+                            style: TextStyle(color: theme.hintColor, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: availableFriends.length,
+                    itemBuilder: (ctx, idx) {
+                      final friend = availableFriends[idx];
+                      final isSelected = _selectedFriends.contains(friend);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.08)
+                              : cardBgColor,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected
+                                ? AppColors.primary
+                                : (isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.03)),
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                          leading: AppAvatar(imageUrl: friend.avatarUrl, name: friend.displayName, radius: 22),
+                          title: Text(
+                            friend.displayName,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          subtitle: Text(
+                            '@${friend.username}',
+                            style: TextStyle(fontSize: 12, color: theme.hintColor),
+                          ),
+                          trailing: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: isSelected
+                                  ? const LinearGradient(
+                                      colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
+                                    )
+                                  : null,
+                              color: isSelected ? null : Colors.transparent,
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.transparent
+                                    : (isDark ? Colors.white38 : Colors.black26),
+                                width: 1.8,
+                              ),
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check, size: 15, color: Colors.white)
+                                : null,
+                          ),
+                          onTap: () {
+                            setState(() {
+                              if (isSelected) {
+                                _selectedFriends.remove(friend);
+                              } else {
+                                _selectedFriends.add(friend);
+                              }
+                            });
+                          },
+                        ),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: CupertinoActivityIndicator()),
+                error: (err, _) => Center(child: Text('Lỗi: $err')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleAddMembers() async {
+    if (_selectedFriends.isEmpty || _isAdding) return;
+
+    setState(() => _isAdding = true);
+    try {
+      final userIds = _selectedFriends.map((f) => f.id).toList();
+      await ref.read(chatRepositoryProvider).addGroupMembers(widget.conv.id, userIds);
+      ref.invalidate(conversationsProvider);
+      ref.invalidate(groupMembersProvider(widget.conv.id));
+      if (mounted) {
+        Navigator.pop(context);
+        ToastService.showSuccess(context, 'Đã thêm ${_selectedFriends.length} thành viên mới vào nhóm!');
+      }
+    } catch (e) {
+      if (mounted) {
+        ToastService.showError(context, 'Lỗi thêm thành viên: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isAdding = false);
+    }
   }
 }

@@ -12,6 +12,7 @@ class MessageModel {
   final String? replyToMessageId;
   final String? callId;
   final bool isFailed;
+  final bool isSending;
 
   // Thuộc tính để lưu tạm UI state cho tin nhắn reply
   final MessageModel? replyToMessage;
@@ -33,6 +34,7 @@ class MessageModel {
     this.replyToMessage,
     this.callId,
     this.isFailed = false,
+    this.isSending = false,
     this.reactions = const {},
   });
 
@@ -133,6 +135,7 @@ class MessageModel {
     MessageModel? replyToMessage,
     String? callId,
     bool? isFailed,
+    bool? isSending,
     Map<String, List<String>>? reactions,
   }) {
     return MessageModel(
@@ -148,6 +151,7 @@ class MessageModel {
       replyToMessage: replyToMessage ?? this.replyToMessage,
       callId: callId ?? this.callId,
       isFailed: isFailed ?? this.isFailed,
+      isSending: isSending ?? this.isSending,
       reactions: reactions ?? this.reactions,
     );
   }

@@ -785,14 +785,14 @@ class _PostPublishPreviewScreenState
   String _getPrivacySubtitle(String p) {
     switch (p) {
       case 'public':
-        return 'Bất kỳ ai ở trong và ngoài MiniSocial';
+        return 'Bất kỳ ai ở trong và ngoài Viora';
       case 'friends':
       case 'followers':
         return 'Bạn bè hoặc người đang theo dõi bạn có thể xem';
       case 'private':
         return 'Chỉ mình bạn mới có thể xem bài viết này';
       default:
-        return 'Bất kỳ ai ở trong và ngoài MiniSocial';
+        return 'Bất kỳ ai ở trong và ngoài Viora';
     }
   }
 }

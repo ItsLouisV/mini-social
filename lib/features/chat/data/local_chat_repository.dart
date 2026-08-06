@@ -5,6 +5,7 @@ import '../../../core/services/objectbox_service.dart';
 import '../../../objectbox.g.dart';
 import '../../profile/domain/profile_model.dart';
 import '../domain/conversation_model.dart';
+import '../domain/conversation_member_model.dart';
 import '../domain/message_model.dart';
 import 'collections/cached_conversation.dart';
 import 'collections/cached_message.dart';
@@ -214,17 +215,17 @@ class LocalChatRepository {
       ConversationModel c, String syncedAt) {
     return CachedConversation()
       ..id = c.id
-      ..participant1 = c.participant1
-      ..participant2 = c.participant2
+      ..participant1 = c.participant1 ?? ''
+      ..participant2 = c.participant2 ?? ''
       ..lastMessage = c.lastMessage
       ..lastMessageAt = c.lastMessageAt?.toUtc().toIso8601String()
       ..lastMessageSenderId = c.lastMessageSenderId
-      ..p1UnreadCount = c.p1UnreadCount
-      ..p2UnreadCount = c.p2UnreadCount
-      ..p1IsPinned = c.p1IsPinned
-      ..p2IsPinned = c.p2IsPinned
-      ..p1IsHidden = c.p1IsHidden
-      ..p2IsHidden = c.p2IsHidden
+      ..p1UnreadCount = c.unreadCount
+      ..p2UnreadCount = 0
+      ..p1IsPinned = c.isPinnedState
+      ..p2IsPinned = false
+      ..p1IsHidden = c.isHiddenState
+      ..p2IsHidden = false
       ..createdAt = c.createdAt.toUtc().toIso8601String()
       ..syncedAt = syncedAt;
   }
@@ -243,12 +244,14 @@ class LocalChatRepository {
           : null,
       createdAt: DateTime.parse(c.createdAt).toLocal(),
       lastMessageSenderId: c.lastMessageSenderId,
-      p1UnreadCount: c.p1UnreadCount,
-      p2UnreadCount: c.p2UnreadCount,
-      p1IsPinned: c.p1IsPinned,
-      p2IsPinned: c.p2IsPinned,
-      p1IsHidden: c.p1IsHidden,
-      p2IsHidden: c.p2IsHidden,
+      myMemberState: ConversationMemberModel(
+        id: c.id,
+        conversationId: c.id,
+        userId: c.participant1,
+        unreadCount: c.p1UnreadCount,
+        isPinned: c.p1IsPinned,
+        isHidden: c.p1IsHidden,
+      ),
       otherUser: otherUser,
     );
   }

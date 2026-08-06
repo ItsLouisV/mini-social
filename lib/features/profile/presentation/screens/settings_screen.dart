@@ -180,7 +180,7 @@ class SettingsScreen extends ConsumerWidget {
                       _IosRow(
                         iconBg: Colors.teal,
                         icon: CupertinoIcons.info_circle_fill,
-                        title: 'MiniSocial',
+                        title: 'Viora',
                         onTap: () {},
                       ),
                     ],
@@ -211,7 +211,7 @@ class SettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 32),
                 Center(
                   child: Text(
-                    'MiniSocial • Phiên bản 1.0.0',
+                    'Viora • Phiên bản 2.1.1',
                     style: TextStyle(
                       color: labelColor,
                       fontSize: 12,

@@ -13,6 +13,7 @@ import '../../../auth/providers/auth_provider.dart';
 import '../../domain/conversation_model.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
+import '../widgets/create_group_modal.dart';
 import '../widgets/new_message_modal.dart';
 import '../widgets/passcode_dialog.dart';
 import '../../../../core/services/connectivity_service.dart';
@@ -62,50 +63,122 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
           ),
         ),
         actions: [
-          IconButton(
-            onPressed: () async {
-              final convs = ref.read(conversationsProvider).valueOrNull ?? [];
-              final currentUserId = ref.read(currentUserIdProvider);
-              final hiddenCount = currentUserId == null ? 0 : convs.where((c) => c.isHidden(currentUserId)).length;
-
-              if (hiddenCount == 0) {
-                // Xoá passcode cũ vì không còn cuộc trò chuyện ẩn nào
-                await ref.read(hiddenChatProvider.notifier).removePasscode();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Chưa có cuộc trò chuyện nào bị ẩn')),
-                  );
-                }
-              } else {
-                final success = await PasscodeDialog.show(context, mode: PasscodeMode.verify);
-                if (success == true && context.mounted) {
-                  context.push('/chat/hidden');
-                }
-              }
-            },
-            icon: Icon(
-              CupertinoIcons.eye_slash,
-              color: theme.colorScheme.primary,
-              size: 24,
-            ),
-          ),
-          IconButton(
-            onPressed: () async {
-              final result = await showModalBottomSheet<String>(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (context) => const NewMessageModal(),
-              );
-              if (result != null && context.mounted) {
-                await context.push('/chat/$result');
-              }
-            },
+          PopupMenuButton<String>(
             icon: Icon(
               CupertinoIcons.square_pencil,
               color: theme.colorScheme.primary,
               size: 22,
             ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            offset: const Offset(0, 42),
+            onSelected: (value) async {
+              switch (value) {
+                case 'create_group':
+                  final groupConvId = await CreateGroupModal.show(context);
+                  if (groupConvId != null && context.mounted) {
+                    context.push('/chat/$groupConvId');
+                  }
+                  break;
+                case 'new_chat':
+                  final result = await NewMessageModal.show(context);
+                  if (result != null && context.mounted) {
+                    await context.push('/chat/$result');
+                  }
+                  break;
+                case 'add_friend':
+                  context.push('/my-qr');
+                  break;
+                case 'hidden_chats':
+                  final convs = ref.read(conversationsProvider).valueOrNull ?? [];
+                  final currentUserId = ref.read(currentUserIdProvider);
+                  final hiddenCount = currentUserId == null ? 0 : convs.where((c) => c.isHidden(currentUserId)).length;
+
+                  if (hiddenCount == 0) {
+                    await ref.read(hiddenChatProvider.notifier).removePasscode();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Chưa có cuộc trò chuyện nào bị ẩn')),
+                      );
+                    }
+                  } else {
+                    final success = await PasscodeDialog.show(context, mode: PasscodeMode.verify);
+                    if (success == true && context.mounted) {
+                      context.push('/chat/hidden');
+                    }
+                  }
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'create_group',
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF5856D6).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(CupertinoIcons.person_3_fill, color: Color(0xFF5856D6), size: 16),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Tạo nhóm mới', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'new_chat',
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF34C759).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(CupertinoIcons.chat_bubble_fill, color: Color(0xFF34C759), size: 16),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Tin nhắn mới', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'add_friend',
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF9F0A).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(CupertinoIcons.person_badge_plus, color: Color(0xFFFF9F0A), size: 16),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Thêm bạn mới', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'hidden_chats',
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(CupertinoIcons.eye_slash_fill, color: Colors.grey, size: 16),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Cuộc trò chuyện ẩn', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 4),
         ],
@@ -214,6 +287,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                             return _ConversationTile(
                               conv: conv,
                               currentUserId: currentUserId,
+                              isSearching: _searchQuery.isNotEmpty,
                               onTap: () async {
                                 if (isHidden) {
                                   final success = await PasscodeDialog.show(context, mode: PasscodeMode.verify);
@@ -246,11 +320,13 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
 class _ConversationTile extends ConsumerWidget {
   final ConversationModel conv;
   final String? currentUserId;
+  final bool isSearching;
   final VoidCallback onTap;
 
   const _ConversationTile({
     required this.conv,
     required this.currentUserId,
+    this.isSearching = false,
     required this.onTap,
   });
 
@@ -490,12 +566,12 @@ class _ConversationTile extends ConsumerWidget {
   
                 // Avatar
                 AppAvatar(
-                  imageUrl: conv.otherUser?.avatarUrl,
-                  name: conv.otherUser?.displayName,
-                  radius: 25, // Sleek 50px avatar
+                  imageUrl: conv.isGroup ? conv.groupAvatarUrl : conv.otherUser?.avatarUrl,
+                  name: conv.isGroup ? (conv.groupName ?? 'Group') : conv.otherUser?.displayName,
+                  radius: 25,
                 ),
                 const SizedBox(width: 12),
-  
+
                 // Text content
                 Expanded(
                   child: Column(
@@ -506,12 +582,12 @@ class _ConversationTile extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              conv.otherUser?.displayName ?? 'Người dùng',
+                              conv.isGroup
+                                  ? (conv.groupName ?? 'Nhóm trò chuyện')
+                                  : (conv.otherUser?.displayName ?? 'Người dùng'),
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: hasUnread
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
+                                fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
                                 color: titleColor,
                                 letterSpacing: -0.2,
                               ),
@@ -540,47 +616,59 @@ class _ConversationTile extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: 3),
-                      Text(
-                        (conv.lastMessage != null)
-                            ? (conv.lastMessageSenderId == currentUserId
-                                ? 'Bạn: ${conv.lastMessage}'
-                                : conv.lastMessage!)
-                            : 'Bắt đầu cuộc trò chuyện',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: hasUnread
-                              ? (isDark ? Colors.white : Colors.black)
-                              : hintColor,
-                          fontWeight: hasUnread
-                              ? FontWeight.w500
-                              : FontWeight.w400,
-                          fontSize: 14,
+
+                      // Khi đang tìm kiếm: CHỈ hiển thị username/thành viên, ẨN HOÀN TOÀN lastMessage
+                      if (isSearching)
+                        Text(
+                          conv.isGroup
+                              ? '${conv.memberIds?.length ?? 0} thành viên'
+                              : (conv.otherUser?.username != null ? '@${conv.otherUser!.username}' : ''),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: hintColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        )
+                      else
+                        Text(
+                          (conv.lastMessage != null)
+                              ? (conv.lastMessageSenderId == currentUserId
+                                  ? 'Bạn: ${conv.lastMessage}'
+                                  : conv.lastMessage!)
+                              : 'Bắt đầu cuộc trò chuyện',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: hasUnread
+                                ? (isDark ? Colors.white : Colors.black)
+                                : hintColor,
+                            fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                            fontSize: 14,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 10),
-  
-                // Time & chevron
+
+                // Time & chevron (Khi tìm kiếm: CHỈ hiển thị chevron, ẩn timestamp)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      conv.lastMessageAt?.chatTimestamp ?? '',
-                      style: TextStyle(
-                        color: hasUnread
-                            ? const Color(0xFF007AFF)
-                            : hintColor,
-                        fontSize: 12,
-                        fontWeight: hasUnread
-                            ? FontWeight.w500
-                            : FontWeight.w400,
+                    if (!isSearching) ...[
+                      Text(
+                        conv.lastMessageAt?.chatTimestamp ?? '',
+                        style: TextStyle(
+                          color: hasUnread ? const Color(0xFF007AFF) : hintColor,
+                          fontSize: 12,
+                          fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
+                      const SizedBox(height: 4),
+                    ],
                     Icon(
                       CupertinoIcons.chevron_forward,
                       size: 14,

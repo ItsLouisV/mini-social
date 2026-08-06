@@ -637,15 +637,10 @@ class _IosTabBar extends StatelessWidget {
                 final totalWidth = constraints.maxWidth;
                 final slotWidth = totalWidth / 5;
 
-                // Pill indicator — co giãn theo slot, không vượt quá slot
-                final pillWidth = (slotWidth * (isCompact ? 0.85 : 0.90))
-                    .clamp(40.0, slotWidth);
-                final pillHeight = isCompact
-                    ? (barHeightCompact  * 0.72).clamp(22.0, 38.0)
-                    : (barHeightExpanded * 0.70).clamp(28.0, 48.0);
-                final pillRadius = isCompact
-                    ? (outerRadiusCompact  * 0.80).clamp(10.0, 24.0)
-                    : (outerRadiusExpanded * 0.78).clamp(14.0, 30.0);
+                // Pill indicator — tỉ lệ 80% chiều cao container giúp hình elip cao ráo & hiện đại
+                final pillWidth = (slotWidth * 0.90).clamp(42.0, slotWidth);
+                final pillHeight = (constraints.maxHeight * 0.80).clamp(36.0, 54.0);
+                final pillRadius = pillHeight / 2;
 
                 final indicatorLeft =
                     (slotWidth * visualIndex) + (slotWidth - pillWidth) / 2;
@@ -812,10 +807,8 @@ class _TabItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isActive = visualIdx == currentVisualIdx;
     final color = isActive ? AppColors.primary : AppColors.textHint;
-    // Icon size co giãn theo scale, clamp để không quá nhỏ / quá lớn
-    final iconSize = isCompact
-        ? (16.0 * scale).clamp(13.0, 22.0)
-        : (21.0 * scale).clamp(17.0, 28.0);
+    // Icon size tỉ lệ chuẩn với active elipse indicator (AnimatedScale tự co giãn đồng bộ)
+    final iconSize = (21.0 * scale).clamp(17.0, 28.0);
 
     Widget iconWidget;
     if (faIcon != null && faActiveIcon != null) {

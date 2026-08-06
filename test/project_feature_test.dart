@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mini_social/features/chat/domain/conversation_model.dart';
-import 'package:mini_social/features/chat/domain/message_model.dart';
-import 'package:mini_social/features/profile/domain/profile_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:realtime_client/realtime_client.dart';
+import 'package:viora/core/services/upstash_redis_service.dart';
+import 'package:viora/features/chat/domain/conversation_model.dart';
+import 'package:viora/features/chat/domain/message_model.dart';
+import 'package:viora/features/profile/domain/profile_model.dart';
 
 void main() {
   group('1. ConversationModel Tests', () {
@@ -177,6 +180,13 @@ void main() {
       expect(profile.displayName, equals('Louis V'));
       expect(profile.username, equals('louisv'));
       expect(profile.avatarUrl, equals('https://domain.com/avatar.jpg'));
+    });
+  });
+
+  group('5. UpstashRedisService Tests', () {
+    test('Should initialize UpstashRedisService with configured credentials', () {
+      final service = UpstashRedisService();
+      expect(service.isConfigured, isTrue);
     });
   });
 }
