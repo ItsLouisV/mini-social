@@ -696,7 +696,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                   : (message.isImage && !hasCaption
                       ? Colors.transparent
                       : (isMine ? myBubbleColor : theirBubbleColor))),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isHighlighted
                 ? theme.colorScheme.primary
@@ -705,7 +705,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
           ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
