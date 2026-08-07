@@ -12,6 +12,7 @@ import '../../../../shared/widgets/error_widget.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../domain/conversation_model.dart';
 import '../../providers/chat_provider.dart';
+import '../widgets/slidable_circular_action_button.dart';
 
 class HiddenConversationsScreen extends ConsumerWidget {
   const HiddenConversationsScreen({super.key});
@@ -121,7 +122,8 @@ class _HiddenConversationTile extends ConsumerStatefulWidget {
 }
 
 class _HiddenConversationTileState
-    extends ConsumerState<_HiddenConversationTile> with SingleTickerProviderStateMixin {
+  extends ConsumerState<_HiddenConversationTile> with SingleTickerProviderStateMixin {
+  static const double _actionWidth = 72.0;
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _squashAnimation;
@@ -158,15 +160,21 @@ class _HiddenConversationTileState
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final pressedColor = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA);
+    final normalColor = Theme.of(context).scaffoldBackgroundColor;
+
+    final pressedColor = isDark
+        ? const Color(0xFF2C2C2E)
+        : const Color(0xFFE5E5EA);
 
     _colorAnimation = ColorTween(
-      begin: Colors.transparent,
+      begin: normalColor,
       end: pressedColor,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+      ),
+    );
   }
 
   @override
@@ -204,6 +212,23 @@ class _HiddenConversationTileState
     _controller.animateWith(simulation);
   }
 
+  double _actionExtentRatio(
+    BuildContext context,
+    int actionCount,
+  ) {
+    final availableWidth = MediaQuery.sizeOf(context).width;
+
+    // Không chỉ circle 42px.
+    // Cần cả khoảng trống xung quanh action để swipe nhìn thoáng.
+    const actionSlotWidth = 72.0;
+
+    final requiredWidth =
+        actionSlotWidth * actionCount;
+
+    return (requiredWidth / availableWidth)
+        .clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -214,131 +239,52 @@ class _HiddenConversationTileState
     final titleColor = theme.textTheme.titleMedium?.color;
     final hintColor = theme.hintColor;
 
-    return Slidable(
-      key: ValueKey(widget.conv.id),
-      // Vuốt từ Trái -> Phải: Bỏ ẩn với StretchMotion & ExtentRatio
-      startActionPane: ActionPane(
-        motion: const StretchMotion(),
-        extentRatio: 0.22,
-        children: [
-          CustomSlidableAction(
-            onPressed: (context) {
-              HapticFeedback.lightImpact();
-              ref.read(chatRepositoryProvider).toggleHide(widget.conv);
-            },
-            backgroundColor: Colors.transparent,
-            child: Container(
-              alignment: Alignment.center,
-              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF34C759), // Green iOS
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF34C759).withValues(alpha: 0.15),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  )
-                ],
-              ),
-              child: LayoutBuilder(builder: (context, constraints) {
-                if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
-                  return const SizedBox.shrink();
-                }
-                return const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(CupertinoIcons.eye_fill, color: Colors.white, size: 20),
-                    SizedBox(height: 4),
-                    Text(
-                      'Bỏ ẩn',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ),
-          ),
-        ],
-      ),
-      // Vuốt từ Phải -> Trái: Xoá với StretchMotion & ExtentRatio
-      endActionPane: ActionPane(
-        motion: const StretchMotion(),
-        extentRatio: 0.22,
-        children: [
-          CustomSlidableAction(
-            onPressed: (context) {
-              HapticFeedback.lightImpact();
-              showCupertinoDialog(
-                context: context,
-                builder: (ctx) => CupertinoAlertDialog(
-                  title: const Text('Xoá cuộc trò chuyện?'),
-                  content: const Text(
-                      'Thao tác này sẽ xoá toàn bộ tin nhắn ở cả 2 phía. Bạn có chắc chắn không?'),
-                  actions: [
-                    CupertinoDialogAction(
-                      child: const Text('Huỷ'),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                    CupertinoDialogAction(
-                      isDestructiveAction: true,
-                      onPressed: () {
-                        HapticFeedback.mediumImpact();
-                        Navigator.pop(ctx);
-                        ref
-                            .read(chatRepositoryProvider)
-                            .deleteConversation(widget.conv.id);
-                      },
-                      child: const Text('Xoá'),
-                    ),
-                  ],
+    return IOSRubberbandSlidableTile(
+      startActions: [
+        SlidableActionItem(
+          icon: CupertinoIcons.eye_fill,
+          label: 'Bỏ ẩn',
+          color: const Color(0xFF34C759),
+          onTap: () async {
+            await ref.read(chatRepositoryProvider).toggleHide(widget.conv);
+            ref.invalidate(conversationsProvider);
+          },
+        ),
+      ],
+      endActions: [
+        SlidableActionItem(
+          icon: CupertinoIcons.trash_fill,
+          label: 'Xoá',
+          color: const Color(0xFFFF3B30),
+          onTap: () {
+            showCupertinoDialog(
+              context: context,
+              builder: (ctx) => CupertinoAlertDialog(
+                title: const Text('Xoá cuộc trò chuyện?'),
+                content: const Text(
+                  'Thao tác này sẽ xoá toàn bộ tin nhắn ở cả 2 phía. Bạn có chắc chắn không?',
                 ),
-              );
-            },
-            backgroundColor: Colors.transparent,
-            child: Container(
-              alignment: Alignment.center,
-              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF3B30), // Red iOS
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFF3B30).withValues(alpha: 0.15),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  )
+                actions: [
+                  CupertinoDialogAction(
+                    child: const Text('Huỷ'),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                  CupertinoDialogAction(
+                    isDestructiveAction: true,
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      Navigator.pop(ctx);
+                      ref.read(chatRepositoryProvider).deleteConversation(widget.conv.id);
+                    },
+                    child: const Text('Xoá'),
+                  ),
                 ],
               ),
-              child: LayoutBuilder(builder: (context, constraints) {
-                if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
-                  return const SizedBox.shrink();
-                }
-                return const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(CupertinoIcons.trash_fill,
-                        color: Colors.white, size: 20),
-                    SizedBox(height: 4),
-                    Text(
-                      'Xoá',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        ),
+      ],
+
       child: GestureDetector(
         onTapDown: _handleTapDown,
         onTapUp: _handleTapUp,
@@ -453,3 +399,5 @@ class _HiddenConversationTileState
     );
   }
 }
+
+

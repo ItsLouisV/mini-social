@@ -6,8 +6,12 @@ import '../../feed/domain/post_model.dart';
 import '../../social/data/ai_repository.dart';
 import '../../../shared/providers/supabase_provider.dart';
 
+import '../../../core/services/isar_service.dart';
+
 final searchRepositoryProvider = Provider<SearchRepository>((ref) {
-  return SearchRepository(ref.watch(supabaseClientProvider));
+  final client = ref.watch(supabaseClientProvider);
+  final isar = ref.watch(isarServiceProvider);
+  return SearchRepository(client, isar);
 });
 
 /// Lưu từ khoá đang nhập

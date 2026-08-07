@@ -1,12 +1,17 @@
+import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:isar/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../profile/domain/profile_model.dart';
 import '../../feed/domain/post_model.dart';
 import '../../../core/constants/supabase_constants.dart';
+import '../../../core/services/isar_service.dart';
+import '../../../core/database/collections/isar_search_history.dart';
 
 class SearchRepository {
   final SupabaseClient _client;
+  final IsarService? _isarService;
 
-  SearchRepository(this._client);
+  SearchRepository(this._client, [this._isarService]);
 
   String? get _currentUserId => _client.auth.currentUser?.id;
 
@@ -100,5 +105,49 @@ class SearchRepository {
       return list.where((u) => u.id != _currentUserId).take(limit).toList();
     }
     return list.take(limit).toList();
+  }
+
+  /// Lưu lịch sử tìm kiếm vào Isar / Hive DB
+  Future<void> saveSearchQuery(String query) async {
+    if (query.trim().isEmpty) return;
+    if (_isarService?.isar != null) {
+      final cleanQuery = query.trim();
+      final item = IsarSearchHistory(
+        id: cleanQuery.toLowerCase(),
+        query: cleanQuery,
+        timestamp: DateTime.now().toUtc(),
+      );
+      await _isarService!.isar!.writeTxn(() async {
+        await _isarService!.isar!.isarSearchHistorys.put(item);
+      });
+    } else if (_isarService?.webService != null) {
+      await _isarService!.webService!.saveSearchQuery(query);
+    }
+  }
+
+  /// Đọc lịch sử tìm kiếm từ Isar / Hive DB
+  Future<List<String>> getSearchHistory({int limit = 10}) async {
+    if (_isarService?.isar != null) {
+      final items = await _isarService!.isar!.isarSearchHistorys
+          .where()
+          .sortByTimestampDesc()
+          .limit(limit)
+          .findAll();
+      return items.map((e) => e.query).toList();
+    } else if (_isarService?.webService != null) {
+      return _isarService!.webService!.getSearchHistory(limit: limit);
+    }
+    return [];
+  }
+
+  /// Xóa sạch lịch sử tìm kiếm Isar / Hive DB
+  Future<void> clearSearchHistory() async {
+    if (_isarService?.isar != null) {
+      await _isarService!.isar!.writeTxn(() async {
+        await _isarService!.isar!.isarSearchHistorys.clear();
+      });
+    } else if (_isarService?.webService != null) {
+      await _isarService!.webService!.clearSearchHistory();
+    }
   }
 }

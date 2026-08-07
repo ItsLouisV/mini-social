@@ -967,13 +967,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     try {
       if (image != null) {
-        await ref.read(chatRepositoryProvider).sendImageMessage(
+        final sentMsg = await ref.read(chatRepositoryProvider).sendImageMessage(
               widget.conversationId,
               image,
               caption: text.isNotEmpty ? text : null,
               replyToMessageId: replyId,
               messageType: msgType,
             );
+        // Thêm ngay vào state — không cần chờ realtime
+        ref
+            .read(realtimeMessagesProvider(widget.conversationId).notifier)
+            .addOptimisticMessage(sentMsg);
       } else if (text.isNotEmpty) {
         await ref
             .read(chatRepositoryProvider)
@@ -1779,8 +1783,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final otherUserName = otherUser?.displayName ?? 'Người dùng';
 
     final msg = _replyingToMessage!;
-    final senderName =
-        msg.senderId == currentUserId ? 'Bạn' : otherUserName;
+    final replySenderProfile = ref.watch(profileProvider(msg.senderId)).valueOrNull;
+    final senderName = msg.senderId == currentUserId
+        ? 'Bạn'
+        : (replySenderProfile?.displayName ?? replySenderProfile?.fullName ?? otherUserName);
     final replyContent = msg.isText
         ? msg.content
         : (msg.isVoice ? 'Tin nhắn thoại' : (msg.isImage ? 'Hình ảnh' : 'Cuộc gọi'));
@@ -2496,10 +2502,11 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              message.replyToMessage!.senderId ==
-                                      widget.currentUserId
-                                  ? 'Bạn'
-                                  : widget.otherUserName,
+                              () {
+                                if (message.replyToMessage!.senderId == widget.currentUserId) return 'Bạn';
+                                final replyProfile = ref.watch(profileProvider(message.replyToMessage!.senderId)).valueOrNull;
+                                return replyProfile?.displayName ?? replyProfile?.fullName ?? (widget.isGroup ? 'Thành viên' : widget.otherUserName);
+                              }(),
                               style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -2980,10 +2987,11 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  message.replyToMessage!.senderId ==
-                                          widget.currentUserId
-                                      ? 'Bạn'
-                                      : widget.otherUserName,
+                                  () {
+                                    if (message.replyToMessage!.senderId == widget.currentUserId) return 'Bạn';
+                                    final replyProfile = ref.watch(profileProvider(message.replyToMessage!.senderId)).valueOrNull;
+                                    return replyProfile?.displayName ?? replyProfile?.fullName ?? (widget.isGroup ? 'Thành viên' : widget.otherUserName);
+                                  }(),
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,

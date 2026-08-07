@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mini_social/core/errors/exceptions.dart';
-import 'package:mini_social/core/errors/failure.dart';
-import 'package:mini_social/core/errors/global_error_handler.dart';
+import 'package:viora/core/errors/exceptions.dart';
+import 'package:viora/core/errors/failure.dart';
+import 'package:viora/core/errors/global_error_handler.dart';
 
 void main() {
   group('GlobalErrorHandler Exception Mapping Tests', () {

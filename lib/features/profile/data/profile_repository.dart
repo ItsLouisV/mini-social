@@ -1,10 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:isar/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/profile_model.dart';
 import '../../../core/constants/supabase_constants.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../feed/domain/post_model.dart';
+
+import '../../../core/services/isar_service.dart';
+import '../../../core/database/collections/isar_profile.dart';
 
 class UserPostsData {
   final List<PostModel> posts;
@@ -19,76 +23,87 @@ class UserPostsData {
     this.isFriendOrFollower = false,
   });
 }
-
+ 
 class ProfileRepository {
   final SupabaseService _service;
+  final IsarService? _isarService;
 
-  ProfileRepository(this._service);
+  ProfileRepository(this._service, [this._isarService]);
 
   SupabaseClient get _client => _service.client;
   String? get currentUserId => _service.currentUserId;
 
   Future<ProfileModel> getProfile(String userId) async {
-    final response = await _client
-        .from(SupabaseConstants.profilesTable)
-        .select('''
-          *,
-          posts_count:posts(count),
-          followers_count:follows!follows_following_id_fkey(count),
-          following_count:follows!follows_follower_id_fkey(count)
-        ''')
-        .eq('id', userId)
-        .single();
+    try {
+      final response = await _client
+          .from(SupabaseConstants.profilesTable)
+          .select('''
+            *,
+            posts_count:posts(count),
+            followers_count:follows!follows_following_id_fkey(count),
+            following_count:follows!follows_follower_id_fkey(count)
+          ''')
+          .eq('id', userId)
+          .single();
 
-    // Flatten counts from nested aggregates
-    final json = Map<String, dynamic>.from(response);
-    json['posts_count'] =
-        (response['posts_count'] as List?)?.first?['count'] ?? 0;
-    json['followers_count'] =
-        (response['followers_count'] as List?)?.first?['count'] ?? 0;
-    json['following_count'] =
-        (response['following_count'] as List?)?.first?['count'] ?? 0;
+      final json = Map<String, dynamic>.from(response);
+      json['posts_count'] =
+          (response['posts_count'] as List?)?.first?['count'] ?? 0;
+      json['followers_count'] =
+          (response['followers_count'] as List?)?.first?['count'] ?? 0;
+      json['following_count'] =
+          (response['following_count'] as List?)?.first?['count'] ?? 0;
 
-    // Tự động đồng bộ ảnh đại diện & tên từ OAuth (Google) vào bảng profiles nếu chưa có
-    final currentUser = _client.auth.currentUser;
-    if (currentUser != null && currentUser.id == userId) {
-      final meta = currentUser.userMetadata;
-      if (meta != null) {
-        final googleAvatar = (meta['avatar_url'] ?? meta['picture']) as String?;
-        final googleName = (meta['full_name'] ?? meta['name']) as String?;
-        final currentAvatar = json['avatar_url'] as String?;
-        final currentFullName = json['full_name'] as String?;
+      final model = ProfileModel.fromJson(json);
 
-        final updates = <String, dynamic>{};
-        if ((currentAvatar == null || currentAvatar.isEmpty) &&
-            googleAvatar != null &&
-            googleAvatar.isNotEmpty) {
-          updates['avatar_url'] = googleAvatar;
-          json['avatar_url'] = googleAvatar;
+      // Cache to Isar
+      if (_isarService?.isar != null) {
+        await _isarService!.isar!.writeTxn(() async {
+          await _isarService!.isar!.isarProfiles.put(IsarProfile(
+            id: model.id,
+            username: model.username,
+            fullName: model.fullName,
+            avatarUrl: model.avatarUrl,
+            bio: model.bio,
+            followerCount: model.followersCount,
+            followingCount: model.followingCount,
+            updatedAt: DateTime.now().toUtc(),
+          ));
+        });
+      }
+
+      if (_isarService?.webService != null) {
+        await _isarService!.webService!.saveProfile(model.toJson());
+      }
+
+      return model;
+    } catch (e) {
+      debugPrint('⚠️ [ProfileRepository] Offline fallback for profile: $e');
+      if (_isarService?.isar != null) {
+        final cached = await _isarService!.isar!.isarProfiles
+            .filter()
+            .idEqualTo(userId)
+            .findFirst();
+        if (cached != null) {
+          return ProfileModel(
+            id: cached.id,
+            username: cached.username,
+            fullName: cached.fullName,
+            avatarUrl: cached.avatarUrl,
+            bio: cached.bio,
+            followersCount: cached.followerCount,
+            followingCount: cached.followingCount,
+            createdAt: DateTime.now(),
+          );
         }
-        if ((currentFullName == null || currentFullName.isEmpty) &&
-            googleName != null &&
-            googleName.isNotEmpty) {
-          updates['full_name'] = googleName;
-          json['full_name'] = googleName;
-        }
-
-        if (updates.isNotEmpty) {
-          Future(() async {
-            try {
-              await _client
-                  .from(SupabaseConstants.profilesTable)
-                  .update(updates)
-                  .eq('id', userId);
-            } catch (e) {
-              debugPrint('Error syncing OAuth profile data: $e');
-            }
-          });
+      } else if (_isarService?.webService != null) {
+        final cached = _isarService!.webService!.getProfile(userId);
+        if (cached != null) {
+          return ProfileModel.fromJson(cached);
         }
       }
+      rethrow;
     }
-
-    return ProfileModel.fromJson(json);
   }
 
   Future<void> updateProfile({

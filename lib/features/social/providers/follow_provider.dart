@@ -7,8 +7,12 @@ import '../../../core/services/supabase_service.dart';
 import '../../profile/providers/profile_provider.dart';
 import 'follow_list_provider.dart';
 
+import '../../../core/services/isar_service.dart';
+
 final socialRepositoryProvider = Provider<SocialRepository>((ref) {
-  return SocialRepository(ref.watch(supabaseServiceProvider));
+  final supabase = ref.watch(supabaseServiceProvider);
+  final isar = ref.watch(isarServiceProvider);
+  return SocialRepository(supabase, isar);
 });
 
 final isFollowingProvider = StateNotifierProvider.family<IsFollowingNotifier, AsyncValue<bool>, String>((ref, userId) {

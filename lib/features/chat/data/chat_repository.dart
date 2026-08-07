@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:isar/isar.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -11,14 +14,25 @@ import '../../profile/domain/profile_model.dart';
 import '../../../core/constants/supabase_constants.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/upstash_redis_service.dart';
+import '../../../core/services/isar_service.dart';
+import '../../../core/services/sync_engine.dart';
+import '../../../core/database/collections/isar_message.dart';
+import '../../../core/database/collections/isar_conversation.dart';
 import '../../../core/utils/image_compressor.dart';
 
 class ChatRepository {
   final SupabaseService _service;
+  final IsarService? _isarService;
+  final SyncEngine? _syncEngine;
   final UpstashRedisService? _upstashRedis;
   final _uuid = const Uuid();
 
-  ChatRepository(this._service, [this._upstashRedis]);
+  ChatRepository(
+    this._service, [
+    this._isarService,
+    this._syncEngine,
+    this._upstashRedis,
+  ]);
 
   SupabaseClient get _client => _service.client;
   String? get currentUserId => _service.currentUserId;
@@ -27,64 +41,126 @@ class ChatRepository {
 
   Future<List<ConversationModel>> getConversations() async {
     final userId = currentUserId!;
-    final memberRows = await _client
-        .from('conversation_members')
-        .select('*, conversation:conversations(*, last_message_sender:messages!fk_last_message(sender_id))')
-        .eq('user_id', userId);
+    try {
+      final memberRows = await _client
+          .from('conversation_members')
+          .select('*, conversation:conversations(*, last_message_sender:messages!fk_last_message(sender_id))')
+          .eq('user_id', userId);
 
-    final conversations = <ConversationModel>[];
-    for (final row in (memberRows as List)) {
-      final convJson = row['conversation'] as Map<String, dynamic>?;
-      if (convJson == null) continue;
+      final conversations = <ConversationModel>[];
+      for (final row in (memberRows as List)) {
+        final convJson = row['conversation'] as Map<String, dynamic>?;
+        if (convJson == null) continue;
 
-      final myMemberState = ConversationMemberModel.fromJson(row);
+        final myMemberState = ConversationMemberModel.fromJson(row);
 
-      ProfileModel? otherUser;
-      List<ConversationMemberModel>? groupMembers;
+        ProfileModel? otherUser;
+        List<ConversationMemberModel>? groupMembers;
 
-      if (convJson['type'] == 'direct' || convJson['type'] == null) {
-        final p1 = convJson['participant_1'] as String?;
-        final p2 = convJson['participant_2'] as String?;
-        final otherUserId = p1 == userId ? p2 : p1;
-        if (otherUserId != null && otherUserId.isNotEmpty) {
+        if (convJson['type'] == 'direct' || convJson['type'] == null) {
+          final p1 = convJson['participant_1'] as String?;
+          final p2 = convJson['participant_2'] as String?;
+          final otherUserId = p1 == userId ? p2 : p1;
+          if (otherUserId != null && otherUserId.isNotEmpty) {
+            try {
+              final profileData = await _client
+                  .from(SupabaseConstants.profilesTable)
+                  .select()
+                  .eq('id', otherUserId)
+                  .single();
+              otherUser = ProfileModel.fromJson(profileData);
+            } catch (_) {}
+          }
+        } else if (convJson['type'] == 'group') {
           try {
-            final profileData = await _client
-                .from(SupabaseConstants.profilesTable)
-                .select()
-                .eq('id', otherUserId)
-                .single();
-            otherUser = ProfileModel.fromJson(profileData);
+            final mData = await _client
+                .from('conversation_members')
+                .select('*, profile:profiles(*)')
+                .eq('conversation_id', convJson['id'] as String);
+            groupMembers = (mData as List)
+                .map((m) => ConversationMemberModel.fromJson(m))
+                .toList();
           } catch (_) {}
         }
-      } else if (convJson['type'] == 'group') {
-        try {
-          final mData = await _client
-              .from('conversation_members')
-              .select('*, profile:profiles(*)')
-              .eq('conversation_id', convJson['id'] as String);
-          groupMembers = (mData as List)
-              .map((m) => ConversationMemberModel.fromJson(m))
-              .toList();
-        } catch (_) {}
-      }
 
-      conversations.add(
-        ConversationModel.fromJson(
+        final model = ConversationModel.fromJson(
           convJson,
           myMemberState: myMemberState,
           otherUser: otherUser,
           members: groupMembers,
-        ),
-      );
+        );
+        conversations.add(model);
+
+        // Sync to Isar local DB
+        if (_isarService?.isar != null) {
+          await _isarService!.isar!.writeTxn(() async {
+            await _isarService!.isar!.isarConversations.put(IsarConversation(
+              id: model.id,
+              type: model.type,
+              name: model.name,
+              avatarUrl: model.avatarUrl,
+              lastMessage: model.lastMessage,
+              lastMessageAt: model.lastMessageAt,
+              unreadCount: model.unreadCount,
+              isPinned: model.isPinnedState,
+              isMuted: model.isMuted,
+              isHidden: model.isHiddenState,
+              otherUserId: model.otherUser?.id,
+              otherUserName: model.otherUser?.fullName ?? model.otherUser?.username,
+              otherUserAvatar: model.otherUser?.avatarUrl,
+              updatedAt: DateTime.now().toUtc(),
+            ));
+          });
+        }
+        if (_isarService?.webService != null) {
+          await _isarService!.webService!.saveConversation(model.toJson());
+        }
+      }
+
+      conversations.sort((a, b) {
+        final aDate = a.lastMessageAt ?? a.createdAt;
+        final bDate = b.lastMessageAt ?? b.createdAt;
+        return bDate.compareTo(aDate);
+      });
+
+      return conversations;
+    } catch (e) {
+      debugPrint('⚠️ [ChatRepository] Failed fetching online conversations, loading from local DB: $e');
+      if (_isarService?.isar != null) {
+        final cached = await _isarService!.isar!.isarConversations.where().findAll();
+        return cached.map((c) => ConversationModel(
+          id: c.id,
+          type: c.type,
+          name: c.name,
+          avatarUrl: c.avatarUrl,
+          lastMessage: c.lastMessage,
+          lastMessageAt: c.lastMessageAt,
+          createdAt: c.lastMessageAt ?? DateTime.now(),
+          myMemberState: ConversationMemberModel(
+            id: 'offline_${c.id}',
+            conversationId: c.id,
+            userId: currentUserId ?? '',
+            unreadCount: c.unreadCount,
+            isPinned: c.isPinned,
+            isMuted: c.isMuted,
+            isHidden: c.isHidden,
+          ),
+          otherUser: c.otherUserId != null
+              ? ProfileModel(
+                  id: c.otherUserId!,
+                  username: c.otherUserName ?? '',
+                  fullName: c.otherUserName,
+                  avatarUrl: c.otherUserAvatar,
+                  createdAt: DateTime.now(),
+                )
+              : null,
+        )).toList();
+      } else if (_isarService?.webService != null) {
+        final cached = _isarService!.webService!.getConversations();
+        return cached.map((json) => ConversationModel.fromJson(json)).toList();
+      }
+      rethrow;
     }
-
-    conversations.sort((a, b) {
-      final aDate = a.lastMessageAt ?? a.createdAt;
-      final bDate = b.lastMessageAt ?? b.createdAt;
-      return bDate.compareTo(aDate);
-    });
-
-    return conversations;
   }
 
   Stream<List<ConversationModel>> watchConversations() async* {
@@ -114,17 +190,32 @@ class ChatRepository {
     }
   }
 
-  /// Stream thô — chỉ emit khi có thay đổi, không fetch models.
+  /// Stream thô — chỉ emit khi có thay đổi (ở cả conversations và conversation_members), không fetch models.
   /// Dùng bởi offline-first provider để trigger sync.
   Stream<void> watchConversationsStream() {
-    return _client
+    final stream1 = _client
         .from(SupabaseConstants.conversationsTable)
         .stream(primaryKey: ['id'])
-        .map((_) {})
-        .handleError((err) {
-          print('Supabase watchConversationsStream error: $err');
-          _service.handleAuthError(err);
-        });
+        .map((_) {});
+
+    final stream2 = _client
+        .from('conversation_members')
+        .stream(primaryKey: ['id'])
+        .map((_) {});
+
+    final controller = StreamController<void>();
+    final s1 = stream1.listen((_) => controller.add(null), onError: (e) {});
+    final s2 = stream2.listen((_) => controller.add(null), onError: (e) {});
+
+    controller.onCancel = () {
+      s1.cancel();
+      s2.cancel();
+    };
+
+    return controller.stream.handleError((err) {
+      print('Supabase watchConversationsStream error: $err');
+      _service.handleAuthError(err);
+    });
   }
 
   Future<ConversationModel> getOrCreateConversation(String otherUserId) async {
@@ -455,12 +546,21 @@ class ChatRepository {
       for (final mId in memberIds) {
         if (mId == userId) continue;
         try {
-          await _client.from(SupabaseConstants.notificationsTable).insert({
-            'receiver_id': mId,
-            'sender_id': userId,
-            'type': 'friend_request',
-            'content': 'Trưởng nhóm đã giải tán nhóm "$groupName"',
-          });
+          try {
+            await _client.from(SupabaseConstants.notificationsTable).insert({
+              'receiver_id': mId,
+              'sender_id': userId,
+              'type': 'group_dissolved',
+              'content': 'Trưởng nhóm đã giải tán nhóm "$groupName". Bạn không thể truy cập vào nhóm này nữa',
+            });
+          } catch (_) {
+            await _client.from(SupabaseConstants.notificationsTable).insert({
+              'receiver_id': mId,
+              'sender_id': userId,
+              'type': 'other',
+              'content': 'Trưởng nhóm đã giải tán nhóm "$groupName". Bạn không thể truy cập vào nhóm này nữa',
+            });
+          }
         } catch (e) {
           debugPrint('⚠️ [ChatRepository] Lỗi gửi thông báo giải tán tới $mId: $e');
         }
@@ -512,12 +612,17 @@ class ChatRepository {
   }
 
   Stream<int> watchTotalUnreadMessagesCount() async* {
-    final userId = currentUserId!;
+    final userId = currentUserId;
+    if (userId == null) {
+      yield 0;
+      return;
+    }
+
     try {
       final initialCount = await getTotalUnreadMessagesCount();
       yield initialCount;
     } catch (e) {
-      print('Error fetching initial unread messages count: $e');
+      debugPrint('ℹ️ [watchTotalUnreadMessagesCount] Offline initial load: $e');
       yield 0;
     }
 
@@ -533,8 +638,7 @@ class ChatRepository {
           return total;
         })
         .handleError((err) {
-          print('Supabase watchTotalUnreadMessagesCount stream error: $err');
-          _service.handleAuthError(err);
+          debugPrint('ℹ️ watchTotalUnreadMessagesCount stream disconnected: $err');
         });
 
     try {
@@ -542,7 +646,7 @@ class ChatRepository {
         yield count;
       }
     } catch (e) {
-      print('Supabase watchTotalUnreadMessagesCount main stream error: $e');
+      debugPrint('ℹ️ watchTotalUnreadMessagesCount stream closed: $e');
     }
   }
 
@@ -613,7 +717,7 @@ class ChatRepository {
     required int limit,
     required int offset,
   }) async {
-    // 1. Nếu offset == 0, ưu tiên đọc 50 tin nhắn hot từ Upstash Redis Cache trước (1-5ms)
+    // 1. Nếu offset == 0, ưu tiên đọc hot cache từ Upstash Redis Cache trước (1-5ms)
     if (offset == 0 && _upstashRedis != null) {
       try {
         final cachedJsonList = await _upstashRedis!.getCachedRecentMessages(conversationId);
@@ -627,27 +731,90 @@ class ChatRepository {
       }
     }
 
-    // 2. Fetch từ Supabase Database
-    final data = await _client
-        .from(SupabaseConstants.messagesTable)
-        .select('*, reply_to_message:reply_to_message_id(*), reactions:message_reactions(emoji, user_id)')
-        .eq('conversation_id', conversationId)
-        .order('created_at', ascending: false)
-        .range(offset, offset + limit - 1);
+    try {
+      // 2. Fetch từ Supabase Database
+      final data = await _client
+          .from(SupabaseConstants.messagesTable)
+          .select('*, reply_to_message:reply_to_message_id(*), reactions:message_reactions(emoji, user_id)')
+          .eq('conversation_id', conversationId)
+          .order('created_at', ascending: false)
+          .range(offset, offset + limit - 1);
 
-    final msgs = (data as List).map((e) => MessageModel.fromJson(e)).toList();
+      final msgs = (data as List).map((e) => MessageModel.fromJson(e)).toList();
 
-    // 3. Nếu là trang 0 và fetch từ DB thành công, lưu lại vào Upstash Redis Cache bất đồng bộ
-    if (offset == 0 && _upstashRedis != null && data.isNotEmpty) {
-      _upstashRedis!.cacheMessagesList(
-        conversationId,
-        List<Map<String, dynamic>>.from(data),
-      ).catchError((err) {
-        debugPrint('⚠️ [ChatRepository] Lỗi lưu Upstash Redis Cache: $err');
-      });
+      // 3. Nếu fetch từ DB thành công, đồng bộ vào Isar DB
+      if (_isarService?.isar != null && msgs.isNotEmpty) {
+        await _isarService!.isar!.writeTxn(() async {
+          for (final m in msgs) {
+            await _isarService!.isar!.isarMessages.put(IsarMessage(
+              id: m.id,
+              conversationId: m.conversationId,
+              senderId: m.senderId,
+              content: m.content ?? '',
+              messageType: m.messageType,
+              createdAt: m.createdAt,
+              replyToMessageId: m.replyToMessageId,
+              status: 'sent',
+              updatedAt: m.createdAt,
+              mediaUrlsJson: m.mediaUrls.isNotEmpty ? jsonEncode(m.mediaUrls) : null,
+            ));
+          }
+        });
+        // Prune messages so only the latest 50-100 remain cached in Isar per conversation
+        await _isarService!.pruneConversationMessages(conversationId, maxKeep: 100);
+      }
+
+      if (_isarService?.webService != null && msgs.isNotEmpty) {
+        final jsonMsgs = msgs.map((m) => m.toJson()).toList();
+        await _isarService!.webService!.saveMessages(conversationId, jsonMsgs);
+      }
+
+      if (offset == 0 && _upstashRedis != null && data.isNotEmpty) {
+        _upstashRedis!.cacheMessagesList(
+          conversationId,
+          List<Map<String, dynamic>>.from(data),
+        ).catchError((err) {
+          debugPrint('⚠️ [ChatRepository] Lỗi lưu Upstash Redis Cache: $err');
+        });
+      }
+
+      return msgs;
+    } catch (e) {
+      debugPrint('⚠️ [ChatRepository] Offline fallback for messages: loading from local DB: $e');
+      if (_isarService?.isar != null) {
+        final cached = await _isarService!.isar!.isarMessages
+            .filter()
+            .conversationIdEqualTo(conversationId)
+            .sortByCreatedAtDesc()
+            .offset(offset)
+            .limit(limit)
+            .findAll();
+
+        return cached.map((m) {
+          List<String> mediaUrls = const [];
+          if (m.mediaUrlsJson != null && m.mediaUrlsJson!.isNotEmpty) {
+            try {
+              final decoded = jsonDecode(m.mediaUrlsJson!);
+              if (decoded is List) mediaUrls = decoded.whereType<String>().toList();
+            } catch (_) {}
+          }
+          return MessageModel(
+            id: m.id,
+            conversationId: m.conversationId,
+            senderId: m.senderId,
+            content: m.content,
+            messageType: m.messageType,
+            createdAt: m.createdAt,
+            replyToMessageId: m.replyToMessageId,
+            mediaUrls: mediaUrls,
+          );
+        }).toList();
+      } else if (_isarService?.webService != null) {
+        final cached = _isarService!.webService!.getMessages(conversationId, limit: limit, offset: offset);
+        return cached.map((json) => MessageModel.fromJson(json)).toList();
+      }
+      rethrow;
     }
-
-    return msgs;
   }
 
   /// Lấy một "window" (cửa sổ) tin nhắn xung quanh [targetDate]:
@@ -713,6 +880,26 @@ class ChatRepository {
       }
     }
 
+    final tempId = _uuid.v4();
+    final now = DateTime.now().toUtc();
+
+    // 1. Ghi tin nhắn vào Isar DB ngay lập tức (Optimistic Local UI Update)
+    if (_isarService?.isar != null) {
+      await _isarService!.isar!.writeTxn(() async {
+        await _isarService!.isar!.isarMessages.put(IsarMessage(
+          id: tempId,
+          conversationId: conversationId,
+          senderId: currentUserId ?? '',
+          content: content,
+          messageType: messageType,
+          createdAt: now,
+          replyToMessageId: replyToMessageId,
+          status: 'sending',
+          updatedAt: now,
+        ));
+      });
+    }
+
     try {
       final data = await _client
           .from(SupabaseConstants.messagesTable)
@@ -729,21 +916,62 @@ class ChatRepository {
 
       await _client.from(SupabaseConstants.conversationsTable).update({
         'last_message': content,
-        'last_message_at': DateTime.now().toUtc().toIso8601String(),
+        'last_message_at': now.toIso8601String(),
       }).eq('id', conversationId);
 
-      // Đẩy tin nhắn mới vào Upstash Redis hot cache bất đồng bộ
+      // Cập nhật trạng thái 'sent' và ID chính thức trên Isar DB
+      final realMsg = MessageModel.fromJson(data);
+      if (_isarService?.isar != null) {
+        await _isarService!.isar!.writeTxn(() async {
+          await _isarService!.isar!.isarMessages.delete(fastHash(tempId));
+          await _isarService!.isar!.isarMessages.put(IsarMessage(
+            id: realMsg.id,
+            conversationId: realMsg.conversationId,
+            senderId: realMsg.senderId,
+            content: realMsg.content ?? '',
+            messageType: realMsg.messageType,
+            createdAt: realMsg.createdAt,
+            replyToMessageId: realMsg.replyToMessageId,
+            status: 'sent',
+            updatedAt: realMsg.createdAt,
+          ));
+        });
+      } else if (_isarService?.webService != null) {
+        await _isarService!.webService!.saveMessages(conversationId, [realMsg.toJson()]);
+      }
+
       if (_upstashRedis != null) {
         _upstashRedis!.cacheRecentMessage(conversationId, data).catchError((err) {
           debugPrint('⚠️ [ChatRepository] Lỗi cache recent message lên Upstash Redis: $err');
         });
       }
 
-      return MessageModel.fromJson(data);
+      return realMsg;
     } catch (e, stack) {
-      print('❌ [ChatRepository.sendMessage Error]: $e');
-      print(stack);
-      rethrow;
+      debugPrint('⚠️ [ChatRepository.sendMessage Error]: $e. Enqueueing to offline sync queue...');
+      
+      // Đẩy vào Outbox Sync Queue khi không có mạng
+      if (_syncEngine != null) {
+        await _syncEngine!.enqueueAction(
+          actionType: 'sendMessage',
+          payload: {
+            'conversation_id': conversationId,
+            'content': content,
+            'message_type': messageType,
+            if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+          },
+        );
+      }
+
+      return MessageModel(
+        id: tempId,
+        conversationId: conversationId,
+        senderId: currentUserId ?? '',
+        content: content,
+        messageType: messageType,
+        createdAt: now,
+        replyToMessageId: replyToMessageId,
+      );
     }
   }
 
@@ -799,6 +1027,13 @@ class ChatRepository {
       'last_message_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 
+    // Invalidate Redis cache so next load fetches fresh from Supabase (contains media_urls)
+    if (_upstashRedis != null) {
+      _upstashRedis!.invalidateMessagesCache(conversationId).catchError((err) {
+        debugPrint('⚠️ [ChatRepository] Lỗi invalidate Redis cache (image): $err');
+      });
+    }
+
     return MessageModel.fromJson(data);
   }
 
@@ -850,6 +1085,13 @@ class ChatRepository {
       'last_message_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', conversationId);
 
+    // Invalidate Redis cache so next load fetches fresh from Supabase (contains media_urls)
+    if (_upstashRedis != null) {
+      _upstashRedis!.invalidateMessagesCache(conversationId).catchError((err) {
+        debugPrint('⚠️ [ChatRepository] Lỗi invalidate Redis cache (voice): $err');
+      });
+    }
+
     return MessageModel.fromJson(data);
   }
 
@@ -863,8 +1105,8 @@ class ChatRepository {
         'unread_count': 0,
         'last_read_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('conversation_id', conversationId).eq('user_id', userId);
-    } catch (e, stack) {
-      debugPrint('⚠️ [ChatRepository.markAsSeen] Lỗi update conversation_members: $e\n$stack');
+    } catch (_) {
+      debugPrint('ℹ️ [ChatRepository.markAsSeen] Offline - skipped conversation_members update');
     }
 
     try {
@@ -875,8 +1117,8 @@ class ChatRepository {
           .eq('conversation_id', conversationId)
           .neq('sender_id', userId)
           .eq('is_seen', false);
-    } catch (e, stack) {
-      debugPrint('⚠️ [ChatRepository.markAsSeen] Lỗi update messages is_seen: $e\n$stack');
+    } catch (_) {
+      debugPrint('ℹ️ [ChatRepository.markAsSeen] Offline - skipped messages update');
     }
   }
 

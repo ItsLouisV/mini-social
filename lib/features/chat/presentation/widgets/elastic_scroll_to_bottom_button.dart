@@ -144,9 +144,9 @@ class _ElasticScrollToBottomButtonState extends State<ElasticScrollToBottomButto
     final displacement = event.position - _pointerStartGlobalPosition;
     _dragOffsetAccumulated = displacement;
 
-    // Apply soft rubber banding distance constraint
+    // Apply tight soft rubber banding distance constraint (max 25.0px)
     final distance = displacement.distance;
-    const maxDrag = 65.0;
+    const maxDrag = 25.0;
 
     Offset elasticOffset;
     if (distance > 0) {
@@ -169,7 +169,7 @@ class _ElasticScrollToBottomButtonState extends State<ElasticScrollToBottomButto
     final velocity = _velocityTracker.getVelocity().pixelsPerSecond;
     Offset releaseVelocity = velocity;
     final speed = releaseVelocity.distance;
-    const maxSpeed = 900.0;
+    const maxSpeed = 600.0;
     if (speed > maxSpeed) {
       releaseVelocity = releaseVelocity * (maxSpeed / speed);
     }
@@ -177,7 +177,7 @@ class _ElasticScrollToBottomButtonState extends State<ElasticScrollToBottomButto
     setState(() {
       _isDragging = false;
       _isPressed = false;
-      _scaleTarget = 1.0; // Return to original scale (spring physics handles the overshoot & bounce)
+      _scaleTarget = 1.0; // Return to original scale
       _dragTarget = Offset.zero;
       _dragVelocity = releaseVelocity;
     });
@@ -203,29 +203,55 @@ class _ElasticScrollToBottomButtonState extends State<ElasticScrollToBottomButto
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final activeColor = widget.themeColor ?? theme.colorScheme.primary;
 
     // Dynamic deformation matrix values
     final double dragDistance = _dragPosition.distance;
     final double dragAngle = dragDistance > 0.01 ? _dragPosition.direction : 0.0;
 
-    // Non-uniform scaling: stretches along the motion vector, squishes along the normal vector
-    final double stretchFactor = math.min(dragDistance / 90.0, 0.4);
+    // Non-uniform scaling: tight elastic stretch
+    final double stretchFactor = math.min(dragDistance / 40.0, 0.2);
     final double scaleX = (1.0 + stretchFactor) * _scale;
-    final double scaleY = (1.0 - stretchFactor * 0.45) * _scale;
+    final double scaleY = (1.0 - stretchFactor * 0.4) * _scale;
 
-    return Transform.translate(
-      offset: _dragPosition,
-      child: Transform.rotate(
-        angle: dragAngle,
-        child: Transform.scale(
-          scaleX: scaleX,
-          scaleY: scaleY,
+    return Stack(
+      alignment: Alignment.center,
+      clipBehavior: Clip.none,
+      children: [
+        // 1. Fixed Base Anchor (Vị trí gốc cố định khi kéo)
+        if (dragDistance > 0.5)
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 100),
+            opacity: math.min(dragDistance / 8.0, 0.4),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: activeColor.withValues(alpha: 0.35),
+                  width: 1.5,
+                ),
+              ),
+            ),
+          ),
+
+        // 2. Pulled Elastic Button
+        Transform.translate(
+          offset: _dragPosition,
           child: Transform.rotate(
-            angle: -dragAngle, // Keep internal icon upright and aligned
-            child: _buildButtonBody(theme),
+            angle: dragAngle,
+            child: Transform.scale(
+              scaleX: scaleX,
+              scaleY: scaleY,
+              child: Transform.rotate(
+                angle: -dragAngle, // Keep internal icon upright
+                child: _buildButtonBody(theme),
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 

@@ -10,7 +10,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'app.dart';
 import 'core/errors/global_error_handler.dart';
 import 'core/services/logger_service.dart';
-import 'core/services/objectbox_service.dart';
+import 'core/services/isar_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,15 +55,14 @@ Future<void> main() async {
   // Initialize timeago
   timeago.setLocaleMessages('vi', timeago.ViMessages());
 
-  // Initialize ObjectBox on mobile/desktop
-  ObjectBoxService? objectBox;
-  if (!kIsWeb) {
-    try {
-      objectBox = await ObjectBoxService.init();
-      CoreLogger.info('Successfully initialized ObjectBox database.', tag: 'Bootstrap');
-    } catch (e) {
-      CoreLogger.error('Failed to initialize ObjectBox: $e', tag: 'Bootstrap');
-    }
+  // Initialize Isar Database for Mobile & Web
+  late final IsarService isarService;
+  try {
+    isarService = await IsarService.init();
+    CoreLogger.info('Successfully initialized Isar database.', tag: 'Bootstrap');
+  } catch (e) {
+    CoreLogger.error('Failed to initialize Isar database: $e', tag: 'Bootstrap');
+    rethrow;
   }
 
   final sentryDsn = dotenv.env['SENTRY_DSN'] ?? '';
@@ -76,8 +75,7 @@ Future<void> main() async {
       appRunner: () => runApp(
         ProviderScope(
           overrides: [
-            if (objectBox != null)
-              objectBoxProvider.overrideWithValue(objectBox),
+            isarServiceProvider.overrideWithValue(isarService),
           ],
           child: const MiniSocialApp(),
         ),
@@ -87,8 +85,7 @@ Future<void> main() async {
     runApp(
       ProviderScope(
         overrides: [
-          if (objectBox != null)
-            objectBoxProvider.overrideWithValue(objectBox),
+          isarServiceProvider.overrideWithValue(isarService),
         ],
         child: const MiniSocialApp(),
       ),

@@ -6,6 +6,9 @@ import '../domain/post_model.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../social/data/recommendation_repository.dart';
 
+import '../../../core/services/isar_service.dart';
+import '../../../core/services/sync_engine.dart';
+
 /// Global ScrollController cho Feed list.
 /// Được dùng bởi MainShell để cuộn về đầu khi bấm lại tab Home.
 final feedScrollControllerProvider = Provider<ScrollController>((ref) {
@@ -15,11 +18,23 @@ final feedScrollControllerProvider = Provider<ScrollController>((ref) {
 });
 
 final postRepositoryProvider = Provider<PostRepository>((ref) {
-  return PostRepository(ref.watch(supabaseServiceProvider));
+  final supabase = ref.watch(supabaseServiceProvider);
+  final isar = ref.watch(isarServiceProvider);
+  final syncEngine = ref.watch(syncEngineProvider);
+  return PostRepository(supabase, isar, syncEngine);
 });
 
 final feedPostsProvider = StreamProvider<List<PostModel>>((ref) async* {
   final currentUserId = ref.watch(supabaseServiceProvider).currentUserId;
+  final repo = ref.watch(postRepositoryProvider);
+
+  try {
+    final cached = await repo.getFeedPosts(page: 0);
+    if (cached.isNotEmpty) {
+      yield cached;
+    }
+  } catch (_) {}
+
   if (currentUserId != null && currentUserId.isNotEmpty) {
     try {
       final recommended = await ref.watch(recommendationRepositoryProvider).getRecommendedFeed(userId: currentUserId);
@@ -29,19 +44,25 @@ final feedPostsProvider = StreamProvider<List<PostModel>>((ref) async* {
       }
     } catch (_) {}
   }
-  yield* ref.watch(postRepositoryProvider).watchPosts();
+  yield* repo.watchPosts().handleError((err) {
+    debugPrint('ℹ️ Feed posts stream info: $err');
+  });
 });
 
 // Single post
 final postDetailProvider =
     StreamProvider.family<PostModel, String>((ref, postId) {
-  return ref.watch(postRepositoryProvider).watchPost(postId);
+  return ref.watch(postRepositoryProvider).watchPost(postId).handleError((err) {
+    debugPrint('ℹ️ Post detail stream info: $err');
+  });
 });
 
 // Comments provider
 final commentsProvider =
     StreamProvider.family<List<CommentModel>, String>((ref, postId) {
-  return ref.watch(postRepositoryProvider).watchComments(postId);
+  return ref.watch(postRepositoryProvider).watchComments(postId).handleError((err) {
+    debugPrint('ℹ️ Comments stream info: $err');
+  });
 });
 
 // Like action notifier (optimistic update)

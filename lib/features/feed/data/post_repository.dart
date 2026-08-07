@@ -1,19 +1,31 @@
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
+import 'package:isar/isar.dart';
 import 'package:async/async.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../profile/domain/profile_model.dart';
 import '../../../core/services/supabase_service.dart';
 import '../domain/comment_model.dart';
 import '../domain/post_model.dart';
 import '../../../core/constants/supabase_constants.dart';
 
+import '../../../core/services/isar_service.dart';
+import '../../../core/services/sync_engine.dart';
+import '../../../core/database/collections/isar_post.dart';
+
 class PostRepository {
   final SupabaseService _service;
+  final IsarService? _isarService;
+  final SyncEngine? _syncEngine;
   final _uuid = const Uuid();
 
-  PostRepository(this._service);
+  PostRepository(
+    this._service, [
+    this._isarService,
+    this._syncEngine,
+  ]);
 
   SupabaseClient get _client => _service.client;
   String? get currentUserId => _service.currentUserId;
@@ -24,107 +36,158 @@ class PostRepository {
     final from = page * pageSize;
     final to = from + pageSize - 1;
 
-    // Không dùng .inFilter('moderation_status', [...]) ở SQL để tránh lọc nhầm
-    // bài 'pending' của chính creator — để quyết định hoàn toàn in-memory bên dưới.
-    final data = await _client
-        .from(SupabaseConstants.postsTable)
-        .select('*, profiles(*), post_media(*)')
-        .filter('deleted_at', 'is', null)
-        .order('created_at', ascending: false);
-
-    final postsList = data as List;
-    if (postsList.isEmpty) return [];
-
-    final userId = currentUserId;
-    if (userId == null) {
-      final publicOnly = postsList.where((p) {
-        final status = p['moderation_status'] as String? ?? 'pending';
-        final privacy = p['privacy'] as String? ?? 'public';
-        return status == 'published' && privacy == 'public';
-      });
-      return publicOnly.map((e) => PostModel.fromJson(e)).toList();
-    }
-
-    // 1. Get the current user's follows
-    Set<String> followingIds = {};
     try {
-      final followingData = await _client
-          .from(SupabaseConstants.followsTable)
-          .select('following_id')
-          .eq('follower_id', userId);
-      followingIds = (followingData as List).map((x) => x['following_id'] as String).toSet();
-    } catch (e) {
-      print('Warning: Failed to fetch following: $e');
-    }
+      final data = await _client
+          .from(SupabaseConstants.postsTable)
+          .select('*, profiles(*), post_media(*)')
+          .filter('deleted_at', 'is', null)
+          .order('created_at', ascending: false);
 
-    // 2. Get the current user's friends (accepted friend requests)
-    Set<String> friendIds = {};
-    try {
-      final friendsData = await _client
-          .from('friend_requests')
-          .select('sender_id, receiver_id')
-          .eq('status', 'accepted')
-          .or('sender_id.eq.$userId,receiver_id.eq.$userId');
-      friendIds = (friendsData as List).map((x) {
-        if (x['sender_id'] == userId) {
-          return x['receiver_id'] as String;
-        } else {
-          return x['sender_id'] as String;
-        }
-      }).toSet();
-    } catch (e) {
-      print('Warning: Failed to fetch friends: $e');
-    }
+      final postsList = data as List;
+      if (postsList.isEmpty) return [];
 
-    // 3. Filter posts based on moderation status and privacy settings
-    final filteredPostsList = postsList.where((postJson) {
-      final postUserId = postJson['user_id'] as String;
-      final status = postJson['moderation_status'] as String? ?? 'pending';
-
-      // Bài viết bị vi phạm nặng (hidden / removed) bị ẩn hoàn toàn khỏi feed (kể cả creator)
-      if (status == 'hidden' || status == 'removed') return false;
-
-      // Creator thấy bài của chính mình (bao gồm cả 'pending' để xem trạng thái kiểm duyệt)
-      if (postUserId == userId) return true;
-
-      // Người khác chỉ thấy bài đã published.
-      // pending / shadow_limited đều bị ẩn cho tới khi AI xác nhận an toàn.
-      if (status != 'published') return false;
-
-      final privacy = postJson['privacy'] as String? ?? 'public';
-      if (privacy == 'public') return true;
-      if (privacy == 'private') return false;
-      if (privacy == 'friends' || privacy == 'followers') {
-        return friendIds.contains(postUserId) || followingIds.contains(postUserId);
+      final userId = currentUserId;
+      if (userId == null) {
+        final publicOnly = postsList.where((p) {
+          final status = p['moderation_status'] as String? ?? 'pending';
+          final privacy = p['privacy'] as String? ?? 'public';
+          return status == 'published' && privacy == 'public';
+        });
+        return publicOnly.map((e) => PostModel.fromJson(e)).toList();
       }
-      return true;
-    }).toList();
 
-    // 4. Apply pagination range in-memory
-    if (from >= filteredPostsList.length) return [];
-    final paginatedList = filteredPostsList.sublist(
-      from,
-      (to + 1) > filteredPostsList.length ? filteredPostsList.length : (to + 1),
-    );
+      // 1. Get the current user's follows
+      Set<String> followingIds = {};
+      try {
+        final followingData = await _client
+            .from(SupabaseConstants.followsTable)
+            .select('following_id')
+            .eq('follower_id', userId);
+        followingIds = (followingData as List).map((x) => x['following_id'] as String).toSet();
+      } catch (e) {
+        print('Warning: Failed to fetch following: $e');
+      }
 
-    // Fetch likes for these posts by current user
-    final postIds = paginatedList.map((e) => e['id']).toList();
-    Set<String> likedPostIds = {};
-    try {
-      final likedPostsData = await _client
-          .from(SupabaseConstants.likesTable)
-          .select('post_id')
-          .eq('user_id', userId)
-          .inFilter('post_id', postIds);
+      // 2. Get the current user's friends
+      Set<String> friendIds = {};
+      try {
+        final friendsData = await _client
+            .from('friend_requests')
+            .select('sender_id, receiver_id')
+            .eq('status', 'accepted')
+            .or('sender_id.eq.$userId,receiver_id.eq.$userId');
+        friendIds = (friendsData as List).map((x) {
+          if (x['sender_id'] == userId) {
+            return x['receiver_id'] as String;
+          } else {
+            return x['sender_id'] as String;
+          }
+        }).toSet();
+      } catch (e) {
+        print('Warning: Failed to fetch friends: $e');
+      }
 
-      likedPostIds = (likedPostsData as List).map((e) => e['post_id'] as String).toSet();
+      // 3. Filter posts
+      final filteredPostsList = postsList.where((postJson) {
+        final postUserId = postJson['user_id'] as String;
+        final status = postJson['moderation_status'] as String? ?? 'pending';
+
+        if (status == 'hidden' || status == 'removed') return false;
+        if (postUserId == userId) return true;
+        if (status != 'published') return false;
+
+        final privacy = postJson['privacy'] as String? ?? 'public';
+        if (privacy == 'public') return true;
+        if (privacy == 'private') return false;
+        if (privacy == 'friends' || privacy == 'followers') {
+          return friendIds.contains(postUserId) || followingIds.contains(postUserId);
+        }
+        return true;
+      }).toList();
+
+      if (from >= filteredPostsList.length) return [];
+      final paginatedList = filteredPostsList.sublist(
+        from,
+        (to + 1) > filteredPostsList.length ? filteredPostsList.length : (to + 1),
+      );
+
+      final postIds = paginatedList.map((e) => e['id']).toList();
+      Set<String> likedPostIds = {};
+      try {
+        final likedPostsData = await _client
+            .from(SupabaseConstants.likesTable)
+            .select('post_id')
+            .eq('user_id', userId)
+            .inFilter('post_id', postIds);
+
+        likedPostIds = (likedPostsData as List).map((e) => e['post_id'] as String).toSet();
+      } catch (e) {
+        print('Warning: Failed to fetch post likes: $e');
+      }
+
+      final resultPosts = paginatedList.map((e) {
+        return PostModel.fromJson(e, isLiked: likedPostIds.contains(e['id']));
+      }).toList();
+
+      // Sync to Isar DB
+      if (_isarService?.isar != null && resultPosts.isNotEmpty) {
+        await _isarService!.isar!.writeTxn(() async {
+          for (final p in resultPosts) {
+            await _isarService!.isar!.isarPosts.put(IsarPost(
+              id: p.id,
+              authorId: p.userId,
+              authorName: p.author?.displayName ?? '',
+              authorAvatar: p.author?.avatarUrl,
+              content: p.caption ?? '',
+              imageUrls: p.media.map((m) => m.url).toList(),
+              videoUrl: null,
+              likesCount: p.likesCount,
+              commentsCount: p.commentsCount,
+              isLiked: p.isLiked,
+              createdAt: p.createdAt,
+              updatedAt: DateTime.now().toUtc(),
+            ));
+          }
+        });
+      }
+
+      if (_isarService?.webService != null && resultPosts.isNotEmpty) {
+        final jsonList = resultPosts.map((p) => p.toJson()).toList();
+        await _isarService!.webService!.savePosts(jsonList);
+      }
+
+      return resultPosts;
     } catch (e) {
-      print('Warning: Failed to fetch post likes: $e');
+      debugPrint('⚠️ [PostRepository] Offline fallback for feed: loading from local DB: $e');
+      if (_isarService?.isar != null) {
+        final cached = await _isarService!.isar!.isarPosts
+            .where()
+            .sortByCreatedAtDesc()
+            .offset(from)
+            .limit(pageSize)
+            .findAll();
+        return cached.map((p) => PostModel(
+          id: p.id,
+          userId: p.authorId,
+          caption: p.content,
+          likesCount: p.likesCount,
+          commentsCount: p.commentsCount,
+          isLiked: p.isLiked,
+          createdAt: p.createdAt,
+          author: ProfileModel(
+            id: p.authorId,
+            username: p.authorName ?? '',
+            fullName: p.authorName,
+            avatarUrl: p.authorAvatar,
+            createdAt: p.createdAt,
+          ),
+        )).toList();
+      } else if (_isarService?.webService != null) {
+        final cached = _isarService!.webService!.getPosts(limit: pageSize, offset: from);
+        return cached.map((json) => PostModel.fromJson(json)).toList();
+      }
+      rethrow;
     }
-
-    return paginatedList.map((e) {
-      return PostModel.fromJson(e, isLiked: likedPostIds.contains(e['id']));
-    }).toList();
   }
 
   Future<bool> _isFriend(String userId1, String userId2) async {

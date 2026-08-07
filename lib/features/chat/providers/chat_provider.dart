@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart' show Color, Colors;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
@@ -20,6 +20,9 @@ import '../../../core/services/connectivity_service.dart';
 import 'hidden_chat_provider.dart' show secureStorageProvider;
 import '../domain/conversation_member_model.dart';
 
+import '../../../core/services/isar_service.dart';
+import '../../../core/services/sync_engine.dart';
+
 // ── Service Providers ─────────────────────────────────────────────────────────
 
 final upstashRedisServiceProvider = Provider<UpstashRedisService>((ref) {
@@ -30,8 +33,10 @@ final upstashRedisServiceProvider = Provider<UpstashRedisService>((ref) {
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   final supabaseService = ref.watch(supabaseServiceProvider);
+  final isarService = ref.watch(isarServiceProvider);
+  final syncEngine = ref.watch(syncEngineProvider);
   final redisService = ref.watch(upstashRedisServiceProvider);
-  return ChatRepository(supabaseService, redisService);
+  return ChatRepository(supabaseService, isarService, syncEngine, redisService);
 });
 
 // ── Upstash Redis Presence & Typing Providers ──────────────────────────────────
@@ -61,61 +66,33 @@ final groupMembersProvider = conversationMembersProvider;
 final conversationsProvider =
     StreamProvider.autoDispose<List<ConversationModel>>((ref) async* {
   final repo = ref.watch(chatRepositoryProvider);
-  final local = ref.watch(localChatRepositoryProvider);
-  final sync = ref.watch(chatSyncServiceProvider);
-  final isOnline = ref.watch(isOnlineProvider);
-  final currentUserId =
-      ref.watch(supabaseServiceProvider).currentUserId;
+  final currentUserId = ref.watch(supabaseServiceProvider).currentUserId;
 
   if (currentUserId == null) return;
 
-  // ① Nếu có local cache → emit ngay lập tức (offline-first)
-  if (local != null) {
-    final cached = await local.getConversations(currentUserId);
-    if (cached.isNotEmpty) {
-      yield cached;
-    }
-  }
-
-  // ② Nếu online → sync từ Supabase, emit kết quả mới
-  if (isOnline && sync != null) {
-    try {
-      final synced = await sync.syncConversations();
-      yield synced;
-    } catch (_) {
-      // Sync thất bại → giữ cache
-    }
-  } else if (isOnline) {
-    // Không có local cache (Web) → fetch trực tiếp
-    try {
-      final convs = await repo.getConversations();
-      yield convs;
-    } catch (_) {}
-  }
-
-  // ③ Subscribe Supabase Realtime stream cho updates
+  // ① Emit cached or fetched conversations immediately (Offline-First)
   try {
-    await for (final _ in repo.watchConversationsStream()) {
+    final convs = await repo.getConversations();
+    yield convs;
+  } catch (e) {
+    debugPrint('⚠️ Error loading initial conversations: $e');
+  }
+
+  // ② Subscribe Realtime stream safely without throwing on network loss
+  try {
+    final stream = repo.watchConversationsStream().handleError((err) {
+      debugPrint('ℹ️ Conversations stream disconnected: $err');
+    });
+    await for (final _ in stream) {
       try {
         final convs = await repo.getConversations();
-        // Lưu vào cache nếu có
-        if (local != null) {
-          await local.saveConversations(convs);
-          // Lưu profiles
-          for (final conv in convs) {
-            if (conv.otherUser != null) {
-              await local.saveProfile(conv.otherUser!);
-            }
-          }
-        }
         yield convs;
       } catch (e) {
-        print('Error fetching updated conversations inside stream: $e');
+        debugPrint('Error fetching updated conversations inside stream: $e');
       }
     }
   } catch (e) {
-    print('Supabase Realtime watchConversationsStream error (WebSocket disconnected): $e');
-    // Keep yielding last known state if possible
+    debugPrint('Supabase Realtime watchConversationsStream error: $e');
   }
 });
 
@@ -304,48 +281,23 @@ class ChatMessagesNotifier
     final repo = ref.watch(chatRepositoryProvider);
     final local = ref.watch(localChatRepositoryProvider);
     final sync = ref.watch(chatSyncServiceProvider);
-    final isOnline = ref.watch(isOnlineProvider);
+    final isOnline = ref.read(isOnlineProvider);
 
-    List<MessageModel> messages;
-    bool hasMore;
+    List<MessageModel> messages = [];
+    bool hasMore = false;
 
-    // ① Load từ local cache trước (instant) nếu có
-    if (local != null && !kIsWeb) {
-      final cached = await local.getMessages(arg, limit: _pageSize);
-      if (cached.isNotEmpty) {
-        final deletedIds = await _getDeletedMessageIds();
-        messages = cached.where((m) => !deletedIds.contains(m.id)).toList();
-        hasMore = cached.length >= _pageSize;
-
-        // Emit cache ngay, sync ngầm phía dưới
-        _syncInBackground(arg, sync, isOnline);
-        _subscribeRealtime(arg, repo, local, sync);
-
-        // Load failed messages
-        final failed = local.getFailedMessages(arg);
-
-        ref.onDispose(() => _channel?.unsubscribe());
-
-        return ChatMessagesState(
-          messages: messages,
-          hasMore: hasMore,
-          failedMessages: failed,
-        );
-      }
+    try {
+      final fetched = await repo.getMessagesPaginated(arg, limit: _pageSize, offset: 0);
+      final deletedIds = await _getDeletedMessageIds();
+      messages = fetched.where((m) => !deletedIds.contains(m.id)).toList();
+      hasMore = fetched.length >= _pageSize;
+    } catch (e) {
+      debugPrint('⚠️ Error fetching messages for conversation $arg: $e');
     }
 
-    // ② Không có cache hoặc Web → load từ Supabase
-    final fetched = await repo.getMessagesPaginated(arg, limit: _pageSize, offset: 0);
-    final deletedIds = await _getDeletedMessageIds();
-    messages = fetched.where((m) => !deletedIds.contains(m.id)).toList();
-    hasMore = fetched.length >= _pageSize;
-
-    // Lưu vào cache nếu có
-    if (local != null && fetched.isNotEmpty) {
-      await local.saveMessages(fetched);
+    if (isOnline) {
+      _subscribeRealtime(arg, repo, local, sync);
     }
-
-    _subscribeRealtime(arg, repo, local, sync);
 
     // Load failed messages
     final failed = local?.getFailedMessages(arg) ?? [];
@@ -492,10 +444,7 @@ class ChatMessagesNotifier
           )
           .subscribe((status, [error]) {
             if (status == RealtimeSubscribeStatus.channelError) {
-              print('Supabase Realtime messages channel error: $error');
-              if (error != null) {
-                ref.read(supabaseServiceProvider).handleAuthError(error);
-              }
+              debugPrint('ℹ️ Supabase Realtime messages channel info: $error');
             }
           });
 

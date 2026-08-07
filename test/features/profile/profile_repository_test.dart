@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:mini_social/features/profile/data/profile_repository.dart';
-import 'package:mini_social/core/services/supabase_service.dart';
+import 'package:viora/features/profile/data/profile_repository.dart';
+import 'package:viora/core/services/supabase_service.dart';
 
 // Giả lập PostgrestFilterBuilder hỗ trợ phương thức so sánh eq() và then()
 class FakePostgrestFilterBuilder<T> extends Fake implements PostgrestFilterBuilder<T> {

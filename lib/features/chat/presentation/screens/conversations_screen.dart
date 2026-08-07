@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -18,6 +19,7 @@ import '../../providers/hidden_chat_provider.dart';
 import '../widgets/create_group_modal.dart';
 import '../widgets/new_message_modal.dart';
 import '../widgets/passcode_dialog.dart';
+import '../widgets/slidable_circular_action_button.dart';
 import '../../../../core/services/connectivity_service.dart';
 
 import '../../../../shared/widgets/skeletons/tile_skeleton_loading.dart';
@@ -66,10 +68,10 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
         ),
         actions: [
           PopupMenuButton<String>(
-            icon: AppSvgIcons.svg(
-              AppSvgIcons.plusSquare,
-              width: 24,
-              height: 24,
+            icon: FaIcon(
+              FontAwesomeIcons.squarePlus,
+              size: 22,
+              color: theme.iconTheme.color,
             ),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             offset: const Offset(0, 42),
@@ -230,7 +232,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                       const Icon(CupertinoIcons.wifi_slash, color: Colors.amber, size: 16),
                       const SizedBox(width: 8),
                       Text(
-                        'Đang ngoại tuyến. Dùng bản lưu ngoại tuyến.',
+                        'Đang ngoại tuyến.',
                         style: TextStyle(
                           color: theme.brightness == Brightness.dark ? Colors.amber[200] : Colors.amber[800],
                           fontSize: 13,
@@ -332,6 +334,23 @@ class _ConversationTile extends ConsumerWidget {
     required this.onTap,
   });
 
+  double _actionExtentRatio(
+    BuildContext context,
+    int actionCount,
+  ) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    // Không chỉ circle 42px.
+    // Cần cả khoảng trống xung quanh action để swipe nhìn thoáng.
+    const actionSlotWidth = 72.0;
+
+    final requiredWidth =
+        actionSlotWidth * actionCount;
+
+    return (requiredWidth / screenWidth)
+        .clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -363,201 +382,93 @@ class _ConversationTile extends ConsumerWidget {
       displayLastMessage = 'Bắt đầu cuộc trò chuyện';
     }
 
-    return Slidable(
-      key: ValueKey(conv.id),
-      // Vuốt từ Trái -> Phải: Ghim / Bỏ ghim với StretchMotion & ExtentRatio
-      startActionPane: ActionPane(
-        motion: const StretchMotion(),
-        extentRatio: 0.22,
-        children: [
-          CustomSlidableAction(
-            onPressed: (context) {
-              HapticFeedback.lightImpact();
-              ref.read(chatRepositoryProvider).togglePin(conv);
-            },
-            backgroundColor: Colors.transparent,
-            child: Container(
-              alignment: Alignment.center,
-              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF007AFF), // Blue iOS
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF007AFF).withValues(alpha: 0.15),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  )
-                ],
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        conv.isPinned(currentUserId ?? '') 
-                            ? CupertinoIcons.pin_slash_fill 
-                            : CupertinoIcons.pin_fill,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        conv.isPinned(currentUserId ?? '') ? AppTranslations.tr(ref, 'unpin') : AppTranslations.tr(ref, 'pin'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-              ),
-            ),
-          ),
-        ],
-      ),
-      // Vuốt từ Phải -> Trái: Ẩn và Xoá với StretchMotion & ExtentRatio
-      endActionPane: ActionPane(
-        motion: const StretchMotion(),
-        extentRatio: 0.44,
-        children: [
-          CustomSlidableAction(
-            onPressed: (context) async {
-              HapticFeedback.lightImpact();
-              final convs = ref.read(conversationsProvider).valueOrNull ?? [];
-              final hiddenCount = currentUserId == null ? 0 : convs.where((c) => c.isHidden(currentUserId!)).length;
+    return IOSRubberbandSlidableTile(
+      startActions: [
+        SlidableActionItem(
+          icon: conv.isPinned(currentUserId ?? '')
+              ? CupertinoIcons.pin_slash_fill
+              : CupertinoIcons.pin_fill,
+          label: conv.isPinned(currentUserId ?? '')
+              ? AppTranslations.tr(ref, 'unpin')
+              : AppTranslations.tr(ref, 'pin'),
+          color: const Color(0xFFFF9500),
+          onTap: () async {
+            await ref.read(chatRepositoryProvider).togglePin(conv);
+            ref.invalidate(conversationsProvider);
+          },
+        ),
+      ],
+      endActions: [
+        SlidableActionItem(
+          icon: CupertinoIcons.eye_slash_fill,
+          label: AppTranslations.tr(ref, 'hide_conversation'),
+          color: const Color(0xFF5856D6),
+          onTap: () async {
+            final convs = ref.read(conversationsProvider).valueOrNull ?? [];
+            final hiddenCount = currentUserId == null
+                ? 0
+                : convs.where((c) => c.isHidden(currentUserId!)).length;
 
-              if (hiddenCount == 0) {
-                // Reset mã pin vì chưa có ai bị ẩn
-                await ref.read(hiddenChatProvider.notifier).removePasscode();
-                if (!context.mounted) return;
-                
-                final success = await PasscodeDialog.show(context, mode: PasscodeMode.setup);
-                if (success == true) {
-                  ref.read(chatRepositoryProvider).toggleHide(conv);
-                }
-              } else {
-                // Đã có hội thoại ẩn, tự động ẩn luôn
-                ref.read(chatRepositoryProvider).toggleHide(conv);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('OK')),
-                  );
-                }
-              }
-            },
-            backgroundColor: Colors.transparent,
-            child: Container(
-              alignment: Alignment.center,
-              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF8E8E93), // Gray
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF8E8E93).withValues(alpha: 0.15),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  )
-                ],
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(CupertinoIcons.eye_slash_fill, color: Colors.white, size: 20),
-                      const SizedBox(height: 4),
-                      Text(
-                        AppTranslations.tr(ref, 'hide_conversation'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-              ),
-            ),
-          ),
-          CustomSlidableAction(
-            onPressed: (context) {
-              HapticFeedback.lightImpact();
-              showCupertinoDialog(
-                context: context,
-                builder: (ctx) => CupertinoAlertDialog(
-                  title: Text(AppTranslations.tr(ref, 'delete_chat')),
-                  content: const Text('...'),
-                  actions: [
-                    CupertinoDialogAction(
-                      child: Text(AppTranslations.tr(ref, 'cancel')),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                    CupertinoDialogAction(
-                      isDestructiveAction: true,
-                      onPressed: () {
-                        HapticFeedback.mediumImpact();
-                        Navigator.pop(ctx);
-                        ref.read(chatRepositoryProvider).deleteConversation(conv.id);
-                      },
-                      child: Text(AppTranslations.tr(ref, 'delete_chat')),
-                    ),
-                  ],
-                ),
+            if (hiddenCount == 0) {
+              await ref.read(hiddenChatProvider.notifier).removePasscode();
+              if (!context.mounted) return;
+
+              final success = await PasscodeDialog.show(
+                context,
+                mode: PasscodeMode.setup,
               );
-            },
-            backgroundColor: Colors.transparent,
-            child: Container(
-              alignment: Alignment.center,
-              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF3B30), // Red iOS
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFF3B30).withValues(alpha: 0.15),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  )
+
+              if (success == true) {
+                await ref.read(chatRepositoryProvider).toggleHide(conv);
+                ref.invalidate(conversationsProvider);
+              }
+            } else {
+              await ref.read(chatRepositoryProvider).toggleHide(conv);
+              ref.invalidate(conversationsProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Đã ẩn cuộc trò chuyện')),
+                );
+              }
+            }
+          },
+        ),
+        SlidableActionItem(
+          icon: CupertinoIcons.trash_fill,
+          label: AppTranslations.tr(ref, 'delete_chat'),
+          color: const Color(0xFFFF3B30),
+          onTap: () {
+            showCupertinoDialog(
+              context: context,
+              builder: (ctx) => CupertinoAlertDialog(
+                title: Text(AppTranslations.tr(ref, 'delete_chat')),
+                content: const Text(
+                  'Thao tác này sẽ xoá toàn bộ tin nhắn ở cả 2 phía. Bạn có chắc chắn không?',
+                ),
+                actions: [
+                  CupertinoDialogAction(
+                    child: Text(AppTranslations.tr(ref, 'cancel')),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                  CupertinoDialogAction(
+                    isDestructiveAction: true,
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      Navigator.pop(ctx);
+                      ref.read(chatRepositoryProvider).deleteConversation(conv.id);
+                    },
+                    child: Text(AppTranslations.tr(ref, 'delete_chat')),
+                  ),
                 ],
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.maxWidth < 50 || constraints.maxHeight < 40) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(CupertinoIcons.trash_fill, color: Colors.white, size: 20),
-                      const SizedBox(height: 4),
-                      Text(
-                        AppTranslations.tr(ref, 'delete_chat'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-              ),
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        ),
+      ],
+
+      // ==========================================================
+      // MAIN CONTENT
+      // ==========================================================
       child: Material(
         color: conv.isPinned(currentUserId ?? '') 
             ? (isDark ? Colors.white.withValues(alpha: 0.03) : theme.scaffoldBackgroundColor) 
@@ -703,3 +614,5 @@ class _ConversationTile extends ConsumerWidget {
     );
   }
 }
+
+

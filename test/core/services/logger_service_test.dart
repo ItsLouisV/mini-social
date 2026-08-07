@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mini_social/core/services/logger_service.dart';
+import 'package:viora/core/services/logger_service.dart';
 
 void main() {
   group('CoreLogger Unit Tests', () {

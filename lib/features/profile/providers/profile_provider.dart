@@ -3,9 +3,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/profile_repository.dart';
 import '../domain/profile_model.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/services/isar_service.dart';
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
-  return ProfileRepository(ref.watch(supabaseServiceProvider));
+  final supabase = ref.watch(supabaseServiceProvider);
+  final isar = ref.watch(isarServiceProvider);
+  return ProfileRepository(supabase, isar);
 });
 
 final profileProvider =

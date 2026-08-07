@@ -147,6 +147,16 @@ class _NotificationTile extends ConsumerWidget {
         icon = CupertinoIcons.exclamationmark_triangle_fill;
         iconColor = const Color(0xFFFF9500);
         break;
+      case 'group_dissolved':
+        actionText = ' đã giải tán nhóm';
+        icon = CupertinoIcons.person_3_fill;
+        iconColor = const Color(0xFFFF3B30);
+        break;
+      case 'group_added':
+        actionText = ' đã thêm bạn vào nhóm';
+        icon = CupertinoIcons.person_3_fill;
+        iconColor = const Color(0xFF5856D6);
+        break;
       default:
         actionText = ' có một thông báo mới';
     }

@@ -314,10 +314,11 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              message.replyToMessage!.senderId ==
-                                      widget.currentUserId
-                                  ? 'Bạn'
-                                  : widget.otherUserName,
+                              () {
+                                if (message.replyToMessage!.senderId == widget.currentUserId) return 'Bạn';
+                                final replyProfile = ref.watch(profileProvider(message.replyToMessage!.senderId)).valueOrNull;
+                                return replyProfile?.displayName ?? replyProfile?.fullName ?? (widget.isGroup ? 'Thành viên' : widget.otherUserName);
+                              }(),
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -777,10 +778,11 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                message.replyToMessage!.senderId ==
-                                        widget.currentUserId
-                                    ? 'Bạn'
-                                    : widget.otherUserName,
+                                () {
+                                  if (message.replyToMessage!.senderId == widget.currentUserId) return 'Bạn';
+                                  final replyProfile = ref.watch(profileProvider(message.replyToMessage!.senderId)).valueOrNull;
+                                  return replyProfile?.displayName ?? replyProfile?.fullName ?? (widget.isGroup ? 'Thành viên' : widget.otherUserName);
+                                }(),
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,

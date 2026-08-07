@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 import 'package:url_launcher_platform_interface/link.dart';
-import 'package:mini_social/features/auth/data/auth_repository.dart';
+import 'package:viora/features/auth/data/auth_repository.dart';
 
 class FakePostgrestFilterBuilder<T> extends Fake implements PostgrestFilterBuilder<T> {
   final String fn;

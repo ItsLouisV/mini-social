@@ -130,7 +130,12 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Đang trả lời ${widget.replyingToMessage!.senderId == widget.currentUserId ? 'chính mình' : widget.otherUserName}',
+                            () {
+                              if (widget.replyingToMessage!.senderId == widget.currentUserId) return 'Đang trả lời chính mình';
+                              final replyProfile = ref.watch(profileProvider(widget.replyingToMessage!.senderId)).valueOrNull;
+                              final name = replyProfile?.displayName ?? replyProfile?.fullName ?? widget.otherUserName;
+                              return 'Đang trả lời $name';
+                            }(),
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,

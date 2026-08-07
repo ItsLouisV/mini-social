@@ -46,7 +46,7 @@ class UpstashRedisService {
             '⚠️ [UpstashRedisService] HTTP ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      debugPrint('⚠️ [UpstashRedisService] Lỗi executeCommand: $e');
+      debugPrint('ℹ️ [UpstashRedisService] Offline - executeCommand skipped: ${e.runtimeType}');
     }
     return null;
   }
@@ -77,7 +77,7 @@ class UpstashRedisService {
         }
       }
     } catch (e) {
-      debugPrint('⚠️ [UpstashRedisService] Lỗi executePipeline: $e');
+      debugPrint('ℹ️ [UpstashRedisService] Offline - executePipeline skipped: ${e.runtimeType}');
     }
     return [];
   }

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:web/web.dart' as web;
@@ -6,12 +8,7 @@ import 'package:web/web.dart' as web;
 @JS('BarcodeDetector')
 extension type BarcodeDetector._(JSObject _) implements JSObject {
   external BarcodeDetector(JSObject options);
-  external JSPromise<JSArray<DetectedBarcode>> detect(JSObject image);
-}
-
-@JS()
-extension type DetectedBarcode._(JSObject _) implements JSObject {
-  external String get rawValue;
+  external JSPromise<JSArray<JSObject>> detect(JSObject image);
 }
 
 Future<String?> decodeQrFromWebImage(XFile imageFile) async {
@@ -23,8 +20,15 @@ Future<String?> decodeQrFromWebImage(XFile imageFile) async {
     final img = web.HTMLImageElement();
     img.src = url;
 
-    // Wait for image to load
-    await web.EventStreamProviders.loadEvent.forTarget(img).first;
+    final completer = Completer<void>();
+    img.addEventListener('load', (web.Event _) {
+      if (!completer.isCompleted) completer.complete();
+    }.toJS);
+    img.addEventListener('error', (web.Event _) {
+      if (!completer.isCompleted) completer.completeError('Failed to load image');
+    }.toJS);
+
+    await completer.future;
 
     final options = {'formats': ['qr_code']}.jsify() as JSObject;
     final detector = BarcodeDetector(options);
@@ -34,7 +38,9 @@ Future<String?> decodeQrFromWebImage(XFile imageFile) async {
     web.URL.revokeObjectURL(url);
 
     if (results.isNotEmpty) {
-      return results.first.rawValue;
+      final first = results.first;
+      final rawValue = (first.getProperty('rawValue'.toJS) as JSString?)?.toDart;
+      return rawValue;
     }
   } catch (e) {
     debugPrint('Web BarcodeDetector error: $e');

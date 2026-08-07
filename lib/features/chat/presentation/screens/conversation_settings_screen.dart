@@ -21,6 +21,7 @@ import '../../../social/providers/follow_list_provider.dart';
 import '../../domain/conversation_member_model.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
+import '../widgets/message_context_menu_route.dart';
 import '../widgets/passcode_dialog.dart';
 
 class ConversationSettingsScreen extends ConsumerStatefulWidget {
@@ -988,10 +989,12 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                     final idx = entry.key;
                     final m = entry.value;
                     final isMe = m.userId == currentUserId;
+                    final itemKey = GlobalKey();
 
                     return Column(
                       children: [
                         ListTile(
+                          key: itemKey,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                           leading: AppAvatar(
                             imageUrl: m.profile?.avatarUrl,
@@ -1044,12 +1047,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                             m.profile?.username != null && m.profile!.username.isNotEmpty ? '@${m.profile!.username}' : 'Thành viên nhóm',
                             style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
-                          trailing: (isGroupAdmin && !isMe)
-                              ? const Icon(CupertinoIcons.ellipsis, size: 18, color: Colors.grey)
-                              : null,
-                          onTap: (isGroupAdmin && !isMe)
-                              ? () => _showMemberActionSheet(context, ref, conv, m)
-                              : null,
+                          trailing: const Icon(CupertinoIcons.ellipsis, size: 18, color: Colors.grey),
+                          onTap: () => _showMemberContextMenu(context, ref, conv, m, itemKey, isGroupAdmin, isMe, currentUserId, cardBgColor),
                         ),
                         if (idx < members.length - 1)
                           Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
@@ -1073,55 +1072,133 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     );
   }
 
-  void _showMemberActionSheet(BuildContext context, WidgetRef ref, dynamic conv, ConversationMemberModel member) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text('Quản lý ${member.profile?.displayName ?? "thành viên"}'),
-        actions: [
-          if (!member.isCoAdmin)
-            CupertinoActionSheetAction(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, 'admin');
-                ref.invalidate(groupMembersProvider(conv.id));
-                ref.invalidate(conversationsProvider);
-                if (context.mounted) {
-                  ToastService.showSuccess(context, 'Đã thăng cấp làm Phó nhóm');
-                }
-              },
-              child: const Text('⭐ Thăng cấp làm Phó nhóm'),
-            )
-          else
-            CupertinoActionSheetAction(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, 'member');
-                ref.invalidate(groupMembersProvider(conv.id));
-                ref.invalidate(conversationsProvider);
-                if (context.mounted) {
-                  ToastService.showInfo(context, 'Đã gỡ quyền Phó nhóm');
-                }
-              },
-              child: const Text('Gỡ quyền Phó nhóm'),
+  void _showMemberContextMenu(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic conv,
+    ConversationMemberModel member,
+    GlobalKey itemKey,
+    bool isGroupAdmin,
+    bool isMe,
+    String currentUserId,
+    Color cardBgColor,
+  ) {
+    HapticFeedback.mediumImpact();
+    final renderBox = itemKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final size = renderBox.size;
+    final position = renderBox.localToGlobal(Offset.zero);
+
+    final overlayMemberWidget = Container(
+      width: size.width,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: cardBgColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          AppAvatar(
+            imageUrl: member.profile?.avatarUrl,
+            name: member.profile?.displayName ?? 'Thành viên',
+            radius: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        isMe ? '${member.profile?.displayName ?? "Tôi"} (Tôi)' : (member.profile?.displayName ?? 'Thành viên'),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    if (member.isOwner)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('👑 Trưởng nhóm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber)),
+                      )
+                    else if (member.isCoAdmin)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('⭐ Phó nhóm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.purple)),
+                      ),
+                  ],
+                ),
+                if (member.profile?.username != null && member.profile!.username.isNotEmpty)
+                  Text(
+                    '@${member.profile!.username}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+              ],
             ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await ref.read(chatRepositoryProvider).removeGroupMember(conv.id, member.userId);
-              ref.invalidate(groupMembersProvider(conv.id));
-              ref.invalidate(conversationsProvider);
-              if (context.mounted) {
-                ToastService.showSuccess(context, 'Đã xóa thành viên khỏi nhóm');
-              }
-            },
-            child: const Text('🚫 Xóa khỏi nhóm'),
           ),
         ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Hủy'),
+      ),
+    );
+
+    Navigator.push(
+      context,
+      MessageContextMenuRoute(
+        messagePosition: position,
+        messageSize: size,
+        messageWidget: overlayMemberWidget,
+        isMine: false,
+        estimatedMenuHeight: 110.0,
+        menuContentWidget: MemberPopupMenuContent(
+          member: member,
+          isCoAdmin: member.isCoAdmin,
+          isGroupAdmin: isGroupAdmin,
+          isMe: isMe,
+          onToggleCoAdmin: () async {
+            Navigator.pop(context);
+            final newRole = member.isCoAdmin ? 'member' : 'admin';
+            await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, newRole);
+            ref.invalidate(groupMembersProvider(conv.id));
+            ref.invalidate(conversationsProvider);
+            if (context.mounted) {
+              ToastService.showSuccess(
+                context,
+                member.isCoAdmin ? 'Đã gỡ quyền Phó nhóm' : 'Đã thăng cấp làm Phó nhóm',
+              );
+            }
+          },
+          onRemoveMember: () async {
+            Navigator.pop(context);
+            await ref.read(chatRepositoryProvider).removeGroupMember(conv.id, member.userId);
+            ref.invalidate(groupMembersProvider(conv.id));
+            ref.invalidate(conversationsProvider);
+            if (context.mounted) {
+              ToastService.showSuccess(context, 'Đã xóa thành viên khỏi nhóm');
+            }
+          },
+          onViewProfile: () {
+            Navigator.pop(context);
+            context.push('/profile/${member.userId}');
+          },
+          onDirectMessage: () async {
+            Navigator.pop(context);
+            final chatRepo = ref.read(chatRepositoryProvider);
+            final directConv = await chatRepo.getOrCreateConversation(member.userId);
+            if (context.mounted) {
+              context.push('/chat/${directConv.id}');
+            }
+          },
         ),
       ),
     );
@@ -1561,4 +1638,141 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
       if (mounted) setState(() => _isAdding = false);
     }
   }
+}
+
+class MemberPopupMenuContent extends StatelessWidget {
+  final ConversationMemberModel member;
+  final bool isCoAdmin;
+  final bool isGroupAdmin;
+  final bool isMe;
+  final VoidCallback onToggleCoAdmin;
+  final VoidCallback onRemoveMember;
+  final VoidCallback onViewProfile;
+  final VoidCallback onDirectMessage;
+
+  const MemberPopupMenuContent({
+    super.key,
+    required this.member,
+    required this.isCoAdmin,
+    required this.isGroupAdmin,
+    required this.isMe,
+    required this.onToggleCoAdmin,
+    required this.onRemoveMember,
+    required this.onViewProfile,
+    required this.onDirectMessage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final containerColor = isDark ? const Color(0xFF1E1E2C) : Colors.white;
+
+    final List<_GridMemberActionItem> actionItems = [
+      if (!isMe)
+        _GridMemberActionItem(
+          icon: CupertinoIcons.chat_bubble_fill,
+          label: 'Nhắn tin',
+          onTap: onDirectMessage,
+          iconColor: Colors.blue,
+        ),
+      _GridMemberActionItem(
+        icon: CupertinoIcons.person_crop_circle,
+        label: 'Trang cá nhân',
+        onTap: onViewProfile,
+        iconColor: Colors.teal,
+      ),
+      if (isGroupAdmin && !isMe)
+        _GridMemberActionItem(
+          icon: isCoAdmin ? CupertinoIcons.star_slash : CupertinoIcons.star_fill,
+          label: isCoAdmin ? 'Gỡ phó nhóm' : 'Thăng phó nhóm',
+          onTap: onToggleCoAdmin,
+          iconColor: Colors.purpleAccent,
+        ),
+      if (isGroupAdmin && !isMe)
+        _GridMemberActionItem(
+          icon: CupertinoIcons.person_badge_minus,
+          label: 'Xóa khỏi nhóm',
+          onTap: onRemoveMember,
+          iconColor: Colors.red,
+          isDestructive: true,
+        ),
+    ];
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: containerColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 16,
+              spreadRadius: 2,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 14,
+          alignment: WrapAlignment.start,
+          children: actionItems.map((item) {
+            return SizedBox(
+              width: 58,
+              child: GestureDetector(
+                onTap: item.onTap,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: item.isDestructive
+                            ? Colors.red.withValues(alpha: 0.12)
+                            : item.iconColor.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        item.icon,
+                        color: item.isDestructive ? Colors.red : item.iconColor,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.label,
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _GridMemberActionItem {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color iconColor;
+  final bool isDestructive;
+
+  const _GridMemberActionItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.iconColor,
+    this.isDestructive = false,
+  });
 }
