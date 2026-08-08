@@ -46,6 +46,7 @@ import '../../../../core/localization/app_language.dart';
 class _MessageListItem {
   final bool isDivider;
   final bool isSystemMessage;
+  final bool isUnreadDivider;
   final String? systemMessageText;
   final DateTime? dateTime;
   final MessageModel? message;
@@ -55,6 +56,7 @@ class _MessageListItem {
   const _MessageListItem._({
     required this.isDivider,
     this.isSystemMessage = false,
+    this.isUnreadDivider = false,
     this.systemMessageText,
     this.dateTime,
     this.message,
@@ -64,6 +66,9 @@ class _MessageListItem {
 
   factory _MessageListItem.divider(DateTime dt) =>
       _MessageListItem._(isDivider: true, dateTime: dt);
+
+  factory _MessageListItem.unreadDivider() =>
+      const _MessageListItem._(isDivider: false, isUnreadDivider: true);
 
   factory _MessageListItem.system(String text, DateTime dt) =>
       _MessageListItem._(
@@ -90,16 +95,20 @@ class _MessageListItem {
 
 /// Build item list từ messages và trả về đồng thời một map
 /// messageId → index trong item list (để scroll chính xác).
-///
-/// Gọi hàm này bên ngoài build() và cache kết quả để tránh
-/// tính lại toàn bộ mỗi khi widget rebuild.
 ({List<_MessageListItem> items, Map<String, int> indexMap}) _buildItemList(
-    List<MessageModel> messages) {
+    List<MessageModel> messages, {String? currentUserId}) {
   final items = <_MessageListItem>[];
 
-  // [messages] đang descending (index 0 = mới nhất).
-  // ListView reverse: true → item index 0 hiển thị ở đáy.
-  // Do đó thứ tự items phải giống messages (descending).
+  // Tìm ID của tin nhắn chưa đọc ĐẦU TIÊN (tin nhắn cũ nhất chưa đọc từ người khác)
+  String? firstUnreadMsgId;
+  if (currentUserId != null) {
+    for (final m in messages.reversed) {
+      if (!m.isSeen && m.senderId != currentUserId) {
+        firstUnreadMsgId = m.id;
+        break;
+      }
+    }
+  }
 
   for (int i = 0; i < messages.length; i++) {
     final msg = messages[i];
@@ -109,9 +118,7 @@ class _MessageListItem {
       continue;
     }
 
-    // Tin trước đó theo thứ tự thời gian = index i+1 (cũ hơn)
     final olderMsg = i < messages.length - 1 ? messages[i + 1] : null;
-    // Tin sau đó theo thứ tự thời gian = index i-1 (mới hơn)
     final newerMsg = i > 0 ? messages[i - 1] : null;
 
     final isLastInGroup = newerMsg == null ||
@@ -125,6 +132,12 @@ class _MessageListItem {
       showInlineTime: isLastInGroup,
     ));
 
+    // Hiển thị nhãn "Tin nhắn chưa đọc" PHÍA TRÊN tin nhắn chưa đọc đầu tiên
+    // (Vì ListView reverse: true nên item được add tiếp theo sẽ ở vị trí cao hơn/phía trên trên màn hình)
+    if (firstUnreadMsgId != null && msg.id == firstUnreadMsgId) {
+      items.add(_MessageListItem.unreadDivider());
+    }
+
     // Time divider nếu cách tin cũ hơn >= 10 phút, hoặc tin đầu tiên
     if (olderMsg == null ||
         olderMsg.isSystem ||
@@ -133,11 +146,11 @@ class _MessageListItem {
     }
   }
 
-  // Build index map: messageId → index trong items (bỏ qua divider và system)
+  // Build index map: messageId → index trong items
   final indexMap = <String, int>{};
   for (int i = 0; i < items.length; i++) {
     final item = items[i];
-    if (!item.isDivider && !item.isSystemMessage && item.message != null) {
+    if (!item.isDivider && !item.isSystemMessage && !item.isUnreadDivider && item.message != null) {
       indexMap[item.message!.id] = i;
     }
   }
@@ -179,6 +192,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // Trạng thái hiển thị nút cuộn xuống đáy
   bool _showScrollToBottomBtn = false;
+  bool _hasScrolledToInitialUnread = false;
 
   // Realtime Typing Indicator State
   RealtimeChannel? _typingChannel;
@@ -797,9 +811,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!needsUpdate) return;
 
     _cachedMessages = messages;
-    final result = _buildItemList(messages);
+    final currentUserId = ref.read(currentUserIdProvider);
+    final result = _buildItemList(messages, currentUserId: currentUserId);
     _cachedItems = result.items;
     _cachedIndexMap = result.indexMap;
+
+    // Tự động cuộn đến tin nhắn chưa đọc đầu tiên ở lần đầu nạp danh sách
+    if (!_hasScrolledToInitialUnread && _cachedItems.isNotEmpty) {
+      _hasScrolledToInitialUnread = true;
+      int? unreadTargetIndex;
+      for (int i = 0; i < _cachedItems.length; i++) {
+        if (_cachedItems[i].isUnreadDivider) {
+          unreadTargetIndex = i;
+          break;
+        }
+      }
+
+      if (unreadTargetIndex != null && unreadTargetIndex > 0) {
+        final targetIndex = unreadTargetIndex;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_itemScrollController.isAttached) {
+            _itemScrollController.jumpTo(
+              index: targetIndex,
+              alignment: 0.3,
+            );
+          }
+        });
+      }
+    }
   }
 
   // ── Scroll tới tin nhắn theo index ────────────────────────────────────────
@@ -1450,27 +1489,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       child: AnimatedOpacity(
                         opacity: _showScrollToBottomBtn ? 1.0 : 0.0,
                         duration: const Duration(milliseconds: 200),
-                        child: messagesAsync.when(
-                          data: (state) {
-                            final unreadCount = state.messages
-                                .where((m) => !m.isSeen && m.senderId != currentUserId)
-                                .length;
-                            return ElasticScrollToBottomButton(
-                              onTap: () => _scrollToBottom(),
-                              unreadCount: unreadCount,
-                              themeColor: chatThemeColor,
-                            );
-                          },
-                          loading: () => ElasticScrollToBottomButton(
-                            onTap: () => _scrollToBottom(),
-                            unreadCount: 0,
-                            themeColor: chatThemeColor,
-                          ),
-                          error: (_, __) => ElasticScrollToBottomButton(
-                            onTap: () => _scrollToBottom(),
-                            unreadCount: 0,
-                            themeColor: chatThemeColor,
-                          ),
+                        child: ElasticScrollToBottomButton(
+                          onTap: () => _scrollToBottom(),
+                          themeColor: chatThemeColor,
                         ),
                       ),
                     ),
@@ -1547,6 +1568,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         }
 
         final item = _cachedItems[itemIndex];
+
+        if (item.isUnreadDivider) {
+          return const _UnreadDivider();
+        }
 
         if (item.isDivider) {
           return _TimeDivider(dateTime: item.dateTime!);
@@ -2220,6 +2245,58 @@ class _TimeDivider extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _UnreadDivider extends StatelessWidget {
+  const _UnreadDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Divider(
+              color: primaryColor.withValues(alpha: 0.35),
+              thickness: 1,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: primaryColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: primaryColor.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                'Tin nhắn chưa đọc',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: primaryColor,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Divider(
+              color: primaryColor.withValues(alpha: 0.35),
+              thickness: 1,
+            ),
+          ),
+        ],
       ),
     );
   }

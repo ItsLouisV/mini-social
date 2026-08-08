@@ -7,13 +7,11 @@ import 'package:flutter/scheduler.dart';
 
 class ElasticScrollToBottomButton extends StatefulWidget {
   final VoidCallback onTap;
-  final int unreadCount;
   final Color? themeColor;
 
   const ElasticScrollToBottomButton({
     super.key,
     required this.onTap,
-    required this.unreadCount,
     this.themeColor,
   });
 
@@ -264,78 +262,38 @@ class _ElasticScrollToBottomButtonState extends State<ElasticScrollToBottomButto
       onPointerMove: _handlePointerMove,
       onPointerUp: _handlePointerUp,
       onPointerCancel: _handlePointerCancel,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Glassmorphic Circle Button
-          ClipOval(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1E1E2F).withValues(alpha: _isPressed ? 0.75 : 0.35)
-                      : Colors.white.withValues(alpha: _isPressed ? 0.8 : 0.4),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: _isPressed ? 0.25 : 0.12),
-                      blurRadius: _isPressed ? 14 : 8,
-                      offset: Offset(0, _isPressed ? 6 : 3),
-                    ),
-                  ],
-                  border: Border.all(
-                    color: activeColor.withValues(alpha: _isPressed ? 0.5 : 0.18),
-                    width: 1.2,
-                  ),
+      child: ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF1E1E2F).withValues(alpha: _isPressed ? 0.75 : 0.35)
+                  : Colors.white.withValues(alpha: _isPressed ? 0.8 : 0.4),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: _isPressed ? 0.25 : 0.12),
+                  blurRadius: _isPressed ? 14 : 8,
+                  offset: Offset(0, _isPressed ? 6 : 3),
                 ),
-                child: Center(
-                  child: Icon(
-                    CupertinoIcons.chevron_down,
-                    color: activeColor.withValues(alpha: _isPressed ? 1.0 : 0.7),
-                    size: 20,
-                  ),
-                ),
+              ],
+              border: Border.all(
+                color: activeColor.withValues(alpha: _isPressed ? 0.5 : 0.18),
+                width: 1.2,
+              ),
+            ),
+            child: Center(
+              child: Icon(
+                CupertinoIcons.chevron_down,
+                color: activeColor.withValues(alpha: _isPressed ? 1.0 : 0.7),
+                size: 20,
               ),
             ),
           ),
-          // Floating Unread Message Indicator Badge
-          if (widget.unreadCount > 0)
-            Positioned(
-              top: -3,
-              right: -3,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withValues(alpha: _isPressed ? 1.0 : 0.9),
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.redAccent.withValues(alpha: 0.3),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 18,
-                  minHeight: 18,
-                ),
-                child: Center(
-                  child: Text(
-                    widget.unreadCount > 99 ? '99+' : '${widget.unreadCount}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
