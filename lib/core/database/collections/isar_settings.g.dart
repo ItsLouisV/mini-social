@@ -15,7 +15,7 @@ extension GetIsarSettingsCollection on Isar {
 
 const IsarSettingsSchema = CollectionSchema(
   name: r'IsarSettings',
-  id: -2003972169886166418,
+  id: -2003972169886166528,
   properties: {
     r'key': PropertySchema(
       id: 0,
@@ -35,7 +35,7 @@ const IsarSettingsSchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'key': IndexSchema(
-      id: -4906094122524121629,
+      id: -4906094122524122112,
       name: r'key',
       unique: true,
       replace: true,

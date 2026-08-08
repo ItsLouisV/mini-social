@@ -6,8 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:web/web.dart' as web;
 
 @JS('BarcodeDetector')
+@staticInterop
 class BarcodeDetector {
-  external BarcodeDetector(JSObject options);
+  external factory BarcodeDetector(JSObject options);
+}
+
+extension BarcodeDetectorExtension on BarcodeDetector {
   external JSPromise<JSArray<JSObject>> detect(JSObject image);
 }
 

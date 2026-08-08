@@ -22,6 +22,7 @@ import '../domain/conversation_member_model.dart';
 
 import '../../../core/services/isar_service.dart';
 import '../../../core/services/sync_engine.dart';
+import '../../auth/providers/auth_provider.dart';
 
 // ── Service Providers ─────────────────────────────────────────────────────────
 
@@ -496,6 +497,24 @@ class ChatMessagesNotifier
     }
   }
 
+  /// Đánh dấu đã đọc tất cả tin nhắn trong cuộc trò chuyện này
+  Future<void> markAsSeen() async {
+    final repo = ref.read(chatRepositoryProvider);
+    await repo.markAsSeen(arg);
+
+    final current = state.valueOrNull;
+    if (current != null) {
+      final currentUserId = ref.read(currentUserIdProvider);
+      final updatedList = current.messages.map((m) {
+        if (!m.isSeen && m.senderId != currentUserId) {
+          return m.copyWith(isSeen: true);
+        }
+        return m;
+      }).toList();
+      state = AsyncData(current.copyWith(messages: updatedList));
+    }
+  }
+
   // ── Phân trang load thêm tin cũ ──────────────────────────────────────────────
 
   Future<void> loadMore() async {
@@ -785,9 +804,7 @@ final unreadMessagesCountProvider = StreamProvider.autoDispose<int>((ref) async*
   final countStream = ref
       .watch(chatRepositoryProvider)
       .watchTotalUnreadMessagesCount()
-      .handleError((err) {
-    print('Supabase watchTotalUnreadMessagesCount stream error (WebSocket disconnected): $err');
-  });
+      .handleError((_) {});
 
   await for (final count in countStream) {
     yield count;

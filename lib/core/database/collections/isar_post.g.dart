@@ -15,7 +15,7 @@ extension GetIsarPostCollection on Isar {
 
 const IsarPostSchema = CollectionSchema(
   name: r'IsarPost',
-  id: 8958281595613992375,
+  id: 8958281595613991936,
   properties: {
     r'authorAvatar': PropertySchema(
       id: 0,
@@ -85,7 +85,7 @@ const IsarPostSchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'id': IndexSchema(
-      id: -3268401673993471357,
+      id: -3268401673993471488,
       name: r'id',
       unique: true,
       replace: true,
@@ -98,7 +98,7 @@ const IsarPostSchema = CollectionSchema(
       ],
     ),
     r'authorId': IndexSchema(
-      id: 8112877077417469315,
+      id: 8112877077417468928,
       name: r'authorId',
       unique: false,
       replace: false,

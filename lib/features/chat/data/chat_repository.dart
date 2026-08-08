@@ -638,16 +638,14 @@ class ChatRepository {
           return total;
         })
         .handleError((err) {
-          debugPrint('ℹ️ watchTotalUnreadMessagesCount stream disconnected: $err');
+          // Tự động kết nối lại khi WebSocket ngắt (không in log rác)
         });
 
     try {
       await for (final count in countStream) {
         yield count;
       }
-    } catch (e) {
-      debugPrint('ℹ️ watchTotalUnreadMessagesCount stream closed: $e');
-    }
+    } catch (_) {}
   }
 
   // ── Conversation Actions ──────────────────────────────────────────────────────
@@ -1110,15 +1108,26 @@ class ChatRepository {
     }
 
     try {
-      // 2. Mark messages from other senders as seen
+      // 2. Mark messages from other senders as seen and update seen_at timestamp
+      final nowUtcIso = DateTime.now().toUtc().toIso8601String();
       await _client
           .from(SupabaseConstants.messagesTable)
-          .update({'is_seen': true})
+          .update({
+            'is_seen': true,
+            'seen_at': nowUtcIso,
+          })
           .eq('conversation_id', conversationId)
           .neq('sender_id', userId)
           .eq('is_seen', false);
     } catch (_) {
       debugPrint('ℹ️ [ChatRepository.markAsSeen] Offline - skipped messages update');
+    }
+
+    // 3. Invalidate Redis cache so next load fetches fresh is_seen: true from Supabase
+    if (_upstashRedis != null) {
+      _upstashRedis!.invalidateMessagesCache(conversationId).catchError((err) {
+        debugPrint('⚠️ [ChatRepository.markAsSeen] Lỗi invalidate Redis cache: $err');
+      });
     }
   }
 

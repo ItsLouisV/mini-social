@@ -77,7 +77,6 @@ class SocialRepository {
         .limit(50)
         .asyncMap((_) => _getNotificationsWithProfiles())
         .handleError((err) {
-          print('Supabase watchNotifications stream error: $err');
           _service.handleAuthError(err);
         });
 
@@ -85,9 +84,7 @@ class SocialRepository {
       await for (final notifications in notificationsStream) {
         yield notifications;
       }
-    } catch (e) {
-      print('Supabase watchNotifications main stream error: $e');
-    }
+    } catch (_) {}
   }
 
   Future<List<Map<String, dynamic>>> _getNotificationsWithProfiles() async {
@@ -169,6 +166,13 @@ class SocialRepository {
         .update({'is_read': true})
         .eq('id', notificationId)
         .eq('is_read', false);
+  }
+
+  Future<void> deleteNotification(String notificationId) async {
+    await _client
+        .from(SupabaseConstants.notificationsTable)
+        .delete()
+        .eq('id', notificationId);
   }
 
   Future<int> getUnreadCount() async {

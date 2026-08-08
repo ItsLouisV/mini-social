@@ -96,16 +96,22 @@ class _MessageListItem {
 /// Build item list từ messages và trả về đồng thời một map
 /// messageId → index trong item list (để scroll chính xác).
 ({List<_MessageListItem> items, Map<String, int> indexMap}) _buildItemList(
-    List<MessageModel> messages, {String? currentUserId}) {
+    List<MessageModel> messages, {
+    String? currentUserId,
+    int unreadCount = 0,
+    DateTime? lastReadAt,
+}) {
   final items = <_MessageListItem>[];
 
-  // Tìm ID của tin nhắn chưa đọc ĐẦU TIÊN (tin nhắn cũ nhất chưa đọc từ người khác)
+  // Chỉ tìm ID tin nhắn chưa đọc đầu tiên KHI người dùng có unreadCount > 0
   String? firstUnreadMsgId;
-  if (currentUserId != null) {
+  if (currentUserId != null && unreadCount > 0) {
     for (final m in messages.reversed) {
-      if (!m.isSeen && m.senderId != currentUserId) {
-        firstUnreadMsgId = m.id;
-        break;
+      if (m.senderId != currentUserId) {
+        if (!m.isSeen && (lastReadAt == null || m.createdAt.isAfter(lastReadAt))) {
+          firstUnreadMsgId = m.id;
+          break;
+        }
       }
     }
   }
@@ -489,7 +495,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _messageController.addListener(_onTextChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await ref.read(chatRepositoryProvider).markAsSeen(widget.conversationId);
+      await ref.read(realtimeMessagesProvider(widget.conversationId).notifier).markAsSeen();
       if (mounted) {
         ref.invalidate(conversationsProvider);
         ref.invalidate(unreadMessagesCountProvider);
@@ -812,7 +818,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _cachedMessages = messages;
     final currentUserId = ref.read(currentUserIdProvider);
-    final result = _buildItemList(messages, currentUserId: currentUserId);
+    
+    // Lấy trạng thái unread & lastReadAt của người dùng từ conversation
+    final convs = ref.read(conversationsProvider).valueOrNull ?? [];
+    ConversationModel? conv;
+    try {
+      conv = convs.firstWhere((c) => c.id == widget.conversationId);
+    } catch (_) {}
+
+    final unreadCount = conv?.unreadCount ?? 0;
+    final lastReadAt = conv?.myMemberState?.lastReadAt;
+
+    final result = _buildItemList(
+      messages,
+      currentUserId: currentUserId,
+      unreadCount: unreadCount,
+      lastReadAt: lastReadAt,
+    );
     _cachedItems = result.items;
     _cachedIndexMap = result.indexMap;
 
@@ -1137,7 +1159,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           curr.messages.isNotEmpty &&
           (prev.messages.isEmpty ||
               curr.messages.first.id != prev.messages.first.id)) {
-        ref.read(chatRepositoryProvider).markAsSeen(widget.conversationId).then((_) {
+        ref.read(realtimeMessagesProvider(widget.conversationId).notifier).markAsSeen().then((_) {
           if (mounted) {
             ref.invalidate(conversationsProvider);
             ref.invalidate(unreadMessagesCountProvider);

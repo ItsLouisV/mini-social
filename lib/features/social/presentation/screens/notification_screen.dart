@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
@@ -62,7 +63,41 @@ class NotificationScreen extends ConsumerWidget {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final n = notifications[index];
-                      return _NotificationTile(notification: n);
+                      final notifId = n['id']?.toString() ?? 'notif_$index';
+                      return Dismissible(
+                        key: Key(notifId),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          color: Colors.redAccent,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(CupertinoIcons.trash_fill, color: Colors.white, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'Xóa',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        onDismissed: (direction) {
+                          final id = n['id'] as String?;
+                          if (id != null) {
+                            HapticFeedback.mediumImpact();
+                            ref.read(socialRepositoryProvider).deleteNotification(id).then((_) {
+                              ref.invalidate(notificationsProvider);
+                            });
+                          }
+                        },
+                        child: _NotificationTile(notification: n),
+                      );
                     },
                     childCount: notifications.length,
                   ),
@@ -287,7 +322,41 @@ class _NotificationTile extends ConsumerWidget {
                 children: [
                   GestureDetector(
                     onTap: () {
-                      // More options
+                      final notifId = notification['id'] as String?;
+                      if (notifId == null) return;
+                      showModalBottomSheet(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        builder: (ctx) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: theme.brightness == Brightness.dark
+                                  ? const Color(0xFF1E1E2F)
+                                  : Colors.white,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: SafeArea(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ListTile(
+                                    leading: const Icon(CupertinoIcons.trash, color: Colors.redAccent),
+                                    title: const Text('Xóa thông báo này', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                                    onTap: () {
+                                      Navigator.pop(ctx);
+                                      HapticFeedback.mediumImpact();
+                                      ref.read(socialRepositoryProvider).deleteNotification(notifId).then((_) {
+                                        ref.invalidate(notificationsProvider);
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
                     },
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 8),
