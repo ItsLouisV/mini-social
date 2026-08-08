@@ -1,35 +1,41 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'chat_provider.dart';
 
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   return const FlutterSecureStorage();
 });
 
 class HiddenChatNotifier extends AutoDisposeAsyncNotifier<bool> {
-  static const _passcodeKey = 'hidden_chat_passcode';
-  
+  String? _cachedPasscode;
+
   @override
   Future<bool> build() async {
-    final storage = ref.watch(secureStorageProvider);
-    final passcode = await storage.read(key: _passcodeKey);
-    return passcode != null; // return true if passcode is set
+    final repo = ref.watch(chatRepositoryProvider);
+    _cachedPasscode = await repo.getHiddenPasscode();
+    return _cachedPasscode != null && _cachedPasscode!.isNotEmpty;
   }
 
   Future<void> setPasscode(String passcode) async {
-    final storage = ref.read(secureStorageProvider);
-    await storage.write(key: _passcodeKey, value: passcode);
+    final repo = ref.read(chatRepositoryProvider);
+    await repo.setHiddenPasscode(passcode);
+    _cachedPasscode = passcode;
     state = const AsyncData(true);
   }
 
   Future<bool> verifyPasscode(String input) async {
-    final storage = ref.read(secureStorageProvider);
-    final passcode = await storage.read(key: _passcodeKey);
-    return passcode == input;
+    if (_cachedPasscode != null && _cachedPasscode!.isNotEmpty) {
+      return _cachedPasscode == input;
+    }
+    final repo = ref.read(chatRepositoryProvider);
+    _cachedPasscode = await repo.getHiddenPasscode();
+    return _cachedPasscode == input;
   }
 
   Future<void> removePasscode() async {
-    final storage = ref.read(secureStorageProvider);
-    await storage.delete(key: _passcodeKey);
+    final repo = ref.read(chatRepositoryProvider);
+    await repo.removeHiddenPasscode();
+    _cachedPasscode = null;
     state = const AsyncData(false);
   }
 }

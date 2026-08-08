@@ -34,6 +34,9 @@ class ProfileRepository {
   String? get currentUserId => _service.currentUserId;
 
   Future<ProfileModel> getProfile(String userId) async {
+    if (userId.trim().isEmpty) {
+      throw ArgumentError('Cannot fetch profile for an empty userId');
+    }
     try {
       final response = await _client
           .from(SupabaseConstants.profilesTable)

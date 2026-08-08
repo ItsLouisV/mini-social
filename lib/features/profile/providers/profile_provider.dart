@@ -13,6 +13,9 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
 
 final profileProvider =
     FutureProvider.family<ProfileModel, String>((ref, userId) async {
+  if (userId.trim().isEmpty) {
+    throw ArgumentError('Cannot fetch profile for an empty userId');
+  }
   final supabase = ref.watch(supabaseServiceProvider).client;
   
   final channel = supabase.channel('public:profile_$userId');

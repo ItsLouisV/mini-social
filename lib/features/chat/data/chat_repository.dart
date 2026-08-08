@@ -1240,4 +1240,42 @@ class ChatRepository {
         .eq('message_id', messageId)
         .eq('user_id', userId);
   }
+
+  // ── Hidden Conversations Passcode ──────────────────────────────────────────
+
+  Future<String?> getHiddenPasscode() async {
+    final userId = currentUserId;
+    if (userId == null) return null;
+    try {
+      final res = await _client
+          .from('user_chat_passcodes')
+          .select('passcode')
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (res != null && res['passcode'] != null) {
+        return res['passcode'] as String;
+      }
+    } catch (e) {
+      debugPrint('ℹ️ [getHiddenPasscode] Error or table missing: $e');
+    }
+    return null;
+  }
+
+  Future<void> setHiddenPasscode(String passcode) async {
+    final userId = currentUserId;
+    if (userId == null) return;
+    await _client.from('user_chat_passcodes').upsert({
+      'user_id': userId,
+      'passcode': passcode,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  Future<void> removeHiddenPasscode() async {
+    final userId = currentUserId;
+    if (userId == null) return;
+    try {
+      await _client.from('user_chat_passcodes').delete().eq('user_id', userId);
+    } catch (_) {}
+  }
 }

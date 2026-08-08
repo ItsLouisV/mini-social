@@ -22,13 +22,16 @@ class SupabaseService {
   /// Nếu thất bại, đăng xuất và hiển thị thông báo hết hạn.
   Future<bool> handleAuthError(dynamic error) async {
     final errorStr = error.toString();
-    final isTokenExpired = errorStr.contains('InvalidJWTToken') ||
-        errorStr.contains('Token has expired') ||
+    final isExplicitTokenError = (error is AuthException && (
+          error.message.contains('Invalid Refresh Token') ||
+          error.message.contains('refresh_token_not_found') ||
+          error.statusCode == '401'
+        )) ||
+        errorStr.contains('InvalidJWTToken') ||
         errorStr.contains('JWT expired') ||
-        errorStr.contains('jwt_expired') ||
-        errorStr.contains('refresh_token_already_used');
+        errorStr.contains('jwt_expired');
 
-    if (!isTokenExpired) return false;
+    if (!isExplicitTokenError) return false;
 
     // Nếu đã có một tác vụ refresh đang chạy đồng thời, chờ nó hoàn tất
     if (_refreshCompleter != null) {
@@ -60,7 +63,6 @@ class SupabaseService {
       }
     } catch (e) {
       print('Error refreshing session: $e');
-      // Nếu lỗi báo token vừa được làm mới ở request khác, kiểm tra lại session
       final sessionAfterErr = client.auth.currentSession;
       if (sessionAfterErr != null && !sessionAfterErr.isExpired) {
         try {
@@ -71,12 +73,6 @@ class SupabaseService {
         return true;
       }
     }
-
-    print('Session refresh failed. Marking session as expired and signing out.');
-    ref.read(sessionExpiredProvider.notifier).state = true;
-    try {
-      await client.auth.signOut();
-    } catch (_) {}
 
     _refreshCompleter!.complete(false);
     _refreshCompleter = null;

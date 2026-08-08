@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
@@ -58,12 +59,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     setState(() => _statusText = 'Kiểm tra trạng thái kết nối...');
 
     bool isLoggedIn = false;
-    try {
-      // 2. Chờ Supabase Auth State khởi tạo
-      final authState = await ref.read(authStateProvider.future);
-      isLoggedIn = authState.session != null;
-    } catch (e) {
-      isLoggedIn = false;
+    final currentSession = Supabase.instance.client.auth.currentSession;
+    if (currentSession != null && !currentSession.isExpired) {
+      isLoggedIn = true;
+    } else {
+      try {
+        final authState = await ref.read(authStateProvider.future).timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => AuthState(
+            AuthChangeEvent.initialSession,
+            Supabase.instance.client.auth.currentSession,
+          ),
+        );
+        isLoggedIn = authState.session != null && !authState.session!.isExpired;
+      } catch (_) {
+        isLoggedIn = Supabase.instance.client.auth.currentSession != null;
+      }
     }
 
     if (!mounted) return;

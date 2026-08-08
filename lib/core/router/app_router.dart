@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_colors.dart';
 import '../utils/notifications.dart';
@@ -65,14 +66,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     refreshListenable: refreshListenable,
     redirect: (context, state) {
+      final session = Supabase.instance.client.auth.currentSession;
       final authState = ref.read(authStateProvider);
-      final isLoggedIn = authState.when(
-        data: (s) => s.session != null,
-        loading: () => null,
-        error: (_, __) => false,
-      );
 
-      if (isLoggedIn == null) return null;
+      final isLoggedIn = (session != null && !session.isExpired) ||
+          (authState.when(
+            data: (s) => s.session != null && !s.session!.isExpired,
+            loading: () => session != null && !session.isExpired ? true : null,
+            error: (_, __) => false,
+          ) ?? false);
 
       final isSplashRoute = state.matchedLocation == '/splash';
       final isAuthRoute = state.matchedLocation.startsWith('/login') ||

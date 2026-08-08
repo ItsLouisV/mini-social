@@ -144,11 +144,114 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
   }
 
   Future<void> _showForgotPasswordDialog() async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final method = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E2F) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.hintColor.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Đặt lại mã PIN',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Chọn phương thức xác thực để đặt lại mã PIN:',
+                  style: TextStyle(color: theme.hintColor, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(CupertinoIcons.lock_shield, color: theme.colorScheme.primary, size: 22),
+                  ),
+                  title: const Text('Nhập Mật khẩu Tài khoản', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  subtitle: const Text('Dành cho tài khoản đăng ký bằng Email & Mật khẩu', style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(CupertinoIcons.chevron_forward, size: 16),
+                  onTap: () => Navigator.pop(ctx, 'password'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF34C759).withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(CupertinoIcons.mail_solid, color: Color(0xFF34C759), size: 22),
+                  ),
+                  title: const Text('Gửi mã OTP qua Email', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  subtitle: const Text('Dành cho tất cả người dùng (bao gồm Google OAuth)', style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(CupertinoIcons.chevron_forward, size: 16),
+                  onTap: () => Navigator.pop(ctx, 'otp'),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (method == null || !mounted) return;
+
+    bool success = false;
+    if (method == 'password') {
+      success = await _verifyByPassword();
+    } else if (method == 'otp') {
+      success = await _verifyByEmailOtp();
+    }
+
+    if (success && mounted) {
+      await ref.read(hiddenChatProvider.notifier).removePasscode();
+      setState(() {
+        _currentMode = PasscodeMode.setup;
+        _passcode = '';
+        _errorMessage = '';
+        _failedAttempts = 0;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã xác thực thành công. Vui lòng thiết lập mã PIN mới.')),
+        );
+      }
+    }
+  }
+
+  Future<bool> _verifyByPassword() async {
     final passwordController = TextEditingController();
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final success = await showCupertinoDialog<bool>(
+    final res = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) {
         bool isLoading = false;
@@ -157,11 +260,11 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
         return StatefulBuilder(
           builder: (ctx, setStateDialog) {
             return CupertinoAlertDialog(
-              title: const Text('Xác thực tài khoản'),
+              title: const Text('Mật khẩu tài khoản'),
               content: Column(
                 children: [
                   const SizedBox(height: 8),
-                  const Text('Vui lòng nhập mật khẩu đăng nhập Mini Social để đặt lại mã PIN.'),
+                  const Text('Nhập mật khẩu tài khoản của bạn để xác thực.'),
                   const SizedBox(height: 16),
                   CupertinoTextField(
                     controller: passwordController,
@@ -190,21 +293,18 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                   isDefaultAction: true,
                   onPressed: isLoading ? null : () async {
                     if (passwordController.text.isEmpty) return;
-                    
                     setStateDialog(() {
                       isLoading = true;
                       authError = null;
                     });
-                    
+
                     try {
                       final email = Supabase.instance.client.auth.currentUser?.email;
                       if (email == null) throw Exception('Không tìm thấy Email');
-                      
                       await Supabase.instance.client.auth.signInWithPassword(
                         email: email,
                         password: passwordController.text,
                       );
-                      
                       if (ctx.mounted) Navigator.pop(ctx, true);
                     } catch (e) {
                       setStateDialog(() {
@@ -213,35 +313,123 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                       });
                     }
                   },
-                  child: isLoading 
-                      ? const CupertinoActivityIndicator() 
-                      : const Text('Xác nhận'),
+                  child: isLoading ? const CupertinoActivityIndicator() : const Text('Xác nhận'),
                 ),
               ],
             );
-          }
+          },
         );
-      }
+      },
     );
 
     passwordController.dispose();
+    return res ?? false;
+  }
 
-    if (success == true && mounted) {
-      // Xoá mã PIN cũ
-      await ref.read(hiddenChatProvider.notifier).removePasscode();
-      // Chuyển sang màn hình setup
-      setState(() {
-        _currentMode = PasscodeMode.setup;
-        _passcode = '';
-        _errorMessage = '';
-        _failedAttempts = 0;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã xoá mã PIN. Vui lòng thiết lập mã PIN mới.')),
-        );
-      }
+  Future<bool> _verifyByEmailOtp() async {
+    final otpController = TextEditingController();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final email = Supabase.instance.client.auth.currentUser?.email;
+
+    if (email == null || email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không tìm thấy email của tài khoản hiện tại.')),
+      );
+      return false;
     }
+
+    try {
+      await Supabase.instance.client.auth.signInWithOtp(email: email);
+    } catch (e) {
+      debugPrint('Error sending OTP: $e');
+    }
+
+    final res = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        bool isLoading = false;
+        String? otpError;
+
+        return StatefulBuilder(
+          builder: (ctx, setStateDialog) {
+            return CupertinoAlertDialog(
+              title: const Text('Xác thực OTP Email'),
+              content: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Text('Mã OTP 6 số đã được gửi tới email:\n$email'),
+                  const SizedBox(height: 16),
+                  CupertinoTextField(
+                    controller: otpController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    textAlign: TextAlign.center,
+                    placeholder: '123456',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                      fontSize: 20,
+                      letterSpacing: 6,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  if (otpError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(otpError!, style: TextStyle(color: theme.colorScheme.error, fontSize: 13)),
+                  ]
+                ],
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('Huỷ'),
+                  onPressed: () {
+                    if (!isLoading) Navigator.pop(ctx, false);
+                  },
+                ),
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: isLoading ? null : () async {
+                    final code = otpController.text.trim();
+                    if (code.length < 6) return;
+
+                    setStateDialog(() {
+                      isLoading = true;
+                      otpError = null;
+                    });
+
+                    try {
+                      final response = await Supabase.instance.client.auth.verifyOTP(
+                        email: email,
+                        token: code,
+                        type: OtpType.email,
+                      );
+                      if (response.session != null || response.user != null) {
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } else {
+                        throw Exception('Xác thực mã OTP không thành công');
+                      }
+                    } catch (e) {
+                      setStateDialog(() {
+                        isLoading = false;
+                        otpError = 'Mã OTP không chính xác hoặc đã hết hạn.';
+                      });
+                    }
+                  },
+                  child: isLoading ? const CupertinoActivityIndicator() : const Text('Xác nhận'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    otpController.dispose();
+    return res ?? false;
   }
 
   @override
