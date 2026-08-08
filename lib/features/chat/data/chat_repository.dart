@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:isar/isar.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:crypto/crypto.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../domain/conversation_model.dart';
@@ -1243,17 +1244,23 @@ class ChatRepository {
 
   // ── Hidden Conversations Passcode ──────────────────────────────────────────
 
+  String hashPasscode(String passcode) {
+    final userId = currentUserId ?? '';
+    final bytes = utf8.encode('$passcode:$userId');
+    return sha256.convert(bytes).toString();
+  }
+
   Future<String?> getHiddenPasscode() async {
     final userId = currentUserId;
     if (userId == null) return null;
     try {
       final res = await _client
           .from('user_chat_passcodes')
-          .select('passcode')
+          .select('passcode_hash')
           .eq('user_id', userId)
           .maybeSingle();
-      if (res != null && res['passcode'] != null) {
-        return res['passcode'] as String;
+      if (res != null && res['passcode_hash'] != null) {
+        return res['passcode_hash'] as String;
       }
     } catch (e) {
       debugPrint('ℹ️ [getHiddenPasscode] Error or table missing: $e');
@@ -1261,14 +1268,22 @@ class ChatRepository {
     return null;
   }
 
-  Future<void> setHiddenPasscode(String passcode) async {
+  Future<void> setHiddenPasscode(String rawPasscode) async {
     final userId = currentUserId;
     if (userId == null) return;
+    final hashed = hashPasscode(rawPasscode);
     await _client.from('user_chat_passcodes').upsert({
       'user_id': userId,
-      'passcode': passcode,
+      'passcode_hash': hashed,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     });
+  }
+
+  Future<bool> verifyHiddenPasscode(String rawInput) async {
+    final storedHash = await getHiddenPasscode();
+    if (storedHash == null) return false;
+    final inputHash = hashPasscode(rawInput);
+    return storedHash == inputHash;
   }
 
   Future<void> removeHiddenPasscode() async {

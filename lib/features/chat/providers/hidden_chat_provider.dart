@@ -7,35 +7,31 @@ final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
 });
 
 class HiddenChatNotifier extends AutoDisposeAsyncNotifier<bool> {
-  String? _cachedPasscode;
+  String? _cachedPasscodeHash;
 
   @override
   Future<bool> build() async {
     final repo = ref.watch(chatRepositoryProvider);
-    _cachedPasscode = await repo.getHiddenPasscode();
-    return _cachedPasscode != null && _cachedPasscode!.isNotEmpty;
+    _cachedPasscodeHash = await repo.getHiddenPasscode();
+    return _cachedPasscodeHash != null && _cachedPasscodeHash!.isNotEmpty;
   }
 
   Future<void> setPasscode(String passcode) async {
     final repo = ref.read(chatRepositoryProvider);
     await repo.setHiddenPasscode(passcode);
-    _cachedPasscode = passcode;
+    _cachedPasscodeHash = repo.hashPasscode(passcode);
     state = const AsyncData(true);
   }
 
   Future<bool> verifyPasscode(String input) async {
-    if (_cachedPasscode != null && _cachedPasscode!.isNotEmpty) {
-      return _cachedPasscode == input;
-    }
     final repo = ref.read(chatRepositoryProvider);
-    _cachedPasscode = await repo.getHiddenPasscode();
-    return _cachedPasscode == input;
+    return await repo.verifyHiddenPasscode(input);
   }
 
   Future<void> removePasscode() async {
     final repo = ref.read(chatRepositoryProvider);
     await repo.removeHiddenPasscode();
-    _cachedPasscode = null;
+    _cachedPasscodeHash = null;
     state = const AsyncData(false);
   }
 }
