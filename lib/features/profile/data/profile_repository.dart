@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:isar/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../domain/profile_model.dart';
 import '../../../core/constants/supabase_constants.dart';
@@ -8,7 +7,6 @@ import '../../../core/services/supabase_service.dart';
 import '../../feed/domain/post_model.dart';
 
 import '../../../core/services/isar_service.dart';
-import '../../../core/database/collections/isar_profile.dart';
 
 class UserPostsData {
   final List<PostModel> posts;
@@ -59,48 +57,14 @@ class ProfileRepository {
 
       final model = ProfileModel.fromJson(json);
 
-      // Cache to Isar
-      if (_isarService?.isar != null) {
-        await _isarService!.isar!.writeTxn(() async {
-          await _isarService!.isar!.isarProfiles.put(IsarProfile(
-            id: model.id,
-            username: model.username,
-            fullName: model.fullName,
-            avatarUrl: model.avatarUrl,
-            bio: model.bio,
-            followerCount: model.followersCount,
-            followingCount: model.followingCount,
-            updatedAt: DateTime.now().toUtc(),
-          ));
-        });
-      }
-
-      if (_isarService?.webService != null) {
-        await _isarService!.webService!.saveProfile(model.toJson());
-      }
+      // Cache to local DB (platform-independent)
+      await _isarService?.saveProfile(model.toJson());
 
       return model;
     } catch (e) {
       debugPrint('⚠️ [ProfileRepository] Offline fallback for profile: $e');
-      if (_isarService?.isar != null) {
-        final cached = await _isarService!.isar!.isarProfiles
-            .filter()
-            .idEqualTo(userId)
-            .findFirst();
-        if (cached != null) {
-          return ProfileModel(
-            id: cached.id,
-            username: cached.username,
-            fullName: cached.fullName,
-            avatarUrl: cached.avatarUrl,
-            bio: cached.bio,
-            followersCount: cached.followerCount,
-            followingCount: cached.followingCount,
-            createdAt: DateTime.now(),
-          );
-        }
-      } else if (_isarService?.webService != null) {
-        final cached = _isarService!.webService!.getProfile(userId);
+      if (_isarService != null) {
+        final cached = _isarService!.getProfile(userId);
         if (cached != null) {
           return ProfileModel.fromJson(cached);
         }

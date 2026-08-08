@@ -1,10 +1,8 @@
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:isar/isar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/supabase_constants.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/isar_service.dart';
-import '../../../core/database/collections/isar_notification.dart';
 
 class SocialRepository {
   final SupabaseService _service;
@@ -97,56 +95,16 @@ class SocialRepository {
           .limit(50);
       final list = List<Map<String, dynamic>>.from(data as List);
 
-      if (_isarService?.isar != null && list.isNotEmpty) {
-        await _isarService!.isar!.writeTxn(() async {
-          for (final n in list) {
-            final sender = n['profiles'] as Map<String, dynamic>?;
-            await _isarService!.isar!.isarNotifications.put(IsarNotification(
-              id: n['id'] as String,
-              receiverId: n['receiver_id'] as String,
-              senderId: n['sender_id'] as String,
-              senderName: sender?['full_name'] as String? ?? sender?['username'] as String?,
-              senderAvatar: sender?['avatar_url'] as String?,
-              type: n['type'] as String? ?? 'other',
-              content: n['content'] as String? ?? '',
-              isRead: n['is_read'] as bool? ?? false,
-              createdAt: DateTime.parse(n['created_at'] as String),
-            ));
-          }
-        });
-      }
-
-      if (_isarService?.webService != null && list.isNotEmpty) {
-        await _isarService!.webService!.saveNotifications(list);
+      // Cache to local DB (platform-independent)
+      if (_isarService != null && list.isNotEmpty) {
+        await _isarService!.saveNotifications(list);
       }
 
       return list;
     } catch (e) {
       debugPrint('⚠️ [SocialRepository] Offline fallback for notifications: loading from local DB: $e');
-      if (_isarService?.isar != null) {
-        final cached = await _isarService!.isar!.isarNotifications
-            .filter()
-            .receiverIdEqualTo(currentUserId!)
-            .sortByCreatedAtDesc()
-            .limit(50)
-            .findAll();
-
-        return cached.map((n) => {
-          'id': n.id,
-          'receiver_id': n.receiverId,
-          'sender_id': n.senderId,
-          'type': n.type,
-          'content': n.content,
-          'is_read': n.isRead,
-          'created_at': n.createdAt.toIso8601String(),
-          'profiles': {
-            'id': n.senderId,
-            'full_name': n.senderName,
-            'avatar_url': n.senderAvatar,
-          }
-        }).toList();
-      } else if (_isarService?.webService != null) {
-        return _isarService!.webService!.getNotifications(limit: 50);
+      if (_isarService != null) {
+        return _isarService!.getNotifications(limit: 50);
       }
       rethrow;
     }

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,13 +54,15 @@ Future<void> main() async {
   // Initialize timeago
   timeago.setLocaleMessages('vi', timeago.ViMessages());
 
-  // Initialize Isar Database for Mobile & Web
-  late final IsarService isarService;
+  // Initialize Local Database
+  // - On native (mobile/desktop): LocalDatabase.init() opens Isar
+  // - On web:                     LocalDatabase.init() opens Hive + IndexedDB
+  late final LocalDatabase localDb;
   try {
-    isarService = await IsarService.init();
-    CoreLogger.info('Successfully initialized Isar database.', tag: 'Bootstrap');
+    localDb = await LocalDatabase.init();
+    CoreLogger.info('Successfully initialized local database.', tag: 'Bootstrap');
   } catch (e) {
-    CoreLogger.error('Failed to initialize Isar database: $e', tag: 'Bootstrap');
+    CoreLogger.error('Failed to initialize local database: $e', tag: 'Bootstrap');
     rethrow;
   }
 
@@ -75,7 +76,7 @@ Future<void> main() async {
       appRunner: () => runApp(
         ProviderScope(
           overrides: [
-            isarServiceProvider.overrideWithValue(isarService),
+            isarServiceProvider.overrideWithValue(localDb),
           ],
           child: const MiniSocialApp(),
         ),
@@ -85,7 +86,7 @@ Future<void> main() async {
     runApp(
       ProviderScope(
         overrides: [
-          isarServiceProvider.overrideWithValue(isarService),
+          isarServiceProvider.overrideWithValue(localDb),
         ],
         child: const MiniSocialApp(),
       ),

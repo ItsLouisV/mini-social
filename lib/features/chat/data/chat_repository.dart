@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:isar/isar.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:crypto/crypto.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,8 +16,6 @@ import '../../../core/services/supabase_service.dart';
 import '../../../core/services/upstash_redis_service.dart';
 import '../../../core/services/isar_service.dart';
 import '../../../core/services/sync_engine.dart';
-import '../../../core/database/collections/isar_message.dart';
-import '../../../core/database/collections/isar_conversation.dart';
 import '../../../core/utils/image_compressor.dart';
 
 class ChatRepository {
@@ -92,30 +89,22 @@ class ChatRepository {
         );
         conversations.add(model);
 
-        // Sync to Isar local DB
-        if (_isarService?.isar != null) {
-          await _isarService!.isar!.writeTxn(() async {
-            await _isarService!.isar!.isarConversations.put(IsarConversation(
-              id: model.id,
-              type: model.type,
-              name: model.name,
-              avatarUrl: model.avatarUrl,
-              lastMessage: model.lastMessage,
-              lastMessageAt: model.lastMessageAt,
-              unreadCount: model.unreadCount,
-              isPinned: model.isPinnedState,
-              isMuted: model.isMuted,
-              isHidden: model.isHiddenState,
-              otherUserId: model.otherUser?.id,
-              otherUserName: model.otherUser?.fullName ?? model.otherUser?.username,
-              otherUserAvatar: model.otherUser?.avatarUrl,
-              updatedAt: DateTime.now().toUtc(),
-            ));
-          });
-        }
-        if (_isarService?.webService != null) {
-          await _isarService!.webService!.saveConversation(model.toJson());
-        }
+        // Sync conversation to local DB (platform-independent)
+        await _isarService?.saveConversation({
+          'id': model.id,
+          'type': model.type,
+          'name': model.name,
+          'avatar_url': model.avatarUrl,
+          'last_message': model.lastMessage,
+          'last_message_at': model.lastMessageAt?.toIso8601String(),
+          'unread_count': model.unreadCount,
+          'is_pinned': model.isPinnedState,
+          'is_muted': model.isMuted,
+          'is_hidden': model.isHiddenState,
+          'other_user_id': model.otherUser?.id,
+          'other_user_name': model.otherUser?.fullName ?? model.otherUser?.username,
+          'other_user_avatar': model.otherUser?.avatarUrl,
+        });
       }
 
       conversations.sort((a, b) {
@@ -127,38 +116,36 @@ class ChatRepository {
       return conversations;
     } catch (e) {
       debugPrint('⚠️ [ChatRepository] Failed fetching online conversations, loading from local DB: $e');
-      if (_isarService?.isar != null) {
-        final cached = await _isarService!.isar!.isarConversations.where().findAll();
+      // Offline fallback: read from local DB
+      if (_isarService != null) {
+        final cached = _isarService!.getConversations();
         return cached.map((c) => ConversationModel(
-          id: c.id,
-          type: c.type,
-          name: c.name,
-          avatarUrl: c.avatarUrl,
-          lastMessage: c.lastMessage,
-          lastMessageAt: c.lastMessageAt,
-          createdAt: c.lastMessageAt ?? DateTime.now(),
+          id: c['id'] as String,
+          type: c['type'] as String? ?? 'direct',
+          name: c['name'] as String?,
+          avatarUrl: c['avatar_url'] as String?,
+          lastMessage: c['last_message'] as String?,
+          lastMessageAt: DateTime.tryParse(c['last_message_at']?.toString() ?? ''),
+          createdAt: DateTime.tryParse(c['last_message_at']?.toString() ?? '') ?? DateTime.now(),
           myMemberState: ConversationMemberModel(
-            id: 'offline_${c.id}',
-            conversationId: c.id,
+            id: 'offline_${c['id']}',
+            conversationId: c['id'] as String,
             userId: currentUserId ?? '',
-            unreadCount: c.unreadCount,
-            isPinned: c.isPinned,
-            isMuted: c.isMuted,
-            isHidden: c.isHidden,
+            unreadCount: (c['unread_count'] as int?) ?? 0,
+            isPinned: (c['is_pinned'] as bool?) ?? false,
+            isMuted: (c['is_muted'] as bool?) ?? false,
+            isHidden: (c['is_hidden'] as bool?) ?? false,
           ),
-          otherUser: c.otherUserId != null
+          otherUser: c['other_user_id'] != null
               ? ProfileModel(
-                  id: c.otherUserId!,
-                  username: c.otherUserName ?? '',
-                  fullName: c.otherUserName,
-                  avatarUrl: c.otherUserAvatar,
+                  id: c['other_user_id'] as String,
+                  username: c['other_user_name'] as String? ?? '',
+                  fullName: c['other_user_name'] as String?,
+                  avatarUrl: c['other_user_avatar'] as String?,
                   createdAt: DateTime.now(),
                 )
               : null,
         )).toList();
-      } else if (_isarService?.webService != null) {
-        final cached = _isarService!.webService!.getConversations();
-        return cached.map((json) => ConversationModel.fromJson(json)).toList();
       }
       rethrow;
     }
@@ -741,31 +728,21 @@ class ChatRepository {
 
       final msgs = (data as List).map((e) => MessageModel.fromJson(e)).toList();
 
-      // 3. Nếu fetch từ DB thành công, đồng bộ vào Isar DB
-      if (_isarService?.isar != null && msgs.isNotEmpty) {
-        await _isarService!.isar!.writeTxn(() async {
-          for (final m in msgs) {
-            await _isarService!.isar!.isarMessages.put(IsarMessage(
-              id: m.id,
-              conversationId: m.conversationId,
-              senderId: m.senderId,
-              content: m.content ?? '',
-              messageType: m.messageType,
-              createdAt: m.createdAt,
-              replyToMessageId: m.replyToMessageId,
-              status: 'sent',
-              updatedAt: m.createdAt,
-              mediaUrlsJson: m.mediaUrls.isNotEmpty ? jsonEncode(m.mediaUrls) : null,
-            ));
-          }
-        });
-        // Prune messages so only the latest 50-100 remain cached in Isar per conversation
+      // 3. Sync messages to local DB (platform-independent)
+      if (_isarService != null && msgs.isNotEmpty) {
+        final jsonMsgs = msgs.map((m) => {
+          'id': m.id,
+          'conversation_id': m.conversationId,
+          'sender_id': m.senderId,
+          'content': m.content ?? '',
+          'message_type': m.messageType,
+          'created_at': m.createdAt.toIso8601String(),
+          'reply_to_message_id': m.replyToMessageId,
+          'status': 'sent',
+          'media_urls': m.mediaUrls,
+        }).toList();
+        await _isarService!.saveMessages(conversationId, jsonMsgs);
         await _isarService!.pruneConversationMessages(conversationId, maxKeep: 100);
-      }
-
-      if (_isarService?.webService != null && msgs.isNotEmpty) {
-        final jsonMsgs = msgs.map((m) => m.toJson()).toList();
-        await _isarService!.webService!.saveMessages(conversationId, jsonMsgs);
       }
 
       if (offset == 0 && _upstashRedis != null && data.isNotEmpty) {
@@ -780,37 +757,26 @@ class ChatRepository {
       return msgs;
     } catch (e) {
       debugPrint('⚠️ [ChatRepository] Offline fallback for messages: loading from local DB: $e');
-      if (_isarService?.isar != null) {
-        final cached = await _isarService!.isar!.isarMessages
-            .filter()
-            .conversationIdEqualTo(conversationId)
-            .sortByCreatedAtDesc()
-            .offset(offset)
-            .limit(limit)
-            .findAll();
-
+      // Offline fallback: load from local DB
+      if (_isarService != null) {
+        final cached = _isarService!.getMessages(conversationId, limit: limit, offset: offset);
         return cached.map((m) {
+          final rawMediaUrls = m['media_urls'];
           List<String> mediaUrls = const [];
-          if (m.mediaUrlsJson != null && m.mediaUrlsJson!.isNotEmpty) {
-            try {
-              final decoded = jsonDecode(m.mediaUrlsJson!);
-              if (decoded is List) mediaUrls = decoded.whereType<String>().toList();
-            } catch (_) {}
+          if (rawMediaUrls is List) {
+            mediaUrls = rawMediaUrls.whereType<String>().toList();
           }
           return MessageModel(
-            id: m.id,
-            conversationId: m.conversationId,
-            senderId: m.senderId,
-            content: m.content,
-            messageType: m.messageType,
-            createdAt: m.createdAt,
-            replyToMessageId: m.replyToMessageId,
+            id: m['id'] as String,
+            conversationId: m['conversation_id'] as String,
+            senderId: m['sender_id'] as String,
+            content: m['content'] as String?,
+            messageType: m['message_type'] as String? ?? 'text',
+            createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ?? DateTime.now(),
+            replyToMessageId: m['reply_to_message_id'] as String?,
             mediaUrls: mediaUrls,
           );
         }).toList();
-      } else if (_isarService?.webService != null) {
-        final cached = _isarService!.webService!.getMessages(conversationId, limit: limit, offset: offset);
-        return cached.map((json) => MessageModel.fromJson(json)).toList();
       }
       rethrow;
     }
@@ -882,22 +848,20 @@ class ChatRepository {
     final tempId = _uuid.v4();
     final now = DateTime.now().toUtc();
 
-    // 1. Ghi tin nhắn vào Isar DB ngay lập tức (Optimistic Local UI Update)
-    if (_isarService?.isar != null) {
-      await _isarService!.isar!.writeTxn(() async {
-        await _isarService!.isar!.isarMessages.put(IsarMessage(
-          id: tempId,
-          conversationId: conversationId,
-          senderId: currentUserId ?? '',
-          content: content,
-          messageType: messageType,
-          createdAt: now,
-          replyToMessageId: replyToMessageId,
-          status: 'sending',
-          updatedAt: now,
-        ));
-      });
-    }
+    // 1. Lưu tin nhắn optimistic vào local DB ngay lập tức
+    await _isarService?.saveMessages(conversationId, [
+      {
+        'id': tempId,
+        'conversation_id': conversationId,
+        'sender_id': currentUserId ?? '',
+        'content': content,
+        'message_type': messageType,
+        'created_at': now.toIso8601String(),
+        'reply_to_message_id': replyToMessageId,
+        'status': 'sending',
+        'media_urls': <String>[],
+      }
+    ]);
 
     try {
       final data = await _client
@@ -918,26 +882,20 @@ class ChatRepository {
         'last_message_at': now.toIso8601String(),
       }).eq('id', conversationId);
 
-      // Cập nhật trạng thái 'sent' và ID chính thức trên Isar DB
-      final realMsg = MessageModel.fromJson(data);
-      if (_isarService?.isar != null) {
-        await _isarService!.isar!.writeTxn(() async {
-          await _isarService!.isar!.isarMessages.delete(fastHash(tempId));
-          await _isarService!.isar!.isarMessages.put(IsarMessage(
-            id: realMsg.id,
-            conversationId: realMsg.conversationId,
-            senderId: realMsg.senderId,
-            content: realMsg.content ?? '',
-            messageType: realMsg.messageType,
-            createdAt: realMsg.createdAt,
-            replyToMessageId: realMsg.replyToMessageId,
-            status: 'sent',
-            updatedAt: realMsg.createdAt,
-          ));
-        });
-      } else if (_isarService?.webService != null) {
-        await _isarService!.webService!.saveMessages(conversationId, [realMsg.toJson()]);
-      }
+      // Cập nhật trạng thái 'sent' và ID chính thức trên local DB
+      await _isarService?.saveMessages(conversationId, [
+        {
+          'id': realMsg.id,
+          'conversation_id': realMsg.conversationId,
+          'sender_id': realMsg.senderId,
+          'content': realMsg.content ?? '',
+          'message_type': realMsg.messageType,
+          'created_at': realMsg.createdAt.toIso8601String(),
+          'reply_to_message_id': realMsg.replyToMessageId,
+          'status': 'sent',
+          'media_urls': realMsg.mediaUrls,
+        }
+      ]);
 
       if (_upstashRedis != null) {
         _upstashRedis!.cacheRecentMessage(conversationId, data).catchError((err) {

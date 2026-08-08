@@ -1,13 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:isar/isar.dart';
 
 import 'isar_service.dart';
 import 'supabase_service.dart';
-import '../database/collections/isar_sync_queue.dart';
 
 final syncEngineProvider = Provider<SyncEngine>((ref) {
   final isarService = ref.watch(isarServiceProvider);
@@ -16,12 +13,12 @@ final syncEngineProvider = Provider<SyncEngine>((ref) {
 });
 
 class SyncEngine {
-  final IsarService _isarService;
+  final LocalDatabase _db;
   final SupabaseService _supabaseService;
   StreamSubscription? _connectivitySub;
   bool _isSyncing = false;
 
-  SyncEngine(this._isarService, this._supabaseService) {
+  SyncEngine(this._db, this._supabaseService) {
     _initConnectivityListener();
   }
 
@@ -35,31 +32,14 @@ class SyncEngine {
     });
   }
 
-  /// Push an offline action into the IsarSyncQueue outbox
+  /// Push an offline action into the sync queue outbox
   Future<void> enqueueAction({
     required String actionType,
     required Map<String, dynamic> payload,
   }) async {
     final itemId = DateTime.now().microsecondsSinceEpoch.toString();
-
-    if (_isarService.isar != null) {
-      final queueItem = IsarSyncQueue(
-        id: itemId,
-        actionType: actionType,
-        payloadJson: jsonEncode(payload),
-        createdAt: DateTime.now().toUtc(),
-      );
-      await _isarService.isar!.writeTxn(() async {
-        await _isarService.isar!.isarSyncQueues.put(queueItem);
-      });
-    } else if (_isarService.webService != null) {
-      await _isarService.webService!.enqueueSyncAction(itemId, actionType, payload);
-    } else {
-      return;
-    }
-
+    await _db.enqueueSyncAction(itemId, actionType, payload);
     debugPrint('📥 [SyncEngine] Enqueued action: $actionType (ID: $itemId)');
-    
     // Attempt processing immediately if online
     processQueue();
   }
@@ -70,23 +50,7 @@ class SyncEngine {
     _isSyncing = true;
 
     try {
-      final pendingItems = <Map<String, dynamic>>[];
-      if (_isarService.isar != null) {
-        final rawItems = await _isarService.isar!.isarSyncQueues
-            .where()
-            .sortByCreatedAt()
-            .findAll();
-        for (final item in rawItems) {
-          pendingItems.add({
-            'isarId': item.isarId,
-            'id': item.id,
-            'actionType': item.actionType,
-            'payload': jsonDecode(item.payloadJson),
-          });
-        }
-      } else if (_isarService.webService != null) {
-        pendingItems.addAll(_isarService.webService!.getSyncQueue());
-      }
+      final pendingItems = _db.getSyncQueue();
 
       if (pendingItems.isEmpty) {
         _isSyncing = false;
@@ -149,13 +113,7 @@ class SyncEngine {
         }
 
         if (success) {
-          if (_isarService.isar != null && item['isarId'] != null) {
-            await _isarService.isar!.writeTxn(() async {
-              await _isarService.isar!.isarSyncQueues.delete(item['isarId'] as int);
-            });
-          } else if (_isarService.webService != null) {
-            await _isarService.webService!.removeSyncAction(itemId);
-          }
+          await _db.removeSyncAction(itemId);
           debugPrint('✅ [SyncEngine] Successfully synced and removed item $itemId');
         } else {
           break;

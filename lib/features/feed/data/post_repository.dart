@@ -1,6 +1,5 @@
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
-import 'package:isar/isar.dart';
 import 'package:async/async.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -13,7 +12,6 @@ import '../../../core/constants/supabase_constants.dart';
 
 import '../../../core/services/isar_service.dart';
 import '../../../core/services/sync_engine.dart';
-import '../../../core/database/collections/isar_post.dart';
 
 class PostRepository {
   final SupabaseService _service;
@@ -129,62 +127,19 @@ class PostRepository {
         return PostModel.fromJson(e, isLiked: likedPostIds.contains(e['id']));
       }).toList();
 
-      // Sync to Isar DB
-      if (_isarService?.isar != null && resultPosts.isNotEmpty) {
-        await _isarService!.isar!.writeTxn(() async {
-          for (final p in resultPosts) {
-            await _isarService!.isar!.isarPosts.put(IsarPost(
-              id: p.id,
-              authorId: p.userId,
-              authorName: p.author?.displayName ?? '',
-              authorAvatar: p.author?.avatarUrl,
-              content: p.caption ?? '',
-              imageUrls: p.media.map((m) => m.url).toList(),
-              videoUrl: null,
-              likesCount: p.likesCount,
-              commentsCount: p.commentsCount,
-              isLiked: p.isLiked,
-              createdAt: p.createdAt,
-              updatedAt: DateTime.now().toUtc(),
-            ));
-          }
-        });
-      }
-
-      if (_isarService?.webService != null && resultPosts.isNotEmpty) {
+      // Sync posts to local DB (platform-independent)
+      if (_isarService != null && resultPosts.isNotEmpty) {
         final jsonList = resultPosts.map((p) => p.toJson()).toList();
-        await _isarService!.webService!.savePosts(jsonList);
+        await _isarService!.savePosts(jsonList);
       }
 
       return resultPosts;
     } catch (e) {
       debugPrint('⚠️ [PostRepository] Offline fallback for feed: loading from local DB: $e');
-      if (_isarService?.isar != null) {
-        final cached = await _isarService!.isar!.isarPosts
-            .where()
-            .sortByCreatedAtDesc()
-            .offset(from)
-            .limit(pageSize)
-            .findAll();
-        return cached.map((p) => PostModel(
-          id: p.id,
-          userId: p.authorId,
-          caption: p.content,
-          likesCount: p.likesCount,
-          commentsCount: p.commentsCount,
-          isLiked: p.isLiked,
-          createdAt: p.createdAt,
-          author: ProfileModel(
-            id: p.authorId,
-            username: p.authorName ?? '',
-            fullName: p.authorName,
-            avatarUrl: p.authorAvatar,
-            createdAt: p.createdAt,
-          ),
-        )).toList();
-      } else if (_isarService?.webService != null) {
-        final cached = _isarService!.webService!.getPosts(limit: pageSize, offset: from);
-        return cached.map((json) => PostModel.fromJson(json)).toList();
+      // Offline fallback
+      if (_isarService != null) {
+        final cached = _isarService!.getPosts(limit: pageSize, offset: from);
+        return cached.map((p) => PostModel.fromJson(p)).toList();
       }
       rethrow;
     }
