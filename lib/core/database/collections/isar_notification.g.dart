@@ -7,7 +7,7 @@ part of 'isar_notification.dart';
 // **************************************************************************
 
 // coverage:ignore-file
-// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types, integer_literal_not_representable_in_javascript
+// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
 
 extension GetIsarNotificationCollection on Isar {
   IsarCollection<IsarNotification> get isarNotifications => this.collection();
@@ -15,7 +15,7 @@ extension GetIsarNotificationCollection on Isar {
 
 const IsarNotificationSchema = CollectionSchema(
   name: r'IsarNotification',
-  id: -5669466738626994176,
+  id: -5669466738626994633,
   properties: {
     r'content': PropertySchema(
       id: 0,
@@ -70,7 +70,7 @@ const IsarNotificationSchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'id': IndexSchema(
-      id: -3268401673993471488,
+      id: -3268401673993471357,
       name: r'id',
       unique: true,
       replace: true,
@@ -83,7 +83,7 @@ const IsarNotificationSchema = CollectionSchema(
       ],
     ),
     r'receiverId': IndexSchema(
-      id: 6011257104462202880,
+      id: 6011257104462202512,
       name: r'receiverId',
       unique: false,
       replace: false,

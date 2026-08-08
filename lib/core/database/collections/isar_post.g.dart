@@ -7,7 +7,7 @@ part of 'isar_post.dart';
 // **************************************************************************
 
 // coverage:ignore-file
-// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types, integer_literal_not_representable_in_javascript
+// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
 
 extension GetIsarPostCollection on Isar {
   IsarCollection<IsarPost> get isarPosts => this.collection();
@@ -15,7 +15,7 @@ extension GetIsarPostCollection on Isar {
 
 const IsarPostSchema = CollectionSchema(
   name: r'IsarPost',
-  id: 8958281595613991936,
+  id: 8958281595613992375,
   properties: {
     r'authorAvatar': PropertySchema(
       id: 0,
@@ -85,7 +85,7 @@ const IsarPostSchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'id': IndexSchema(
-      id: -3268401673993471488,
+      id: -3268401673993471357,
       name: r'id',
       unique: true,
       replace: true,
@@ -98,7 +98,7 @@ const IsarPostSchema = CollectionSchema(
       ],
     ),
     r'authorId': IndexSchema(
-      id: 8112877077417468928,
+      id: 8112877077417469315,
       name: r'authorId',
       unique: false,
       replace: false,
