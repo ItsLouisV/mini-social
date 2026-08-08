@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/localization/app_translations.dart';
 import '../../../../core/extensions/date_extension.dart';
@@ -31,8 +32,8 @@ class NotificationScreen extends ConsumerWidget {
             surfaceTintColor: Colors.transparent,
             actions: [
               IconButton(
-                icon: const Icon(CupertinoIcons.checkmark_circle, size: 24),
-                tooltip: 'Đánh dấu đã đọc',
+                icon: const FaIcon(FontAwesomeIcons.listCheck, size: 20),
+                tooltip: 'Đọc tất cả.',
                 onPressed: () {
                   ref.read(socialRepositoryProvider).markAllAsRead().then((_) {
                     ref.invalidate(notificationsProvider);

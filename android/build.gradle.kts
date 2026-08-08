@@ -20,7 +20,7 @@ subprojects {
 }
 
 subprojects {
-    afterEvaluate {
+    val configureNamespace: Project.() -> Unit = {
         val android = extensions.findByName("android")
         if (android != null) {
             try {
@@ -28,11 +28,19 @@ subprojects {
                 val currentNamespace = getNamespace.invoke(android)
                 if (currentNamespace == null) {
                     val setNamespace = android.javaClass.getMethod("setNamespace", String::class.java)
-                    val defaultNamespace = "dev.isar.${project.name.replace("-", "_")}"
+                    val defaultNamespace = "dev.isar.${name.replace("-", "_")}"
                     setNamespace.invoke(android, defaultNamespace)
                 }
             } catch (_: Exception) {
             }
+        }
+    }
+
+    if (state.executed) {
+        configureNamespace()
+    } else {
+        afterEvaluate {
+            configureNamespace()
         }
     }
 }
