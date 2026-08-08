@@ -78,7 +78,7 @@ Future<void> main() async {
           overrides: [
             isarServiceProvider.overrideWithValue(localDb),
           ],
-          child: const MiniSocialApp(),
+          child: const VioraApp(),
         ),
       ),
     );
@@ -88,7 +88,7 @@ Future<void> main() async {
         overrides: [
           isarServiceProvider.overrideWithValue(localDb),
         ],
-        child: const MiniSocialApp(),
+        child: const VioraApp(),
       ),
     );
   }

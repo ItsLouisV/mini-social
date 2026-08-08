@@ -15,7 +15,7 @@ extension GetIsarSyncQueueCollection on Isar {
 
 const IsarSyncQueueSchema = CollectionSchema(
   name: r'IsarSyncQueue',
-  id: 3924536786993273344,
+  id: 3924536786993273448,
   properties: {
     r'actionType': PropertySchema(
       id: 0,
@@ -50,7 +50,7 @@ const IsarSyncQueueSchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'id': IndexSchema(
-      id: -3268401673993471488,
+      id: -3268401673993471357,
       name: r'id',
       unique: true,
       replace: true,

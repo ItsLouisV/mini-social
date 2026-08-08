@@ -877,6 +877,8 @@ class ChatRepository {
           .select()
           .single();
 
+      final realMsg = MessageModel.fromJson(data);
+
       await _client.from(SupabaseConstants.conversationsTable).update({
         'last_message': content,
         'last_message_at': now.toIso8601String(),

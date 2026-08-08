@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../social/data/ai_repository.dart';
-import '../../auth/presentation/controllers/auth_controller.dart';
+import '../../../auth/providers/auth_provider.dart';
 
 class AppealsScreen extends ConsumerStatefulWidget {
   const AppealsScreen({super.key});
@@ -30,8 +30,14 @@ class _AppealsScreenState extends ConsumerState<AppealsScreen> {
   }
 
   Future<void> _loadData() async {
-    final user = ref.read(authControllerProvider);
-    if (user == null) return;
+    final user = ref.read(authStateProvider).valueOrNull?.session?.user;
+    if (user == null) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     final repo = ref.read(aiRepositoryProvider);
@@ -56,7 +62,7 @@ class _AppealsScreenState extends ConsumerState<AppealsScreen> {
       return;
     }
 
-    final user = ref.read(authControllerProvider);
+    final user = ref.read(authStateProvider).valueOrNull?.session?.user;
     if (user == null) return;
 
     setState(() => _isSubmitting = true);

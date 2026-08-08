@@ -307,7 +307,7 @@ class LocalDatabase {
     if (query.trim().isEmpty) return;
     final clean = query.trim();
     await _isar.writeTxn(() async {
-      await _isar.isarSearchHistories.put(IsarSearchHistory(
+      await _isar.isarSearchHistorys.put(IsarSearchHistory(
         id: clean.toLowerCase(),
         query: clean,
         timestamp: DateTime.now().toUtc(),
@@ -316,7 +316,7 @@ class LocalDatabase {
   }
 
   List<String> getSearchHistory({int limit = 10}) {
-    final cached = _isar.isarSearchHistories
+    final cached = _isar.isarSearchHistorys
         .where()
         .sortByTimestampDesc()
         .limit(limit)
@@ -326,7 +326,7 @@ class LocalDatabase {
 
   Future<void> clearSearchHistory() async {
     await _isar.writeTxn(() async {
-      await _isar.isarSearchHistories.clear();
+      await _isar.isarSearchHistorys.clear();
     });
   }
 

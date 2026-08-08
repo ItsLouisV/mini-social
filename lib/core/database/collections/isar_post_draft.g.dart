@@ -15,7 +15,7 @@ extension GetIsarPostDraftCollection on Isar {
 
 const IsarPostDraftSchema = CollectionSchema(
   name: r'IsarPostDraft',
-  id: -7914048823124350976,
+  id: -7914048823124350939,
   properties: {
     r'content': PropertySchema(
       id: 0,
@@ -45,7 +45,7 @@ const IsarPostDraftSchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'id': IndexSchema(
-      id: -3268401673993471488,
+      id: -3268401673993471357,
       name: r'id',
       unique: true,
       replace: true,

@@ -15,7 +15,7 @@ extension GetIsarNotificationCollection on Isar {
 
 const IsarNotificationSchema = CollectionSchema(
   name: r'IsarNotification',
-  id: -5669466738626994176,
+  id: -5669466738626994633,
   properties: {
     r'content': PropertySchema(
       id: 0,
@@ -70,7 +70,7 @@ const IsarNotificationSchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'id': IndexSchema(
-      id: -3268401673993471488,
+      id: -3268401673993471357,
       name: r'id',
       unique: true,
       replace: true,
@@ -83,7 +83,7 @@ const IsarNotificationSchema = CollectionSchema(
       ],
     ),
     r'receiverId': IndexSchema(
-      id: 6011257104462202880,
+      id: 6011257104462202512,
       name: r'receiverId',
       unique: false,
       replace: false,

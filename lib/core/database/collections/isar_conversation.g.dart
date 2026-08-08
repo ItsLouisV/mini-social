@@ -15,7 +15,7 @@ extension GetIsarConversationCollection on Isar {
 
 const IsarConversationSchema = CollectionSchema(
   name: r'IsarConversation',
-  id: -5855878079097872384,
+  id: -5855878079097872048,
   properties: {
     r'avatarUrl': PropertySchema(
       id: 0,
@@ -95,7 +95,7 @@ const IsarConversationSchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'id': IndexSchema(
-      id: -3268401673993471488,
+      id: -3268401673993471357,
       name: r'id',
       unique: true,
       replace: true,

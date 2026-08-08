@@ -15,6 +15,7 @@ import '../../../../core/localization/locale_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
 import '../../../social/data/ai_repository.dart';
 import '../../domain/message_model.dart';
+import '../../domain/conversation_member_model.dart';
 import '../../providers/chat_provider.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import 'full_screen_image_viewer.dart';
@@ -634,7 +635,10 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
       ),
     );
 
+    final themeState = ref.watch(chatThemeColorProvider);
+    final themeName = themeState[message.conversationId] ?? 'blue';
     final replyThemeColor = getChatThemePrimaryColor(themeName);
+
     Color senderNameColor = replyThemeColor;
     Widget? roleBadge;
     if (senderMember != null) {
@@ -653,8 +657,6 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
       }
     }
 
-    final themeState = ref.watch(chatThemeColorProvider);
-    final themeName = themeState[message.conversationId] ?? 'blue';
     final myBubbleColor = getChatThemeColor(themeName, isDark: isDark);
     final theirBubbleColor = isDark
         ? AppColors.darkChatBubbleReceiver
@@ -674,8 +676,6 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
         message.content != null &&
         message.content != 'Đã gửi một ảnh' &&
         message.content!.trim().isNotEmpty;
-
-    final replyThemeColor = getChatThemePrimaryColor(themeName);
 
     Widget bubbleContent = SwipeToReply(
       key: _bubbleKey,

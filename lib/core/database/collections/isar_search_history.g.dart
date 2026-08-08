@@ -15,7 +15,7 @@ extension GetIsarSearchHistoryCollection on Isar {
 
 const IsarSearchHistorySchema = CollectionSchema(
   name: r'IsarSearchHistory',
-  id: 630678123738405760,
+  id: 630678123738405766,
   properties: {
     r'id': PropertySchema(
       id: 0,
@@ -40,7 +40,7 @@ const IsarSearchHistorySchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'id': IndexSchema(
-      id: -3268401673993471488,
+      id: -3268401673993471357,
       name: r'id',
       unique: true,
       replace: true,
@@ -53,7 +53,7 @@ const IsarSearchHistorySchema = CollectionSchema(
       ],
     ),
     r'query': IndexSchema(
-      id: -3238105102146786304,
+      id: -3238105102146786367,
       name: r'query',
       unique: false,
       replace: false,

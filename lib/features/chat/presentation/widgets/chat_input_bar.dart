@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../profile/providers/profile_provider.dart';
 import '../../domain/message_model.dart';
 import '../../providers/chat_provider.dart';
 import 'voice_recorder_bar.dart';

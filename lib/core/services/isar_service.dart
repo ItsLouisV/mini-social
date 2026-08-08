@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../database/local_database.dart';
 
 // Re-export LocalDatabase so every file that imports isar_service.dart
 // automatically gets the correct platform implementation.

@@ -110,7 +110,7 @@ class GlobalErrorWidget extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isDark ? Colors.red.withOpacity(0.1) : Colors.red.shade50,
+              color: isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red.shade50,
               shape: BoxShape.circle,
             ),
             child: Icon(

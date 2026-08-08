@@ -23,14 +23,14 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
       };
 }
 
-class MiniSocialApp extends ConsumerStatefulWidget {
-  const MiniSocialApp({super.key});
+class VioraApp extends ConsumerStatefulWidget {
+  const VioraApp({super.key});
 
   @override
-  ConsumerState<MiniSocialApp> createState() => _MiniSocialAppState();
+  ConsumerState<VioraApp> createState() => _VioraAppState();
 }
 
-class _MiniSocialAppState extends ConsumerState<MiniSocialApp> {
+class _VioraAppState extends ConsumerState<VioraApp> {
   bool _isShowingIncomingCall = false;
 
   @override

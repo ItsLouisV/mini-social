@@ -15,7 +15,7 @@ extension GetIsarMessageCollection on Isar {
 
 const IsarMessageSchema = CollectionSchema(
   name: r'IsarMessage',
-  id: 2123208272505019392,
+  id: 2123208272505019328,
   properties: {
     r'content': PropertySchema(
       id: 0,
@@ -100,7 +100,7 @@ const IsarMessageSchema = CollectionSchema(
   idName: r'isarId',
   indexes: {
     r'id': IndexSchema(
-      id: -3268401673993471488,
+      id: -3268401673993471357,
       name: r'id',
       unique: true,
       replace: true,
@@ -113,7 +113,7 @@ const IsarMessageSchema = CollectionSchema(
       ],
     ),
     r'conversationId': IndexSchema(
-      id: 2945908346256754176,
+      id: 2945908346256754300,
       name: r'conversationId',
       unique: false,
       replace: false,
