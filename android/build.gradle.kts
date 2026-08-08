@@ -57,17 +57,25 @@ subprojects {
 // Force all subprojects (e.g. isar_flutter_libs) to use compileSdk >= 31
 // to resolve android:attr/lStar which was introduced in Android 12 (API 31).
 subprojects {
-    afterEvaluate {
+    val configureCompileSdk: Project.() -> Unit = {
         val android = extensions.findByName("android")
         if (android != null) {
             try {
-                val setCompileSdk = android.javaClass.getMethod("setCompileSdkVersion", Int::class.java)
                 val getCompileSdk = android.javaClass.getMethod("getCompileSdkVersion")
                 val current = getCompileSdk.invoke(android) as? Int ?: 0
                 if (current < 31) {
+                    val setCompileSdk = android.javaClass.getMethod("setCompileSdkVersion", Int::class.java)
                     setCompileSdk.invoke(android, 31)
                 }
             } catch (_: Exception) {}
+        }
+    }
+
+    if (state.executed) {
+        configureCompileSdk()
+    } else {
+        afterEvaluate {
+            configureCompileSdk()
         }
     }
 }
