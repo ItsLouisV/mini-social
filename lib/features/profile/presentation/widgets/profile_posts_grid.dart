@@ -102,7 +102,7 @@ class ProfilePostsGrid extends ConsumerWidget {
               final post = posts[index];
               return Column(
                 children: [
-                  PostCard(post: post, currentUserId: currentUserId ?? ''),
+                  PostCard(post: post, currentUserId: currentUserId ?? '', heroScope: 'profile'),
                   Divider(
                     height: 1,
                     thickness: 0.5,

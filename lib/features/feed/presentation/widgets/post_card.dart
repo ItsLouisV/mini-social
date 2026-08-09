@@ -23,10 +23,15 @@ class PostCard extends ConsumerStatefulWidget {
   final PostModel post;
   final String currentUserId;
 
+  /// Phân biệt Hero của PostCard ở từng màn hình.
+  /// Ví dụ: feed, comment, profile, saved...
+  final String heroScope;
+
   const PostCard({
     super.key,
     required this.post,
     required this.currentUserId,
+    required this.heroScope,
   });
 
   @override
@@ -391,6 +396,7 @@ class _PostCardState extends ConsumerState<PostCard> {
             ImageCarousel(
               media: post.media,
               layoutType: post.layoutType,
+              heroScope: '${widget.heroScope}_${post.id}',
             ),
 
           // PostActions (Facebook layout)

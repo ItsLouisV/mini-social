@@ -1007,6 +1007,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                                   media: allPreviewMedia,
                                   layoutType: _selectedLayout,
                                   onTapCarousel: _openMediaEditModal,
+                                  heroScope: 'create_post',
                                 ),
                               ),
                             ),

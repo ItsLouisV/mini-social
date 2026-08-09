@@ -178,6 +178,7 @@ class FeedScreen extends ConsumerWidget {
                           return PostCard(
                             post: posts[postIndex],
                             currentUserId: currentUserId ?? '',
+                            heroScope: 'feed',
                           );
                         },
                       ),

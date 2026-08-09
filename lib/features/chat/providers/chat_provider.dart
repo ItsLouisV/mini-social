@@ -8,17 +8,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/supabase_service.dart';
+import '../../../core/services/upstash_redis_service.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../data/chat_repository.dart';
 import '../data/chat_sync_service.dart';
 import '../data/local_chat_repository_exports.dart';
 import '../domain/conversation_model.dart';
 import '../domain/message_model.dart';
 import '../domain/pinned_message_model.dart';
-import '../../../core/services/supabase_service.dart';
-import '../../../core/services/upstash_redis_service.dart';
-import '../../../core/services/connectivity_service.dart';
-import 'hidden_chat_provider.dart' show secureStorageProvider;
 import '../domain/conversation_member_model.dart';
+import '../domain/group_permissions.dart';
+import '../domain/group_ban_model.dart';
+import 'hidden_chat_provider.dart' show secureStorageProvider;
 
 import '../../../core/services/isar_service.dart';
 import '../../../core/services/sync_engine.dart';
@@ -867,6 +869,63 @@ final pinnedMessagesProvider = AsyncNotifierProvider.autoDispose
     .family<PinnedMessagesNotifier, List<PinnedMessageModel>, String>(
   PinnedMessagesNotifier.new,
 );
+
+// ── Group Member (Me) Provider ────────────────────────────────────────────────
+//
+// Returns the ConversationMemberModel for the current user in a given group.
+// Used to instantiate GroupPermissions without re-fetching members.
+
+final groupMemberMeProvider = Provider.autoDispose
+    .family<ConversationMemberModel?, String>((ref, conversationId) {
+  final membersAsync = ref.watch(groupMembersProvider(conversationId));
+  final currentUserId = ref.watch(currentUserIdProvider);
+  if (currentUserId == null) return null;
+  final members = membersAsync.valueOrNull;
+  if (members == null) return null;
+  try {
+    return members.firstWhere((m) => m.userId == currentUserId);
+  } catch (_) {
+    return null;
+  }
+});
+
+// ── Group Permissions Provider ────────────────────────────────────────────────
+//
+// Computes a GroupPermissions object for the current user in the given group.
+// Returns null for direct chats or when member data is not yet loaded.
+
+final groupPermissionsProvider = Provider.autoDispose
+    .family<GroupPermissions?, String>((ref, conversationId) {
+  final myMember = ref.watch(groupMemberMeProvider(conversationId));
+  if (myMember == null) return null;
+
+  // Read conversation settings from conversationsProvider
+  final convAsync = ref.watch(conversationsProvider);
+  final conv = convAsync.valueOrNull?.firstWhere(
+    (c) => c.id == conversationId,
+    orElse: () => ConversationModel(
+      id: conversationId,
+      createdAt: DateTime.now(),
+    ),
+  );
+
+  return GroupPermissions(
+    myMember: myMember,
+    adminOnlyMessaging: conv?.adminOnlyMessaging ?? false,
+    allowMemberInvite: conv?.allowMemberInvite ?? true,
+    allowMemberPin: conv?.allowMemberPin ?? true,
+    allowMemberMentionAll: conv?.allowMemberMentionAll ?? true,
+    allowMemberEditInfo: conv?.allowMemberEditInfo ?? true,
+  );
+});
+
+// ── Group Bans Provider ────────────────────────────────────────────────────────
+
+final groupBansProvider = FutureProvider.autoDispose
+    .family<List<GroupBanModel>, String>((ref, conversationId) async {
+  final repo = ref.watch(chatRepositoryProvider);
+  return repo.getGroupBans(conversationId);
+});
 
 // ── Chat Wallpaper Notifier & Provider ────────────────────────────────────────
 //

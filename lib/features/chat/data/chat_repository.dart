@@ -10,6 +10,7 @@ import '../domain/conversation_model.dart';
 import '../domain/conversation_member_model.dart';
 import '../domain/message_model.dart';
 import '../domain/pinned_message_model.dart';
+import '../domain/group_ban_model.dart';
 import '../../profile/domain/profile_model.dart';
 import '../../../core/constants/supabase_constants.dart';
 import '../../../core/services/supabase_service.dart';
@@ -455,6 +456,139 @@ class ChatRepository {
     await _client.from(SupabaseConstants.conversationsTable).update({
       'name': newName,
     }).eq('id', conversationId);
+  }
+
+  /// Cập nhật mô tả nhóm
+  Future<void> updateGroupDescription(String conversationId, String description) async {
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      'description': description,
+    }).eq('id', conversationId);
+  }
+
+  /// Bật / tắt chế độ chỉ admin mới nhắn được tin nhắn
+  Future<void> setAdminOnlyMessaging(String conversationId, {required bool enabled}) async {
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      'admin_only_messaging': enabled,
+    }).eq('id', conversationId);
+  }
+
+  /// Cập nhật một trong 5 quyền của member (toggle by owner only):
+  /// [permission] must be one of:
+  ///   'allow_member_invite' | 'allow_member_pin' |
+  ///   'allow_member_mention_all' | 'allow_member_edit_info'
+  Future<void> setMemberPermission(
+    String conversationId, {
+    required String permission,
+    required bool value,
+  }) async {
+    const valid = {
+      'allow_member_invite',
+      'allow_member_pin',
+      'allow_member_mention_all',
+      'allow_member_edit_info',
+    };
+    assert(valid.contains(permission), 'Invalid member permission key: $permission');
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      permission: value,
+    }).eq('id', conversationId);
+  }
+
+  /// Cấm (ban) một thành viên khỏi nhóm:
+  ///  1. Ghi vào bảng group_bans
+  ///  2. Xóa khỏi conversation_members
+  Future<void> banMember(
+    String conversationId,
+    String targetUserId, {
+    String? reason,
+  }) async {
+    final uid = currentUserId!;
+    // Insert ban record
+    await _client.from('group_bans').insert({
+      'conversation_id': conversationId,
+      'user_id': targetUserId,
+      'banned_by': uid,
+      if (reason != null) 'reason': reason,
+    });
+    // Remove from active members
+    await _client
+        .from('conversation_members')
+        .delete()
+        .eq('conversation_id', conversationId)
+        .eq('user_id', targetUserId);
+  }
+
+  /// Bỏ lệnh cấm (unban) thành viên — đặt is_active = false
+  Future<void> unbanMember(String conversationId, String targetUserId) async {
+    await _client
+        .from('group_bans')
+        .update({
+          'is_active': false,
+          'unbanned_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', targetUserId)
+        .eq('is_active', true);
+  }
+
+  /// Lấy danh sách thành viên đang bị cấm của nhóm
+  Future<List<GroupBanModel>> getGroupBans(String conversationId) async {
+    final data = await _client
+        .from('group_bans')
+        .select('*, user:profiles!user_id(id, full_name, username, avatar_url)')
+        .eq('conversation_id', conversationId)
+        .eq('is_active', true)
+        .order('banned_at', ascending: false);
+    return (data as List).map((e) => GroupBanModel.fromJson(e)).toList();
+  }
+
+  /// Admin tắt tiếng (mute) một thành viên trong nhóm.
+  /// [mutedUntil] = null → mute vĩnh viễn; future DateTime → timed mute.
+  Future<void> muteMemberByAdmin(
+    String conversationId,
+    String targetUserId, {
+    DateTime? mutedUntil,
+  }) async {
+    await _client
+        .from('conversation_members')
+        .update({
+          'is_muted_by_admin': true,
+          'muted_until': mutedUntil?.toUtc().toIso8601String(),
+        })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', targetUserId);
+  }
+
+  /// Bỏ mute admin đối với một thành viên
+  Future<void> unmuteMemberByAdmin(String conversationId, String targetUserId) async {
+    await _client
+        .from('conversation_members')
+        .update({
+          'is_muted_by_admin': false,
+          'muted_until': null,
+        })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', targetUserId);
+  }
+
+  /// Chuyển quyền Owner sang thành viên khác.
+  /// Người cũ → 'admin', người mới → 'owner'.
+  Future<void> transferOwnership(String conversationId, String newOwnerId) async {
+    final uid = currentUserId!;
+    await _client
+        .from('conversation_members')
+        .update({'role': 'admin'})
+        .eq('conversation_id', conversationId)
+        .eq('user_id', uid);
+    await _client
+        .from('conversation_members')
+        .update({'role': 'owner'})
+        .eq('conversation_id', conversationId)
+        .eq('user_id', newOwnerId);
+    // Also update created_by to reflect new owner
+    await _client
+        .from(SupabaseConstants.conversationsTable)
+        .update({'created_by': newOwnerId})
+        .eq('id', conversationId);
   }
 
   /// Thêm các thành viên mới vào nhóm
@@ -1113,8 +1247,18 @@ class ChatRepository {
   Future<List<PinnedMessageModel>> getPinnedMessages(String conversationId) async {
     final data = await _client
       .from('pinned_messages')
-      .select(
-          '*, message:message_id(*, reply_to_message:reply_to_message_id(*))')
+      .select('''
+        *,
+        message:message_id(
+          *,
+          sender:profiles!sender_id(
+            id,
+            full_name,
+            username
+          ),
+          reply_to_message:reply_to_message_id(*)
+        )
+      ''')
       .eq('conversation_id', conversationId)
       .order('pinned_at', ascending: false);
 

@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
 import '../widgets/full_screen_image_viewer.dart';
@@ -21,6 +23,7 @@ import '../../../social/providers/follow_list_provider.dart';
 import '../../domain/conversation_member_model.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
+import '../../domain/group_permissions.dart';
 import '../widgets/message_context_menu_route.dart';
 import '../widgets/passcode_dialog.dart';
 
@@ -94,6 +97,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
 
           final membersAsync = ref.watch(groupMembersProvider(widget.conversationId));
           final memberCount = membersAsync.valueOrNull?.length ?? (conv.members?.length ?? 0);
+          // ── Correct admin check: use role from member model, not createdBy ──
+          final myMember = ref.watch(groupMemberMeProvider(widget.conversationId));
+          final isOwner = myMember?.isOwner ?? (conv.groupAdminId == currentUserId);
+          final isGroupAdmin = myMember?.isAdmin ?? isOwner;
+          final perms = ref.watch(groupPermissionsProvider(widget.conversationId));
 
           final isPinned = conv.isPinned(currentUserId);
           final isMuted = muteState[widget.conversationId] ?? false;
@@ -332,7 +340,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               ),
               if (isGroup) ...[
                 const SizedBox(height: 24),
-                _buildGroupMembersSection(context, ref, conv, currentUserId, cardBgColor, dividerColor),
+                _buildGroupMembersSection(context, ref, conv, currentUserId, cardBgColor, dividerColor, isGroupAdmin, isOwner, perms),
                 const SizedBox(height: 24),
               ],
 
@@ -495,11 +503,22 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               _buildSectionHeader('HÀNH ĐỘNG'),
               Builder(builder: (context) {
                 if (isGroup) {
-                  final isGroupAdmin = conv.groupAdminId == currentUserId;
                   return _buildCardContainer(
                     cardBgColor,
                     children: [
                       if (isGroupAdmin)
+                        _buildListTile(
+                          context: context,
+                          icon: CupertinoIcons.settings_solid,
+                          gradientColors: [Colors.indigo, Colors.purple],
+                          title: 'Quản lý nhóm',
+                          subtitle: 'Quyền, mute, cấm thành viên...',
+                          trailing: const Icon(CupertinoIcons.right_chevron, size: 16, color: Colors.grey),
+                          onTap: () => context.pushNamed('group-management', pathParameters: {'conversationId': widget.conversationId}),
+                        ),
+                      if (isGroupAdmin)
+                        Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                      if (isOwner)
                         _buildListTile(
                           context: context,
                           icon: CupertinoIcons.trash,
@@ -517,7 +536,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                           title: 'Rời khỏi nhóm',
                           titleColor: Colors.redAccent,
                           trailing: const SizedBox.shrink(),
-                          onTap: () => _confirmLeaveGroup(context, ref, conv),
+                          onTap: () => _confirmLeaveGroup(context, ref, conv, isOwner, membersAsync.valueOrNull ?? []),
                         ),
                     ],
                   );
@@ -940,9 +959,18 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     }
   }
 
-  Widget _buildGroupMembersSection(BuildContext context, WidgetRef ref, dynamic conv, String currentUserId, Color cardBgColor, Color dividerColor) {
+  Widget _buildGroupMembersSection(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic conv,
+    String currentUserId,
+    Color cardBgColor,
+    Color dividerColor,
+    bool isGroupAdmin,
+    bool isOwner,
+    GroupPermissions? perms,
+  ) {
     final membersAsync = ref.watch(groupMembersProvider(conv.id));
-    final isGroupAdmin = conv.groupAdminId == currentUserId;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1048,7 +1076,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                             style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                           trailing: const Icon(CupertinoIcons.ellipsis, size: 18, color: Colors.grey),
-                          onTap: () => _showMemberContextMenu(context, ref, conv, m, itemKey, isGroupAdmin, isMe, currentUserId, cardBgColor),
+                          onTap: () => _showMemberContextMenu(context, ref, conv, m, itemKey, isGroupAdmin, isOwner, isMe, currentUserId, cardBgColor),
                         ),
                         if (idx < members.length - 1)
                           Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
@@ -1079,6 +1107,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     ConversationMemberModel member,
     GlobalKey itemKey,
     bool isGroupAdmin,
+    bool isOwner,
     bool isMe,
     String currentUserId,
     Color cardBgColor,
@@ -1164,9 +1193,12 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
           member: member,
           isCoAdmin: member.isCoAdmin,
           isGroupAdmin: isGroupAdmin,
+          isOwner: isOwner,
           isMe: isMe,
           onToggleCoAdmin: () async {
             Navigator.pop(context);
+            // Only owner can promote/demote (phó nhóm only set by owner)
+            if (!isOwner) return;
             final newRole = member.isCoAdmin ? 'member' : 'admin';
             await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, newRole);
             ref.invalidate(groupMembersProvider(conv.id));
@@ -1178,6 +1210,21 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               );
             }
           },
+          onMuteMember: isGroupAdmin && !isMe && !member.isOwner
+              ? () => _showMuteDurationPicker(context, ref, conv.id, member)
+              : null,
+          onBanMember: isOwner && !isMe && !member.isOwner
+              ? () async {
+                  Navigator.pop(context);
+                  await _confirmBanMember(context, ref, conv.id, member);
+                }
+              : null,
+          onTransferOwnership: isOwner && !isMe && !member.isOwner
+              ? () async {
+                  Navigator.pop(context);
+                  await _confirmTransferOwnership(context, ref, conv.id, member);
+                }
+              : null,
           onRemoveMember: () async {
             Navigator.pop(context);
             await ref.read(chatRepositoryProvider).removeGroupMember(conv.id, member.userId);
@@ -1217,7 +1264,29 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     );
   }
 
-  void _confirmLeaveGroup(BuildContext context, WidgetRef ref, dynamic conv) {
+  void _confirmLeaveGroup(BuildContext context, WidgetRef ref, dynamic conv, bool isOwner, List<ConversationMemberModel> members) {
+    // Owner must transfer ownership first if there are other members
+    if (isOwner) {
+      final others = members.where((m) => m.userId != (ref.read(currentUserIdProvider) ?? ''));
+      if (others.isNotEmpty) {
+        showCupertinoDialog(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('Bạn là Trưởng nhóm'),
+            content: const Text(
+                'Bạn cần chuyển quyền Trưởng nhóm cho thành viên khác trước khi rời nhóm.'),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('Đã hiểu'),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+    }
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
@@ -1285,6 +1354,132 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               }
             },
             child: const Text('Giải tán'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Hiện dialog chọn thời gian tắt tiếng member
+  void _showMuteDurationPicker(
+    BuildContext context,
+    WidgetRef ref,
+    String conversationId,
+    ConversationMemberModel member,
+  ) {
+    Navigator.pop(context);
+    final name = member.profile?.displayName ?? 'Thành viên';
+    final durations = [
+      ('1 giờ', const Duration(hours: 1)),
+      ('8 giờ', const Duration(hours: 8)),
+      ('24 giờ', const Duration(hours: 24)),
+      ('7 ngày', const Duration(days: 7)),
+      ('Vĩnh viễn', null),
+    ];
+
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('Tắt tiếng $name'),
+        content: const Text('Chọn thời gian tắt tiếng:'),
+        actions: [
+          ...durations.map((entry) => CupertinoDialogAction(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final until = entry.$2 != null ? DateTime.now().add(entry.$2!) : null;
+                  try {
+                    await ref.read(chatRepositoryProvider).muteMemberByAdmin(
+                          conversationId, member.userId, mutedUntil: until);
+                    ref.invalidate(groupMembersProvider(conversationId));
+                    if (context.mounted) {
+                      ToastService.showSuccess(context, 'Đã tắt tiếng $name (${entry.$1})');
+                    }
+                  } catch (e) {
+                    if (context.mounted) ToastService.showError(context, 'Lỗi: $e');
+                  }
+                },
+                child: Text(entry.$1),
+              )),
+          CupertinoDialogAction(
+            child: const Text('Hủy'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Xác nhận cấm (ban) thành viên khỏi nhóm
+  Future<void> _confirmBanMember(
+    BuildContext context,
+    WidgetRef ref,
+    String conversationId,
+    ConversationMemberModel member,
+  ) async {
+    final name = member.profile?.displayName ?? 'Thành viên';
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('Cấm $name khỏi nhóm?'),
+        content: const Text('Thành viên này sẽ bị xóa và không thể tham gia lại nhóm.'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Hủy'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ref.read(chatRepositoryProvider).banMember(conversationId, member.userId);
+                ref.invalidate(groupMembersProvider(conversationId));
+                ref.invalidate(groupBansProvider(conversationId));
+                ref.invalidate(conversationsProvider);
+                if (context.mounted) ToastService.showSuccess(context, 'Đã cấm $name khỏi nhóm');
+              } catch (e) {
+                if (context.mounted) ToastService.showError(context, 'Lỗi cấm thành viên: $e');
+              }
+            },
+            child: const Text('Cấm'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Xác nhận chuyển quyền Owner sang thành viên khác
+  Future<void> _confirmTransferOwnership(
+    BuildContext context,
+    WidgetRef ref,
+    String conversationId,
+    ConversationMemberModel member,
+  ) async {
+    final name = member.profile?.displayName ?? 'Thành viên';
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('Chuyển quyền cho $name?'),
+        content: Text('$name sẽ trở thành Trưởng nhóm mới. Bạn sẽ trở thành Phó nhóm.'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Hủy'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ref.read(chatRepositoryProvider).transferOwnership(conversationId, member.userId);
+                ref.invalidate(groupMembersProvider(conversationId));
+                ref.invalidate(conversationsProvider);
+                if (context.mounted) ToastService.showSuccess(context, 'Đã chuyển quyền Owner cho $name');
+              } catch (e) {
+                if (context.mounted) ToastService.showError(context, 'Lỗi chuyển quyền: $e');
+              }
+            },
+            child: const Text('Xác nhận'),
           ),
         ],
       ),
@@ -1644,22 +1839,30 @@ class MemberPopupMenuContent extends StatelessWidget {
   final ConversationMemberModel member;
   final bool isCoAdmin;
   final bool isGroupAdmin;
+  final bool isOwner;
   final bool isMe;
   final VoidCallback onToggleCoAdmin;
   final VoidCallback onRemoveMember;
   final VoidCallback onViewProfile;
   final VoidCallback onDirectMessage;
+  final VoidCallback? onMuteMember;
+  final VoidCallback? onBanMember;
+  final VoidCallback? onTransferOwnership;
 
   const MemberPopupMenuContent({
     super.key,
     required this.member,
     required this.isCoAdmin,
     required this.isGroupAdmin,
+    required this.isOwner,
     required this.isMe,
     required this.onToggleCoAdmin,
     required this.onRemoveMember,
     required this.onViewProfile,
     required this.onDirectMessage,
+    this.onMuteMember,
+    this.onBanMember,
+    this.onTransferOwnership,
   });
 
   @override
@@ -1682,19 +1885,48 @@ class MemberPopupMenuContent extends StatelessWidget {
         onTap: onViewProfile,
         iconColor: Colors.teal,
       ),
-      if (isGroupAdmin && !isMe)
+      // Promote/demote to co-admin — owner only
+      if (isOwner && !isMe && !member.isOwner)
         _GridMemberActionItem(
           icon: isCoAdmin ? CupertinoIcons.star_slash : CupertinoIcons.star_fill,
           label: isCoAdmin ? 'Gỡ phó nhóm' : 'Thăng phó nhóm',
           onTap: onToggleCoAdmin,
           iconColor: Colors.purpleAccent,
         ),
-      if (isGroupAdmin && !isMe)
+      // Mute member — owner/admin
+      if (onMuteMember != null)
+        _GridMemberActionItem(
+          icon: member.isEffectivelyMutedByAdmin
+              ? CupertinoIcons.speaker_2_fill
+              : CupertinoIcons.speaker_slash_fill,
+          label: member.isEffectivelyMutedByAdmin ? 'Bỏ tắt tiếng' : 'Tắt tiếng',
+          onTap: onMuteMember!,
+          iconColor: Colors.orange,
+        ),
+      // Remove from group — owner/admin
+      if (isGroupAdmin && !isMe && !member.isOwner)
         _GridMemberActionItem(
           icon: CupertinoIcons.person_badge_minus,
           label: 'Xóa khỏi nhóm',
           onTap: onRemoveMember,
           iconColor: Colors.red,
+          isDestructive: true,
+        ),
+      // Transfer ownership — owner only
+      if (onTransferOwnership != null)
+        _GridMemberActionItem(
+          icon: CupertinoIcons.checkmark_shield_fill,
+          label: 'Chuyển Owner',
+          onTap: onTransferOwnership!,
+          iconColor: Colors.amber,
+        ),
+      // Ban member — owner only
+      if (onBanMember != null)
+        _GridMemberActionItem(
+          icon: CupertinoIcons.xmark_shield_fill,
+          label: 'Cấm vĩnh viễn',
+          onTap: onBanMember!,
+          iconColor: Colors.deepOrange,
           isDestructive: true,
         ),
     ];
@@ -1776,3 +2008,4 @@ class _GridMemberActionItem {
     this.isDestructive = false,
   });
 }
+

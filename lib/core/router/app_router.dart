@@ -42,6 +42,7 @@ import '../../features/social/presentation/screens/qr_scanner_screen.dart';
 import '../../features/social/providers/follow_provider.dart';
 import '../../features/call/presentation/screens/call_screens.dart';
 import '../../features/feed/providers/feed_provider.dart';
+import '../../features/chat/presentation/screens/group_admin_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _feedTabKey = GlobalKey<NavigatorState>(debugLabel: 'feedTab');
@@ -255,6 +256,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             conversationId: state.pathParameters['conversationId']!,
           ),
         ),
+      ),
+
+      GoRoute(
+        path: '/chat/:conversationId/manage',
+        name: 'group-management',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) {
+          final conversationId = state.pathParameters['conversationId']!;
+          return CupertinoPage(child: GroupAdminScreen(conversationId: conversationId));
+        },
       ),
       // ── Call routes ──────────────────────────────────────────────────
       GoRoute(

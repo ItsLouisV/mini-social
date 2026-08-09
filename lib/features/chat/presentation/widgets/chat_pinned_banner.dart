@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../domain/pinned_message_model.dart';
 import '../../providers/chat_provider.dart';
+import '../../domain/message_model.dart';
 
 class ChatPinnedBanner extends ConsumerStatefulWidget {
   final String conversationId;
@@ -35,6 +37,82 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
 class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
   bool _isExpanded = false;
 
+  Widget? _buildMediaPreview(MessageModel msg, Color accentColor, {double size = 36}) {
+
+    // Image
+    if (msg.isImage) {
+      final mediaUrl = msg.firstMediaUrl;
+
+      if (mediaUrl == null || mediaUrl.isEmpty) return null;
+
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(7),
+        child: CachedNetworkImage(
+          imageUrl: mediaUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => Container(
+            width: size,
+            height: size,
+            color: accentColor.withValues(alpha: 0.1),
+            child: const Center(
+              child: CupertinoActivityIndicator(radius: 8),
+            ),
+          ),
+          errorWidget: (_, __, ___) => Container(
+            width: size,
+            height: size,
+            color: accentColor.withValues(alpha: 0.1),
+            child: Icon(
+              CupertinoIcons.photo,
+              size: 17,
+              color: accentColor,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Voice
+    if (msg.isVoice) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: accentColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: FaIcon(
+          FontAwesomeIcons.creativeCommonsSampling,
+          size: 22,
+          color: accentColor,
+        ),
+      );
+    }
+
+    // Call
+    if (msg.isCall) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: accentColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          CupertinoIcons.phone_fill,
+          size: 20,
+          color: accentColor,
+        ),
+      );
+    }
+
+    // Other
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.pinnedList.isEmpty) return const SizedBox.shrink();
@@ -50,20 +128,44 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
     final themeName = themeState[widget.conversationId] ?? 'blue';
     final accentColor = getChatThemePrimaryColor(themeName);
 
-    String contentSnippet = latestMsg.isText
-        ? (latestMsg.content ?? '')
-        : latestMsg.isImage
-            ? '[Hình ảnh]'
-            : latestMsg.isCall
-                ? '[Cuộc gọi]'
-                : '[Tin nhắn]';
+    String _getSenderName(MessageModel msg) {
+      if (msg.senderId == widget.currentUserId) {
+        return 'Bạn';
+      }
+      return msg.senderName?.trim().isNotEmpty == true
+          ? msg.senderName!
+          : widget.otherUserName;
+    }
 
-    final senderName =
-        latestMsg.senderId == widget.currentUserId ? 'Bạn' : widget.otherUserName;
+    String _getContentSnippet(MessageModel msg) {
+      if (msg.isText) {
+        final text = msg.content?.trim();
+        return text?.isNotEmpty == true ? text! : '[Tin nhắn]';
+      }
+      if (msg.isImage) {
+        return '[Hình ảnh]';
+      }
+      if (msg.isVoice) {
+        return '[Voice Message]';
+      }
+      if (msg.isCall) {
+        return '[Cuộc gọi]';
+      }
+      if (msg.isRecalled) {
+        return '[Revoked message]';
+      }
+      if (msg.isSystem) {
+        return '[Tin nhắn hệ thống]';
+      }
+      return '[Tin nhắn]';
+    }
+
+    final contentSnippet = _getContentSnippet(latestMsg);
+
+    final senderName = _getSenderName(latestMsg);
 
     final mediaUrl = latestMsg.firstMediaUrl;
-    final hasImageThumbnail =
-        (latestMsg.isImage || mediaUrl != null) && (mediaUrl != null && mediaUrl.isNotEmpty);
+    // final hasImageThumbnail = latestMsg.isImage && mediaUrl != null && mediaUrl.isNotEmpty;
 
     final bannerBgColor = widget.hasWallpaper
         ? (isDark
@@ -76,6 +178,8 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
     final borderColor = isDark
         ? Colors.white.withValues(alpha: 0.12)
         : accentColor.withValues(alpha: 0.2);
+
+    final mediaPreview = _buildMediaPreview(latestMsg, accentColor);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
@@ -223,45 +327,9 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                             ),
                           ),
 
-                          // Image Thumbnail on the right (if pinned message has image)
-                          if (hasImageThumbnail) ...[
+                          if (mediaPreview != null) ...[
                             const SizedBox(width: 8),
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: accentColor.withValues(alpha: 0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(7),
-                                child: CachedNetworkImage(
-                                  imageUrl: mediaUrl!,
-                                  width: 36,
-                                  height: 36,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    width: 36,
-                                    height: 36,
-                                    color: accentColor.withValues(alpha: 0.1),
-                                    child: const Center(
-                                      child: CupertinoActivityIndicator(radius: 8),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) => Container(
-                                    width: 36,
-                                    height: 36,
-                                    color: accentColor.withValues(alpha: 0.1),
-                                    child: Icon(
-                                      CupertinoIcons.photo,
-                                      size: 16,
-                                      color: accentColor,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                            mediaPreview,
                           ],
 
                           const SizedBox(width: 6),
@@ -334,18 +402,15 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                           final msg = pin.message;
                           if (msg == null) return const SizedBox.shrink();
 
-                          final pinSnippet = msg.isText
-                              ? (msg.content ?? '')
-                              : msg.isImage
-                                  ? '[Hình ảnh]'
-                                  : '[Cuộc gọi]';
-                          final pinSender = msg.senderId == widget.currentUserId
-                              ? 'Bạn'
-                              : widget.otherUserName;
+                          final pinSnippet = _getContentSnippet(msg);
 
-                          final pinMedia = msg.firstMediaUrl;
-                          final pinHasThumb = (msg.isImage || pinMedia != null) &&
-                              (pinMedia != null && pinMedia.isNotEmpty);
+                          final pinSender = _getSenderName(msg);
+
+                          // final pinMedia = msg.firstMediaUrl;
+
+                          // final pinHasThumb = msg.isImage && pinMedia != null && pinMedia.isNotEmpty;
+
+                          final pinMediaPreview = _buildMediaPreview(msg, accentColor, size: 28);
 
                           return InkWell(
                             onTap: () {
@@ -383,18 +448,30 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  if (pinHasThumb) ...[
+                                  // if (pinHasThumb) ...[
+                                  //   const SizedBox(width: 8),
+                                  //   ClipRRect(
+                                  //     borderRadius: BorderRadius.circular(6),
+                                  //     child: CachedNetworkImage(
+                                  //       imageUrl: pinMedia!,
+                                  //       width: 28,
+                                  //       height: 28,
+                                  //       fit: BoxFit.cover,
+                                  //     ),
+                                  //   ),
+                                  // ],
+
+                                  if (pinMediaPreview != null) ...[
                                     const SizedBox(width: 8),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(6),
-                                      child: CachedNetworkImage(
-                                        imageUrl: pinMedia!,
-                                        width: 28,
-                                        height: 28,
-                                        fit: BoxFit.cover,
+                                    SizedBox(
+                                      width: 28,
+                                      height: 28,
+                                      child: FittedBox(
+                                        child: pinMediaPreview!,
                                       ),
                                     ),
                                   ],
+
                                   const SizedBox(width: 4),
                                   CupertinoButton(
                                     padding: EdgeInsets.zero,

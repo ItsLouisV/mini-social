@@ -8,12 +8,20 @@ class ConversationModel {
   final String? participant2;
   final String? name; // Group name
   final String? avatarUrl; // Group avatar
+  final String? description; // Group description
   final String? createdBy;
   final String? lastMessageId;
   final String? lastMessage;
   final DateTime? lastMessageAt;
   final String? lastMessageSenderId;
   final DateTime createdAt;
+
+  // ── Group permission toggles (only relevant for type == 'group') ──────────
+  final bool adminOnlyMessaging;    // Only owner/admin can send messages
+  final bool allowMemberInvite;     // Members can invite new members
+  final bool allowMemberPin;        // Members can pin/unpin messages
+  final bool allowMemberMentionAll; // Members can @everyone
+  final bool allowMemberEditInfo;   // Members can edit name/avatar/description
 
   // Custom states from conversation_members & profiles
   final ConversationMemberModel? myMemberState;
@@ -30,6 +38,7 @@ class ConversationModel {
     this.participant2,
     this.name,
     this.avatarUrl,
+    this.description,
     this.createdBy,
     this.lastMessageId,
     this.lastMessage,
@@ -39,6 +48,11 @@ class ConversationModel {
     this.myMemberState,
     this.otherUser,
     this.members,
+    this.adminOnlyMessaging = false,
+    this.allowMemberInvite = true,
+    this.allowMemberPin = true,
+    this.allowMemberMentionAll = true,
+    this.allowMemberEditInfo = true,
     int? legacyP2Unread,
     bool? legacyP2Pinned,
     bool? legacyP2Hidden,
@@ -162,6 +176,7 @@ class ConversationModel {
       participant2: json['participant_2'] as String?,
       name: (json['name'] ?? json['group_name']) as String?,
       avatarUrl: (json['avatar_url'] ?? json['group_avatar_url']) as String?,
+      description: json['description'] as String?,
       createdBy: (json['created_by'] ?? json['group_admin_id']) as String?,
       lastMessageId: json['last_message_id'] as String?,
       lastMessage: json['last_message'] as String?,
@@ -175,6 +190,11 @@ class ConversationModel {
       myMemberState: memberState,
       otherUser: otherUser,
       members: parsedMembers,
+      adminOnlyMessaging: json['admin_only_messaging'] as bool? ?? false,
+      allowMemberInvite: json['allow_member_invite'] as bool? ?? true,
+      allowMemberPin: json['allow_member_pin'] as bool? ?? true,
+      allowMemberMentionAll: json['allow_member_mention_all'] as bool? ?? true,
+      allowMemberEditInfo: json['allow_member_edit_info'] as bool? ?? true,
       legacyP2Unread: json['p2_unread_count'] as int?,
       legacyP2Pinned: json['p2_is_pinned'] as bool?,
       legacyP2Hidden: json['p2_is_hidden'] as bool?,
@@ -189,18 +209,25 @@ class ConversationModel {
       'participant_2': participant2,
       'name': name,
       'avatar_url': avatarUrl,
+      'description': description,
       'created_by': createdBy,
       'last_message_id': lastMessageId,
       'last_message': lastMessage,
       'last_message_at': lastMessageAt?.toUtc().toIso8601String(),
       'last_message_sender_id': lastMessageSenderId,
       'created_at': createdAt.toUtc().toIso8601String(),
+      'admin_only_messaging': adminOnlyMessaging,
+      'allow_member_invite': allowMemberInvite,
+      'allow_member_pin': allowMemberPin,
+      'allow_member_mention_all': allowMemberMentionAll,
+      'allow_member_edit_info': allowMemberEditInfo,
     };
   }
 
   ConversationModel copyWith({
     String? name,
     String? avatarUrl,
+    String? description,
     String? lastMessage,
     DateTime? lastMessageAt,
     String? lastMessageId,
@@ -208,6 +235,11 @@ class ConversationModel {
     ConversationMemberModel? myMemberState,
     ProfileModel? otherUser,
     List<ConversationMemberModel>? members,
+    bool? adminOnlyMessaging,
+    bool? allowMemberInvite,
+    bool? allowMemberPin,
+    bool? allowMemberMentionAll,
+    bool? allowMemberEditInfo,
   }) {
     return ConversationModel(
       id: id,
@@ -216,6 +248,7 @@ class ConversationModel {
       participant2: participant2,
       name: name ?? this.name,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      description: description ?? this.description,
       createdBy: createdBy,
       lastMessageId: lastMessageId ?? this.lastMessageId,
       lastMessage: lastMessage ?? this.lastMessage,
@@ -225,6 +258,11 @@ class ConversationModel {
       myMemberState: myMemberState ?? this.myMemberState,
       otherUser: otherUser ?? this.otherUser,
       members: members ?? this.members,
+      adminOnlyMessaging: adminOnlyMessaging ?? this.adminOnlyMessaging,
+      allowMemberInvite: allowMemberInvite ?? this.allowMemberInvite,
+      allowMemberPin: allowMemberPin ?? this.allowMemberPin,
+      allowMemberMentionAll: allowMemberMentionAll ?? this.allowMemberMentionAll,
+      allowMemberEditInfo: allowMemberEditInfo ?? this.allowMemberEditInfo,
     );
   }
 }

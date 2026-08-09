@@ -4,6 +4,9 @@ class MessageModel {
   final String id;
   final String conversationId;
   final String senderId;
+
+  final String? senderName;
+
   final String? content;
   final List<String> mediaUrls;
   final String messageType; // 'text' | 'image' | 'voice' | 'recalled'
@@ -25,6 +28,7 @@ class MessageModel {
     required this.id,
     required this.conversationId,
     required this.senderId,
+    this.senderName,
     this.content,
     this.mediaUrls = const [],
     this.messageType = 'text',
@@ -76,10 +80,21 @@ class MessageModel {
       parsedMediaUrls = [rawMediaUrl];
     }
 
+    final sender = json['sender'];
+
+    String? parseSenderName;
+
+    if (sender is Map<String, dynamic>) {
+      parseSenderName = (sender['full_name'] as String?)?.isNotEmpty == true
+          ? sender['full_name'] as String?
+          : sender['username'] as String?;
+    }
+
     return MessageModel(
       id: json['id'] as String,
       conversationId: json['conversation_id'] as String,
       senderId: json['sender_id'] as String,
+      senderName: parseSenderName,
       content: json['content'] as String?,
       mediaUrls: parsedMediaUrls,
       messageType: json['message_type'] as String? ?? 'text',
@@ -126,6 +141,7 @@ class MessageModel {
     String? id,
     String? conversationId,
     String? senderId,
+    String? senderName,
     String? content,
     List<String>? mediaUrls,
     String? messageType,
@@ -142,6 +158,7 @@ class MessageModel {
       id: id ?? this.id,
       conversationId: conversationId ?? this.conversationId,
       senderId: senderId ?? this.senderId,
+      senderName: senderName ?? this.senderName,
       content: content ?? this.content,
       mediaUrls: mediaUrls ?? this.mediaUrls,
       messageType: messageType ?? this.messageType,

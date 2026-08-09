@@ -103,6 +103,7 @@ class _MediaEditModalState extends State<MediaEditModal> {
       context,
       imageUrls: imageUrls,
       initialIndex: index,
+      heroScope: 'media_edit',
     );
   }
 

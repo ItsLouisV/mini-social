@@ -8,15 +8,17 @@ import 'package:photo_view/photo_view_gallery.dart';
 class GalleryScreen extends StatefulWidget {
   final List<String> imageUrls;
   final int initialIndex;
+  final String heroScope;
 
   const GalleryScreen({
     super.key,
     required this.imageUrls,
+    required this.heroScope,
     this.initialIndex = 0,
   });
 
   /// Mở Gallery với hiệu ứng FadeTransition nền trong suốt mượt mà
-  static void open(BuildContext context, {required List<String> imageUrls, int initialIndex = 0}) {
+  static void open(BuildContext context, {required List<String> imageUrls, required String heroScope, int initialIndex = 0}) {
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder(
         opaque: false,
@@ -25,6 +27,7 @@ class GalleryScreen extends StatefulWidget {
         pageBuilder: (context, _, __) => GalleryScreen(
           imageUrls: imageUrls,
           initialIndex: initialIndex,
+          heroScope: heroScope,
         ),
         transitionsBuilder: (context, animation, _, child) {
           return FadeTransition(opacity: animation, child: child);
@@ -220,7 +223,7 @@ class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateM
                             minScale: PhotoViewComputedScale.contained * 0.8,
                             maxScale: PhotoViewComputedScale.covered * 2,
                             heroAttributes: PhotoViewHeroAttributes(
-                              tag: widget.imageUrls[index],
+                              tag: '${widget.heroScope}_${widget.imageUrls[index]}',
                               flightShuttleBuilder: (flightContext, animation, flightDirection, fromHeroContext, toHeroContext) {
                                 final Hero fromHero = fromHeroContext.widget as Hero;
                                 final Hero toHero = toHeroContext.widget as Hero;

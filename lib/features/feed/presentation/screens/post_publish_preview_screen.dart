@@ -554,6 +554,7 @@ class _PostPublishPreviewScreenState
                               child: ImageCarousel(
                                 media: allPreviewMedia,
                                 layoutType: widget.selectedLayout,
+                                heroScope: 'post_public_preview'
                               ),
                             ),
                         ],

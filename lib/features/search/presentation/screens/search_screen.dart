@@ -395,6 +395,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                       return PostCard(
                         post: post,
                         currentUserId: currentUserId,
+                        heroScope: 'search',
                       );
                     },
                   ),
@@ -469,6 +470,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
             return PostCard(
               post: post,
               currentUserId: currentUserId,
+              heroScope: 'search',
             );
           },
         );

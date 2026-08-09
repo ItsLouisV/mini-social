@@ -14,10 +14,12 @@ class ImageCarousel extends StatefulWidget {
   final String layoutType;
   final Function(PostMedia media)? onDeleteMedia;
   final VoidCallback? onTapCarousel;
+  final String heroScope;
 
   const ImageCarousel({
     super.key,
     required this.media,
+    required this.heroScope,
     this.layoutType = 'dashboard',
     this.onDeleteMedia,
     this.onTapCarousel,
@@ -319,6 +321,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
     String? overlayText,
   }) {
     final item = widget.media[index];
+    final heroTag = '${widget.heroScope}_${item.id}';
     final isVideo = item.type == 'video';
     final imagesOnly = widget.media.where((m) => m.type == 'image').toList();
     final imageIndex = imagesOnly.indexOf(item);
@@ -362,7 +365,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
             : Image.file(io.File(item.url), fit: BoxFit.cover);
       }
       mediaWidget = Hero(
-        tag: item.url,
+        tag: heroTag,
         createRectTween: (begin, end) => RectTween(begin: begin, end: end),
         child: imageWidget,
       );
@@ -445,6 +448,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
                   context,
                   imageUrls: imagesOnly.map((m) => m.url).toList(),
                   initialIndex: imageIndex,
+                  heroScope: widget.heroScope,
                 );
               }
             },

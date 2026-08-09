@@ -195,7 +195,11 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           ),
 
         if (post.media.isNotEmpty)
-          ImageCarousel(media: post.media),
+          ImageCarousel(
+            media: post.media,
+            layoutType: post.layoutType,
+            heroScope: 'post_detail_${post.id}',
+          ),
 
         PostActions(post: post),
 

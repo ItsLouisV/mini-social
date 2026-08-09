@@ -13,6 +13,10 @@ class ConversationMemberModel {
   final bool isHidden;
   final bool isPinned;
   final bool isMuted;
+  /// Muted by group admin (distinct from user self-muting notifications).
+  final bool isMutedByAdmin;
+  /// null = muted indefinitely; future timestamp = mute expires at this time.
+  final DateTime? mutedUntil;
   final String? nickname;
   final ProfileModel? profile;
 
@@ -29,6 +33,8 @@ class ConversationMemberModel {
     this.isHidden = false,
     this.isPinned = false,
     this.isMuted = false,
+    this.isMutedByAdmin = false,
+    this.mutedUntil,
     this.nickname,
     this.profile,
   });
@@ -37,6 +43,14 @@ class ConversationMemberModel {
   bool get isCoAdmin => role == 'admin' || role == 'co_admin';
   bool get isAdmin => isOwner || isCoAdmin;
   bool get isMember => role == 'member';
+
+  /// True if admin-muted and the mute period has not yet expired.
+  bool get isEffectivelyMutedByAdmin {
+    if (!isMutedByAdmin) return false;
+    final until = mutedUntil;
+    if (until != null && DateTime.now().isAfter(until)) return false;
+    return true;
+  }
 
   factory ConversationMemberModel.fromJson(Map<String, dynamic> json) {
     ProfileModel? prof;
@@ -57,6 +71,10 @@ class ConversationMemberModel {
       isHidden: json['is_hidden'] as bool? ?? false,
       isPinned: json['is_pinned'] as bool? ?? false,
       isMuted: json['is_muted'] as bool? ?? false,
+      isMutedByAdmin: json['is_muted_by_admin'] as bool? ?? false,
+      mutedUntil: json['muted_until'] != null
+          ? DateTime.parse(json['muted_until'] as String).toLocal()
+          : null,
       nickname: json['nickname'] as String?,
       profile: prof,
     );
@@ -76,6 +94,8 @@ class ConversationMemberModel {
       'is_hidden': isHidden,
       'is_pinned': isPinned,
       'is_muted': isMuted,
+      'is_muted_by_admin': isMutedByAdmin,
+      'muted_until': mutedUntil?.toUtc().toIso8601String(),
       'nickname': nickname,
     };
   }
@@ -86,6 +106,9 @@ class ConversationMemberModel {
     bool? isHidden,
     bool? isPinned,
     bool? isMuted,
+    bool? isMutedByAdmin,
+    DateTime? mutedUntil,
+    bool clearMutedUntil = false,
     String? nickname,
     ProfileModel? profile,
   }) {
@@ -102,6 +125,8 @@ class ConversationMemberModel {
       isHidden: isHidden ?? this.isHidden,
       isPinned: isPinned ?? this.isPinned,
       isMuted: isMuted ?? this.isMuted,
+      isMutedByAdmin: isMutedByAdmin ?? this.isMutedByAdmin,
+      mutedUntil: clearMutedUntil ? null : (mutedUntil ?? this.mutedUntil),
       nickname: nickname ?? this.nickname,
       profile: profile ?? this.profile,
     );
