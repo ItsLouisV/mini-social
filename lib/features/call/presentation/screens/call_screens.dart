@@ -96,6 +96,10 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
     // Phát dialtone gọi đi
     CallAudioService().playDialtone();
 
+    if (widget.isVideo) {
+      unawaited(_startCameraPreview());
+    }
+
     // Call API: create call
     _initCall();
 
@@ -124,7 +128,58 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
   }
 
   CallModel? _currentCall;
+  LocalVideoTrack? _previewTrack;
+  bool _previewTransferred = false;
+  bool _previewLoading = false;
+  int _previewOperation = 0;
   bool _cameraOff = false;
+
+  Future<void> _startCameraPreview() async {
+    if (!widget.isVideo || _previewLoading || _previewTrack != null) return;
+    final operation = ++_previewOperation;
+    if (mounted) setState(() => _previewLoading = true);
+    try {
+      if (!kIsWeb) {
+        final permission = await Permission.camera.request();
+        if (!permission.isGranted) {
+          if (mounted) setState(() => _cameraOff = true);
+          return;
+        }
+      }
+      final track = await LocalVideoTrack.createCameraTrack(
+        const CameraCaptureOptions(
+          cameraPosition: CameraPosition.front,
+          params: VideoParametersPresets.h720_169,
+          maxFrameRate: 24,
+          stopCameraCaptureOnMute: true,
+        ),
+      );
+      await track.start();
+      if (!mounted || operation != _previewOperation || _cameraOff) {
+        await track.stop();
+        return;
+      }
+      setState(() => _previewTrack = track);
+    } catch (e) {
+      debugPrint('Không thể mở camera preview: $e');
+      if (mounted) setState(() => _cameraOff = true);
+    } finally {
+      if (mounted && operation == _previewOperation) {
+        setState(() => _previewLoading = false);
+      }
+    }
+  }
+
+  Future<void> _stopCameraPreview() async {
+    _previewOperation++;
+    final track = _previewTrack;
+    _previewTrack = null;
+    if (track != null) {
+      try {
+        await track.stop();
+      } catch (_) {}
+    }
+  }
 
   Future<void> _initCall() async {
     try {
@@ -160,12 +215,14 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
 
     // Chuyển sang màn hình Active (thay thế màn hình hiện tại)
     if (mounted) {
+      _previewTransferred = _previewTrack != null;
       context.pushReplacement('/call/active', extra: {
         'callModel': call,
         'otherName': widget.calleeName,
         'avatarUrl': widget.calleeAvatarUrl,
         'isVideo': widget.isVideo,
         'initialCameraOff': _cameraOff,
+        'previewVideoTrack': _previewTrack,
       });
     }
   }
@@ -176,6 +233,7 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
     _connectCtrl.dispose();
     _timer?.cancel();
     CallAudioService().stop(); // đảm bảo dừng âm thanh khi out
+    if (!_previewTransferred) unawaited(_stopCameraPreview());
     super.dispose();
   }
 
@@ -229,16 +287,31 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
     }
 
     const avatarRadius = 56.0;
-
-    // Đường dẫn ảnh nền tuỳ chỉnh (sau này bạn thêm file thì đổi giá trị null thành 'assets/images/tên_file.jpg')
-    const customBackgroundPath = 'assets/images/outgoing.jpg';
+    final hasPreview = widget.isVideo && !_cameraOff && _previewTrack != null;
 
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
           // 1. Background (Ảnh tuỳ chỉnh, ảnh avatar làm mờ, hoặc preview camera của người gọi)
-          Image.asset(customBackgroundPath, fit: BoxFit.cover),
+          if (hasPreview) ...[
+            VideoTrackRenderer(_previewTrack!),
+            Container(color: Colors.black.withValues(alpha: 0.18)),
+          ] else ...[
+            if (widget.calleeAvatarUrl != null)
+              Image.network(
+                widget.calleeAvatarUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    Container(color: const Color(0xFF1A2940)),
+              )
+            else
+              Container(color: const Color(0xFF1A2940)),
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 45, sigmaY: 45),
+              child: Container(color: Colors.black.withValues(alpha: 0.58)),
+            ),
+          ],
 
           // 3. Nội dung chính
           SafeArea(
@@ -416,10 +489,14 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
                                         ? Colors.white.withValues(alpha: 0.3)
                                         : Colors.white.withValues(alpha: 0.15),
                                     onTap: () async {
-                                      final targetState = !_cameraOff;
-                                      setState(() {
-                                        _cameraOff = targetState;
-                                      });
+                                      if (_cameraOff) {
+                                        setState(() => _cameraOff = false);
+                                        await _startCameraPreview();
+                                      } else {
+                                        setState(() => _cameraOff = true);
+                                        await _stopCameraPreview();
+                                        if (mounted) setState(() {});
+                                      }
                                     },
                                   ),
                                   // Nút Huỷ
@@ -594,15 +671,24 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
       }
     }
 
-    // Đường dẫn ảnh nền tuỳ chỉnh (sau này bạn thêm file thì đổi giá trị null thành 'assets/images/tên_file.jpg')
-    const customBackgroundPath = 'assets/images/incoming.jpg';
-
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Background (Ảnh tuỳ chỉnh hoặc ảnh avatar làm mờ)
-          Image.asset(customBackgroundPath, fit: BoxFit.cover),
+          // Nền mặc định: avatar người gọi được làm mờ hoặc màu nền dự phòng.
+          if (widget.callerAvatarUrl != null)
+            Image.network(
+              widget.callerAvatarUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  Container(color: const Color(0xFF1A2940)),
+            )
+          else
+            Container(color: const Color(0xFF1A2940)),
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 45, sigmaY: 45),
+            child: Container(color: Colors.black.withValues(alpha: 0.58)),
+          ),
 
           // 3. Nội dung chính
           SafeArea(
@@ -797,6 +883,7 @@ class ActiveCallScreen extends ConsumerStatefulWidget {
   final Room? prePreparedRoom;
   final String? preFetchedToken;
   final bool initialCameraOff;
+  final LocalVideoTrack? previewVideoTrack;
 
   const ActiveCallScreen({
     super.key,
@@ -808,6 +895,7 @@ class ActiveCallScreen extends ConsumerStatefulWidget {
     this.prePreparedRoom,
     this.preFetchedToken,
     this.initialCameraOff = false,
+    this.previewVideoTrack,
   });
 
   @override
@@ -818,6 +906,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
   Room? _room;
   LocalParticipant? _localParticipant;
   String? _serverUrl;
+  LocalVideoTrack? _previewVideoTrack;
 
   bool _muted = false;
   bool _speakerOn = false;
@@ -846,6 +935,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
   @override
   void initState() {
     super.initState();
+    _previewVideoTrack = widget.previewVideoTrack;
     _connectToRoom();
   }
 
@@ -939,9 +1029,16 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
         debugPrint('4. Đang bật microphone/camera...');
         // 3. Enable tracks
         await room.localParticipant?.setMicrophoneEnabled(true);
-        if (widget.isVideo) {
-          await room.localParticipant
-              ?.setCameraEnabled(!widget.initialCameraOff);
+        if (widget.isVideo && !widget.initialCameraOff) {
+          final previewTrack = _previewVideoTrack;
+          if (previewTrack != null) {
+            await room.localParticipant?.publishVideoTrack(previewTrack);
+            _previewVideoTrack = null; // Room now owns the track lifecycle.
+          } else {
+            await room.localParticipant?.setCameraEnabled(true);
+          }
+        } else if (_previewVideoTrack != null) {
+          await _stopUnpublishedPreview();
         }
       } else {
         debugPrint(
@@ -979,13 +1076,27 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
   }
 
   Future<void> _disconnectRoom() async {
-    if (_room == null) return;
+    if (_room == null) {
+      await _stopUnpublishedPreview();
+      return;
+    }
     final r = _room;
     _room = null; // Tránh ngắt kết nối nhiều lần
     r?.removeListener(_onRoomEvent);
     try {
       await r?.disconnect();
     } catch (_) {}
+    await _stopUnpublishedPreview();
+  }
+
+  Future<void> _stopUnpublishedPreview() async {
+    final track = _previewVideoTrack;
+    _previewVideoTrack = null;
+    if (track != null) {
+      try {
+        await track.stop();
+      } catch (_) {}
+    }
   }
 
   Future<void> _endCall() async {

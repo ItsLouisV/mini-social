@@ -14,6 +14,7 @@ import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
 import '../../../social/data/ai_repository.dart';
 import '../widgets/image_carousel.dart';
+import '../../../location/domain/place_model.dart';
 
 class PostPublishPreviewScreen extends ConsumerStatefulWidget {
   final String caption;
@@ -21,7 +22,7 @@ class PostPublishPreviewScreen extends ConsumerStatefulWidget {
   final List<XFile> media;
   final String selectedLayout;
   final String? selectedMusic;
-  final String? selectedLocation;
+  final PlaceModel? selectedLocation;
   final String? selectedFeeling;
   final List<String> taggedFriends;
   final String initialPrivacy;
@@ -71,9 +72,6 @@ class _PostPublishPreviewScreenState
     final extraDetails = <String>[];
     if (widget.selectedFeeling != null) {
       extraDetails.add('— đang cảm thấy ${widget.selectedFeeling}');
-    }
-    if (widget.selectedLocation != null) {
-      extraDetails.add('tại ${widget.selectedLocation}');
     }
     if (widget.selectedMusic != null) {
       extraDetails.add('🎵 ${widget.selectedMusic}');
@@ -173,6 +171,8 @@ class _PostPublishPreviewScreenState
               moderationScore: modResult.riskScore,
               moderationStatus: modStatus,
               isAiGenerated: _isAiLabelEnabled,
+              location: widget.selectedLocation,
+              clearLocation: widget.selectedLocation == null,
             );
         ref.invalidate(feedPostsProvider);
       } else {
@@ -184,6 +184,7 @@ class _PostPublishPreviewScreenState
               moderationScore: modResult.riskScore,
               moderationStatus: modStatus,
               isAiGenerated: _isAiLabelEnabled,
+              location: widget.selectedLocation,
             );
       }
 

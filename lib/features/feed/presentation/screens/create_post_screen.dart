@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,8 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 
-import 'package:http/http.dart' as http;
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/localization/app_translations.dart';
@@ -25,6 +22,10 @@ import '../../../social/data/ai_repository.dart';
 import '../widgets/image_carousel.dart';
 import 'media_edit_modal.dart';
 import 'post_publish_preview_screen.dart';
+import '../../../location/domain/place_model.dart';
+import '../../../location/presentation/location_picker_screen.dart';
+import '../../../location/data/photo_location_service.dart';
+import '../../../location/providers/location_provider.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
   final PostModel? editPost;
@@ -39,6 +40,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   late final TextEditingController _captionController;
   List<PostMedia> _existingMedia = [];
   final List<XFile> _media = [];
+  final Map<String, PhotoCoordinates> _photoCoordinates = {};
   String _privacy = 'public'; // Mặc định Công khai
   String _selectedLayout = 'panel-top'; // Mặc định cố định panel-top khi >= 3 ảnh/video
 
@@ -46,7 +48,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   // Extra status items
   String? _selectedMusic;
-  String? _selectedLocation;
+  PlaceModel? _selectedLocation;
   String? _selectedFeeling;
   final List<String> _taggedFriends = [];
 
@@ -60,6 +62,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         _selectedLayout = widget.editPost!.layoutType;
       }
       _existingMedia = List<PostMedia>.from(widget.editPost!.media);
+      _selectedLocation = widget.editPost!.location;
     }
   }
 
@@ -94,8 +97,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final compressed = <XFile>[];
     for (final x in toAdd) {
       if (!_isVideo(x)) {
+        final coordinates =
+            await ref.read(photoLocationServiceProvider).readCoordinates(x);
         final file = await ImageUtils.compressImage(x);
-        compressed.add(file ?? x);
+        final output = file ?? x;
+        compressed.add(output);
+        if (coordinates != null) _photoCoordinates[output.path] = coordinates;
       } else {
         compressed.add(x);
       }
@@ -128,6 +135,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           _existingMedia.addAll(updatedExisting);
           _media.clear();
           _media.addAll(updatedNew);
+          _photoCoordinates.removeWhere(
+            (path, _) => !updatedNew.any((file) => file.path == path),
+          );
         });
       },
     );
@@ -290,219 +300,20 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     );
   }
 
-  Future<List<String>> _getRealNearbyLocations() async {
-    final List<String> results = [];
-    try {
-      if (!kIsWeb) {
-        final status = await Permission.locationWhenInUse.request();
-        if (status.isDenied || status.isPermanentlyDenied) {
-          return [];
-        }
-      }
-      final res = await http.get(
-        Uri.parse('https://ipapi.co/json/'),
-      ).timeout(const Duration(seconds: 4));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final city = data['city'] as String?;
-        final region = data['region'] as String?;
-        final country = data['country_name'] as String?;
-        final lat = data['latitude'];
-        final lon = data['longitude'];
-
-        if (city != null && city.isNotEmpty) {
-          results.add('$city, $country');
-        }
-        if (region != null && region.isNotEmpty && region != city) {
-          results.add('$region, $country');
-        }
-
-        if (lat != null && lon != null) {
-          try {
-            final nominatimRes = await http.get(
-              Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lon'),
-              headers: {'User-Agent': 'VioraApp/1.0'},
-            ).timeout(const Duration(seconds: 3));
-
-            if (nominatimRes.statusCode == 200) {
-              final nomData = jsonDecode(nominatimRes.body);
-              final address = nomData['address'] as Map<String, dynamic>?;
-              if (address != null) {
-                final suburb = address['suburb'] ?? address['neighbourhood'] ?? address['quarter'];
-                final cityDist = address['city_district'] ?? address['county'] ?? address['town'];
-                if (suburb != null && city != null) {
-                  results.insert(0, '$suburb, $city');
-                }
-                if (cityDist != null && city != null && cityDist != city) {
-                  results.insert(0, '$cityDist, $city');
-                }
-              }
-            }
-          } catch (_) {}
-        }
-      }
-    } catch (_) {}
-    return results.toSet().toList();
-  }
-
-  void _showLocationModal() {
-    String searchQuery = '';
-    Future<List<String>>? locationFuture = _getRealNearbyLocations();
-
-    // Lấy vị trí từ ảnh tải lên
-    final photoLocations = <String>[];
-    if (_media.isNotEmpty) {
-      for (int i = 0; i < _media.length; i++) {
-        final file = _media[i];
-        final cleanName = file.name.replaceAll(RegExp(r'\.[^.]+$'), '').replaceAll(RegExp(r'[_-]'), ' ');
-        if (cleanName.length > 3 && !RegExp(r'^\d+$').hasMatch(cleanName)) {
-          photoLocations.add('Ảnh ${i + 1}: $cleanName');
-        }
-      }
-      if (photoLocations.isEmpty) {
-        photoLocations.add('Ảnh ${_media.first.name.split('.').first}');
-      }
-    }
-
-    _showCustomFullScreenModal(
-      title: 'Gắn thẻ vị trí',
-      subtitle: 'Vị trí thực tế từ thiết bị & ảnh đã tải lên',
-      heightFactor: 0.92,
-      bodyBuilder: (ctx, setModalState) {
-        final queryLower = searchQuery.toLowerCase();
-
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Tìm kiếm địa điểm...',
-                  prefixIcon: const Icon(CupertinoIcons.search, size: 20),
-                  suffixIcon: searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(CupertinoIcons.clear_thick_circled, size: 18),
-                          onPressed: () {
-                            setModalState(() => searchQuery = '');
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: Theme.of(context).cardColor,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onChanged: (val) {
-                  setModalState(() => searchQuery = val);
-                },
-              ),
-            ),
-            Expanded(
-              child: FutureBuilder<List<String>>(
-                future: locationFuture,
-                builder: (context, snapshot) {
-                  final realNearbyLocs = snapshot.data ?? [];
-                  final isFetchingLoc = snapshot.connectionState == ConnectionState.waiting;
-
-                  final filteredPhotoLocs = photoLocations.where((l) => l.toLowerCase().contains(queryLower)).toList();
-                  final filteredNearbyLocs = realNearbyLocs.where((l) => l.toLowerCase().contains(queryLower)).toList();
-
-                  return ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: [
-                      // 1. Vị trí từ ảnh tải lên (nếu có)
-                      if (_media.isNotEmpty && filteredPhotoLocs.isNotEmpty) ...[
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            children: [
-                              Icon(CupertinoIcons.photo_fill, size: 16, color: Colors.purpleAccent),
-                              SizedBox(width: 8),
-                              Text('TỪ ẢNH ĐÃ TẢI LÊN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.purpleAccent)),
-                            ],
-                          ),
-                        ),
-                        ...filteredPhotoLocs.map((loc) => ListTile(
-                              leading: const Icon(CupertinoIcons.location_north_fill, color: Colors.purpleAccent),
-                              title: Text(loc, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: const Text('Phát hiện từ tệp ảnh', style: TextStyle(fontSize: 12)),
-                              trailing: const Icon(CupertinoIcons.chevron_right, size: 16),
-                              onTap: () {
-                                setState(() => _selectedLocation = loc);
-                                Navigator.pop(ctx);
-                              },
-                            )),
-                        const Divider(height: 24),
-                      ],
-
-                      // 2. Vị trí thiết bị thực tế & xung quanh
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Icon(CupertinoIcons.location_solid, size: 16, color: Colors.redAccent),
-                            SizedBox(width: 8),
-                            Text('VỊ TRÍ GỢI Ý', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.redAccent)),
-                          ],
-                        ),
-                      ),
-                      if (isFetchingLoc)
-                        const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                                SizedBox(width: 10),
-                                Text('Đang định vị GPS / vị trí thiết bị...', style: TextStyle(fontSize: 13)),
-                              ],
-                            ),
-                          ),
-                        )
-                      else if (filteredNearbyLocs.isEmpty && searchQuery.isEmpty)
-                        const ListTile(
-                          leading: Icon(CupertinoIcons.location_slash, color: Colors.grey),
-                          title: Text('Không lấy được vị trí GPS thiết bị'),
-                          subtitle: Text('Hãy nhập địa điểm vào thanh tìm kiếm trên'),
-                        )
-                      else
-                        ...filteredNearbyLocs.map((loc) => ListTile(
-                              leading: const Icon(CupertinoIcons.compass_fill, color: Colors.redAccent),
-                              title: Text(loc, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              trailing: const Icon(CupertinoIcons.add, size: 18),
-                              onTap: () {
-                                setState(() => _selectedLocation = loc);
-                                Navigator.pop(ctx);
-                              },
-                            )),
-
-                      // Tự nhập địa điểm khi có searchQuery
-                      if (searchQuery.isNotEmpty) ...[
-                        const Divider(height: 24),
-                        ListTile(
-                          leading: const Icon(CupertinoIcons.add_circled_solid, color: AppColors.primary),
-                          title: Text('Sử dụng "$searchQuery"'),
-                          subtitle: const Text('Thêm vị trí tùy chỉnh'),
-                          onTap: () {
-                            setState(() => _selectedLocation = searchQuery);
-                            Navigator.pop(ctx);
-                          },
-                        ),
-                      ],
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
+  Future<void> _showLocationModal() async {
+    final selected = await Navigator.push<PlaceModel>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          images: _media,
+          photoCoordinates: _media
+              .map((file) => _photoCoordinates[file.path])
+              .whereType<PhotoCoordinates>()
+              .toList(),
+        ),
+      ),
     );
+    if (selected != null && mounted) setState(() => _selectedLocation = selected);
   }
 
   void _showMusicModal() {
@@ -913,7 +724,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                           const SizedBox(width: 8),
                           _buildTopChip(
                             icon: CupertinoIcons.location_solid,
-                            label: _selectedLocation ?? AppTranslations.tr(ref, 'location'),
+                            label: _selectedLocation?.name ?? AppTranslations.tr(ref, 'location'),
                             isSelected: _selectedLocation != null,
                             onTap: _showLocationModal,
                             onClear: _selectedLocation != null

@@ -73,10 +73,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       final isLoggedIn = (session != null && !session.isExpired) ||
           (authState.when(
-            data: (s) => s.session != null && !s.session!.isExpired,
-            loading: () => session != null && !session.isExpired ? true : null,
-            error: (_, __) => false,
-          ) ?? false);
+                data: (s) => s.session != null && !s.session!.isExpired,
+                loading: () =>
+                    session != null && !session.isExpired ? true : null,
+                error: (_, __) => false,
+              ) ??
+              false);
 
       final isSplashRoute = state.matchedLocation == '/splash';
       final isAuthRoute = state.matchedLocation.startsWith('/login') ||
@@ -102,7 +104,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           child: const LoginScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
-              opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+              opacity:
+                  CurvedAnimation(parent: animation, curve: Curves.easeOut),
               child: child,
             );
           },
@@ -195,14 +198,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/my-qr',
         parentNavigatorKey: _rootNavigatorKey,
-        pageBuilder: (_, __) =>
-            const CupertinoPage(child: MyQrCodeScreen()),
+        pageBuilder: (_, __) => const CupertinoPage(child: MyQrCodeScreen()),
       ),
       GoRoute(
         path: '/qr-scan',
         parentNavigatorKey: _rootNavigatorKey,
-        pageBuilder: (_, __) =>
-            const CupertinoPage(child: QrScannerScreen()),
+        pageBuilder: (_, __) => const CupertinoPage(child: QrScannerScreen()),
       ),
       GoRoute(
         path: '/create',
@@ -265,7 +266,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, state) {
           final conversationId = state.pathParameters['conversationId']!;
-          return CupertinoPage(child: GroupAdminScreen(conversationId: conversationId));
+          return CupertinoPage(
+              child: GroupAdminScreen(conversationId: conversationId));
         },
       ),
 
@@ -289,12 +291,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return CupertinoPage(
             fullscreenDialog: true,
             child: OutgoingCallScreen(
-              conversationId:  extra['conversationId'] as String? ?? '',
-              calleeId:        extra['calleeId']       as String? ?? '',
-              calleeName:      extra['calleeName']     as String? ?? '',
-              calleeAvatarUrl: extra['avatarUrl']      as String?,
-              isVideo:         extra['isVideo']        as bool?   ?? false,
-              onCancel:        extra['onCancel']       as VoidCallback?,
+              conversationId: extra['conversationId'] as String? ?? '',
+              calleeId: extra['calleeId'] as String? ?? '',
+              calleeName: extra['calleeName'] as String? ?? '',
+              calleeAvatarUrl: extra['avatarUrl'] as String?,
+              isVideo: extra['isVideo'] as bool? ?? false,
+              onCancel: extra['onCancel'] as VoidCallback?,
             ),
           );
         },
@@ -307,12 +309,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return CupertinoPage(
             fullscreenDialog: true,
             child: IncomingCallScreen(
-              callModel:       extra['callModel'], // CallModel
-              callerName:      extra['callerName'] as String? ?? '',
-              callerAvatarUrl: extra['avatarUrl']  as String?,
-              isVideo:         extra['isVideo']    as bool?   ?? false,
-              onAccept:        extra['onAccept']   as VoidCallback?,
-              onDecline:       extra['onDecline']  as VoidCallback?,
+              callModel: extra['callModel'], // CallModel
+              callerName: extra['callerName'] as String? ?? '',
+              callerAvatarUrl: extra['avatarUrl'] as String?,
+              isVideo: extra['isVideo'] as bool? ?? false,
+              onAccept: extra['onAccept'] as VoidCallback?,
+              onDecline: extra['onDecline'] as VoidCallback?,
             ),
           );
         },
@@ -325,14 +327,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return CupertinoPage(
             fullscreenDialog: true,
             child: ActiveCallScreen(
-              callModel:      extra['callModel'], // CallModel
-              otherName:      extra['otherName']  as String? ?? '',
-              otherAvatarUrl: extra['avatarUrl']  as String?,
-              isVideo:        extra['isVideo']    as bool?   ?? false,
-              onEnd:          extra['onEnd']      as VoidCallback?,
+              callModel: extra['callModel'], // CallModel
+              otherName: extra['otherName'] as String? ?? '',
+              otherAvatarUrl: extra['avatarUrl'] as String?,
+              isVideo: extra['isVideo'] as bool? ?? false,
+              onEnd: extra['onEnd'] as VoidCallback?,
               prePreparedRoom: extra['prePreparedRoom'],
               preFetchedToken: extra['preFetchedToken'] as String?,
               initialCameraOff: extra['initialCameraOff'] as bool? ?? false,
+              previewVideoTrack: extra['previewVideoTrack'],
             ),
           );
         },
@@ -609,12 +612,12 @@ class _IosTabBar extends StatelessWidget {
     final outerRadiusExpanded = (28.0 * scale).clamp(18.0, 40.0);
 
     // Nút + ở giữa
-    final fabSizeExpanded     = (36.0 * scale).clamp(28.0, 52.0);
-    final fabSizeCompact      = (28.0 * scale).clamp(22.0, 40.0);
-    final fabRadiusExpanded   = (11.0 * scale).clamp(7.0,  16.0);
-    final fabRadiusCompact    = (8.0  * scale).clamp(5.0,  12.0);
+    final fabSizeExpanded = (36.0 * scale).clamp(28.0, 52.0);
+    final fabSizeCompact = (28.0 * scale).clamp(22.0, 40.0);
+    final fabRadiusExpanded = (11.0 * scale).clamp(7.0, 16.0);
+    final fabRadiusCompact = (8.0 * scale).clamp(5.0, 12.0);
     final fabIconSizeExpanded = (20.0 * scale).clamp(15.0, 28.0);
-    final fabIconSizeCompact  = (15.0 * scale).clamp(12.0, 22.0);
+    final fabIconSizeCompact = (15.0 * scale).clamp(12.0, 22.0);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -655,148 +658,154 @@ class _IosTabBar extends StatelessWidget {
                   ),
                 ],
               ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final totalWidth = constraints.maxWidth;
-                final slotWidth = totalWidth / 5;
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final totalWidth = constraints.maxWidth;
+                  final slotWidth = totalWidth / 5;
 
-                // Pill indicator — tỉ lệ 80% chiều cao container giúp hình elip cao ráo & hiện đại
-                final pillWidth = (slotWidth * 0.90).clamp(42.0, slotWidth);
-                final pillHeight = (constraints.maxHeight * 0.80).clamp(36.0, 54.0);
-                final pillRadius = pillHeight / 2;
+                  // Pill indicator — tỉ lệ 80% chiều cao container giúp hình elip cao ráo & hiện đại
+                  final pillWidth = (slotWidth * 0.90).clamp(42.0, slotWidth);
+                  final pillHeight =
+                      (constraints.maxHeight * 0.80).clamp(36.0, 54.0);
+                  final pillRadius = pillHeight / 2;
 
-                final indicatorLeft =
-                    (slotWidth * visualIndex) + (slotWidth - pillWidth) / 2;
-                final indicatorTop =
-                    (constraints.maxHeight - pillHeight) / 2;
+                  final indicatorLeft =
+                      (slotWidth * visualIndex) + (slotWidth - pillWidth) / 2;
+                  final indicatorTop = (constraints.maxHeight - pillHeight) / 2;
 
-                return Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    // ── 1. Nền Elip Trượt Qua Trượt Lại (Sliding Active Indicator) ──
-                    if (visualIndex != 2)
-                      AnimatedPositioned(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.fastOutSlowIn,
-                        left: indicatorLeft,
-                        top: indicatorTop,
-                        width: pillWidth,
-                        height: pillHeight,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 280),
-                          curve: Curves.easeInOutCubic,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary
-                                .withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(pillRadius),
+                  return Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      // ── 1. Nền Elip Trượt Qua Trượt Lại (Sliding Active Indicator) ──
+                      if (visualIndex != 2)
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.fastOutSlowIn,
+                          left: indicatorLeft,
+                          top: indicatorTop,
+                          width: pillWidth,
+                          height: pillHeight,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 280),
+                            curve: Curves.easeInOutCubic,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary
+                                  .withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(pillRadius),
+                            ),
                           ),
                         ),
-                      ),
 
-                    // ── 2. Hàng Tab Icons ──
-                    Row(
-                      children: [
-                        _TabItem(
-                          visualIdx: 0,
-                          currentVisualIdx: visualIndex,
-                          isCompact: isCompact,
-                          scale: scale,
-                          faIcon: FontAwesomeIcons.house,
-                          faActiveIcon: FontAwesomeIcons.house,
-                          icon: CupertinoIcons.house,
-                          activeIcon: CupertinoIcons.house_fill,
-                          label: '',
-                          onTap: onTap,
-                        ),
-                        _TabItem(
-                          visualIdx: 1,
-                          currentVisualIdx: visualIndex,
-                          isCompact: isCompact,
-                          scale: scale,
-                          icon: CupertinoIcons.bubble_left,
-                          activeIcon: CupertinoIcons.bubble_left_fill,
-                          label: 'Tin nhắn',
-                          badge: unreadMsgCount > 0 ? '$unreadMsgCount' : null,
-                          onTap: onTap,
-                        ),
-                        // ── Centre create button ──
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => onTap(2),
-                            behavior: HitTestBehavior.opaque,
-                            child: Center(
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 280),
-                                curve: Curves.easeInOutCubic,
-                                width:  isCompact ? fabSizeCompact  : fabSizeExpanded,
-                                height: isCompact ? fabSizeCompact  : fabSizeExpanded,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      theme.colorScheme.primary,
-                                      theme.colorScheme.secondary,
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(
-                                      isCompact
-                                          ? fabRadiusCompact
-                                          : fabRadiusExpanded),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: theme.colorScheme.primary
-                                          .withValues(alpha: 0.35),
-                                      blurRadius: isCompact ? 4 : 7,
-                                      offset: const Offset(0, 2),
+                      // ── 2. Hàng Tab Icons ──
+                      Row(
+                        children: [
+                          _TabItem(
+                            visualIdx: 0,
+                            currentVisualIdx: visualIndex,
+                            isCompact: isCompact,
+                            scale: scale,
+                            faIcon: FontAwesomeIcons.house,
+                            faActiveIcon: FontAwesomeIcons.house,
+                            icon: CupertinoIcons.house,
+                            activeIcon: CupertinoIcons.house_fill,
+                            label: '',
+                            onTap: onTap,
+                          ),
+                          _TabItem(
+                            visualIdx: 1,
+                            currentVisualIdx: visualIndex,
+                            isCompact: isCompact,
+                            scale: scale,
+                            icon: CupertinoIcons.bubble_left,
+                            activeIcon: CupertinoIcons.bubble_left_fill,
+                            label: 'Tin nhắn',
+                            badge:
+                                unreadMsgCount > 0 ? '$unreadMsgCount' : null,
+                            onTap: onTap,
+                          ),
+                          // ── Centre create button ──
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => onTap(2),
+                              behavior: HitTestBehavior.opaque,
+                              child: Center(
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 280),
+                                  curve: Curves.easeInOutCubic,
+                                  width: isCompact
+                                      ? fabSizeCompact
+                                      : fabSizeExpanded,
+                                  height: isCompact
+                                      ? fabSizeCompact
+                                      : fabSizeExpanded,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        theme.colorScheme.primary,
+                                        theme.colorScheme.secondary,
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                     ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  CupertinoIcons.plus,
-                                  color: Colors.white,
-                                  size: isCompact
-                                      ? fabIconSizeCompact
-                                      : fabIconSizeExpanded,
+                                    borderRadius: BorderRadius.circular(
+                                        isCompact
+                                            ? fabRadiusCompact
+                                            : fabRadiusExpanded),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: theme.colorScheme.primary
+                                            .withValues(alpha: 0.35),
+                                        blurRadius: isCompact ? 4 : 7,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    CupertinoIcons.plus,
+                                    color: Colors.white,
+                                    size: isCompact
+                                        ? fabIconSizeCompact
+                                        : fabIconSizeExpanded,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        _TabItem(
-                          visualIdx: 3,
-                          currentVisualIdx: visualIndex,
-                          isCompact: isCompact,
-                          scale: scale,
-                          icon: CupertinoIcons.bell,
-                          activeIcon: CupertinoIcons.bell_fill,
-                          label: 'Thông báo',
-                          badge:
-                              unreadNotifCount > 0 ? '$unreadNotifCount' : null,
-                          onTap: onTap,
-                        ),
-                        _TabItem(
-                          visualIdx: 4,
-                          currentVisualIdx: visualIndex,
-                          isCompact: isCompact,
-                          scale: scale,
-                          icon: CupertinoIcons.person,
-                          activeIcon: CupertinoIcons.person_fill,
-                          label: 'Cài đặt',
-                          onTap: onTap,
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
+                          _TabItem(
+                            visualIdx: 3,
+                            currentVisualIdx: visualIndex,
+                            isCompact: isCompact,
+                            scale: scale,
+                            icon: CupertinoIcons.bell,
+                            activeIcon: CupertinoIcons.bell_fill,
+                            label: 'Thông báo',
+                            badge: unreadNotifCount > 0
+                                ? '$unreadNotifCount'
+                                : null,
+                            onTap: onTap,
+                          ),
+                          _TabItem(
+                            visualIdx: 4,
+                            currentVisualIdx: visualIndex,
+                            isCompact: isCompact,
+                            scale: scale,
+                            icon: CupertinoIcons.person,
+                            activeIcon: CupertinoIcons.person_fill,
+                            label: 'Cài đặt',
+                            onTap: onTap,
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 class _TabItem extends StatelessWidget {
@@ -871,8 +880,8 @@ class _TabItem extends StatelessWidget {
                   right: isCompact ? -7 : -9,
                   top: isCompact ? -3 : -4,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 1),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                     decoration: BoxDecoration(
                       color: Colors.red,
                       borderRadius: BorderRadius.circular(8),

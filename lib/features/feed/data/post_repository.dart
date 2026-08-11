@@ -8,6 +8,7 @@ import '../../../core/services/supabase_service.dart';
 import '../domain/comment_model.dart';
 import '../domain/post_model.dart';
 import '../../../core/constants/supabase_constants.dart';
+import '../../location/domain/place_model.dart';
 
 import '../../../core/services/isar_service.dart';
 import '../../../core/services/sync_engine.dart';
@@ -229,6 +230,7 @@ class PostRepository {
     int? moderationScore,
     String? moderationStatus,
     bool isAiGenerated = false,
+    PlaceModel? location,
   }) async {
     final userId = currentUserId!;
     final finalPostId = postId ?? _uuid.v4();
@@ -248,6 +250,14 @@ class PostRepository {
       if (isAiGenerated) 'is_ai_generated': true,
       if (moderationScore != null) 'ai_moderation_score': moderationScore,
       if (moderationStatus != null) 'moderation_status': moderationStatus,
+      if (location != null) ...{
+        'location_place_id': location.providerPlaceId,
+        'location_name': location.name,
+        'location_address': location.address,
+        'location_latitude': location.latitude,
+        'location_longitude': location.longitude,
+        'location_provider': location.provider,
+      },
     };
 
     try {
@@ -670,6 +680,8 @@ class PostRepository {
     int? moderationScore,
     String? moderationStatus,
     bool? isAiGenerated,
+    PlaceModel? location,
+    bool clearLocation = false,
   }) async {
     final userId = currentUserId!;
     final updateData = <String, dynamic>{
@@ -678,6 +690,14 @@ class PostRepository {
       if (isAiGenerated != null) 'is_ai_generated': isAiGenerated,
       if (moderationScore != null) 'ai_moderation_score': moderationScore,
       if (moderationStatus != null) 'moderation_status': moderationStatus,
+      if (clearLocation || location != null) ...{
+        'location_place_id': clearLocation ? null : location!.providerPlaceId,
+        'location_name': clearLocation ? null : location!.name,
+        'location_address': clearLocation ? null : location!.address,
+        'location_latitude': clearLocation ? null : location!.latitude,
+        'location_longitude': clearLocation ? null : location!.longitude,
+        'location_provider': clearLocation ? null : location!.provider,
+      },
     };
     try {
       updateData['layout_type'] = layoutType;

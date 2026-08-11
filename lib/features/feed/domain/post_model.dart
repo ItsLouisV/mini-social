@@ -1,4 +1,5 @@
 import '../../profile/domain/profile_model.dart';
+import '../../location/domain/place_model.dart';
 
 class PostMedia {
   final String id;
@@ -82,6 +83,7 @@ class PostModel {
   final int? aiModerationScore;
   final String? moderationStatus;
   final bool isAiGenerated;
+  final PlaceModel? location;
 
   const PostModel({
     required this.id,
@@ -98,6 +100,7 @@ class PostModel {
     this.aiModerationScore,
     this.moderationStatus,
     this.isAiGenerated = false,
+    this.location,
   });
 
   factory PostModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
@@ -138,6 +141,7 @@ class PostModel {
           json['isAiGenerated'] == true ||
           json['is_ai_generated'].toString() == 'true' ||
           json['is_ai_generated'].toString() == '1',
+      location: PlaceModel.fromPostJson(json),
     );
   }
 
@@ -153,6 +157,12 @@ class PostModel {
         'ai_moderation_score': aiModerationScore,
         'moderation_status': moderationStatus,
         'is_ai_generated': isAiGenerated,
+        'location_place_id': location?.providerPlaceId,
+        'location_name': location?.name,
+        'location_address': location?.address,
+        'location_latitude': location?.latitude,
+        'location_longitude': location?.longitude,
+        'location_provider': location?.provider,
       };
 
   PostModel copyWith({
@@ -161,6 +171,7 @@ class PostModel {
     bool? isLiked,
     String? layoutType,
     bool? isAiGenerated,
+    PlaceModel? location,
   }) {
     return PostModel(
       id: id,
@@ -177,6 +188,7 @@ class PostModel {
       aiModerationScore: aiModerationScore,
       moderationStatus: moderationStatus,
       isAiGenerated: isAiGenerated ?? this.isAiGenerated,
+      location: location ?? this.location,
     );
   }
 }

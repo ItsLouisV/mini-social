@@ -76,6 +76,8 @@ dependencies:
   custom_pop_up_menu: ^1.2.4
   google_fonts: ^8.1.0
   simple_media_picker: ^1.0.1
+  geolocator: ^14.0.2
+  exif: ^3.3.0
 
 dev_dependencies:
   flutter_test:

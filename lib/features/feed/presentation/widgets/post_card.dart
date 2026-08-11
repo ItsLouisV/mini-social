@@ -232,6 +232,30 @@ class _PostCardState extends ConsumerState<PostCard> {
                           ),
                         ],
                       ),
+                      if (post.location != null) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Icon(
+                              CupertinoIcons.location_fill,
+                              size: 12,
+                              color: Theme.of(context).hintColor,
+                            ),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                post.location!.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.caption.copyWith(
+                                  color: Theme.of(context).hintColor,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
