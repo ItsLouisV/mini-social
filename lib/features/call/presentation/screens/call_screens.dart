@@ -57,8 +57,6 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
   late final AnimationController _connectCtrl;
   Timer? _timer;
 
-  static const _autoConnectSec = 10; // Giả lập kết nối sau 10s
-
   @override
   void initState() {
     super.initState();
@@ -105,77 +103,28 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (!mounted) return;
       setState(() => _elapsed++);
-      
+
       if (_elapsed >= 60) {
         _timer?.cancel();
         if (_currentCall != null) {
-          await ref.read(callRepositoryProvider).updateStatus(_currentCall!.id, CallStatus.missed);
+          try {
+            await ref.read(callRepositoryProvider).updateStatus(
+                  _currentCall!.id,
+                  CallStatus.missed,
+                  reason: 'ring_timeout',
+                );
+          } catch (_) {
+            // Another device may have accepted/cancelled at the timeout boundary.
+          }
         }
-        _sendLogAndPop(widget.isVideo ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ');
+        _sendLogAndPop(
+            widget.isVideo ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ');
       }
     });
   }
 
   CallModel? _currentCall;
-  String? _preFetchedToken;
-  Room? _preparedRoom;
   bool _cameraOff = false;
-
-  Future<void> _preWarmConnection(CallModel call) async {
-    try {
-      final repo = ref.read(callRepositoryProvider);
-      debugPrint('⚡⚡ [OutgoingCallScreen] Đang pre-warm LiveKit token & connection...');
-      final token = await repo.getLiveKitToken(call.roomName);
-      if (!mounted) return;
-      _preFetchedToken = token;
-      
-      final url = repo.getLiveKitUrl();
-      final room = Room(
-        roomOptions: const RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
-        ),
-      );
-      
-      if (widget.isVideo) {
-        if (!kIsWeb) {
-          await [Permission.camera, Permission.microphone].request();
-        }
-        if (!mounted) return;
-        
-        await room.connect(
-          url,
-          token,
-          connectOptions: ConnectOptions(
-            timeouts: Timeouts(
-              connection: const Duration(seconds: 20),
-              peerConnection: const Duration(seconds: 20),
-              publish: const Duration(seconds: 15),
-              subscribe: const Duration(seconds: 15),
-              debounce: const Duration(milliseconds: 100),
-              iceRestart: const Duration(seconds: 15),
-            ),
-          ),
-        );
-        
-        await room.localParticipant?.setCameraEnabled(!_cameraOff);
-        await room.localParticipant?.setMicrophoneEnabled(true);
-      } else {
-        await room.prepareConnection(url, token);
-      }
-      
-      if (!mounted) {
-        await room.disconnect();
-        return;
-      }
-      setState(() {
-        _preparedRoom = room;
-      });
-      debugPrint('⚡⚡ [OutgoingCallScreen] Pre-warm/Connect LiveKit connection THÀNH CÔNG!');
-    } catch (e) {
-      debugPrint('⚠️ [OutgoingCallScreen] Pre-warm/Connect LiveKit connection thất bại: $e');
-    }
-  }
 
   Future<void> _initCall() async {
     try {
@@ -187,11 +136,11 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
       );
       if (mounted) {
         setState(() => _currentCall = call);
-        _preWarmConnection(call);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không thể gọi: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Không thể gọi: $e')));
         context.pop();
       }
     }
@@ -216,8 +165,6 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
         'otherName': widget.calleeName,
         'avatarUrl': widget.calleeAvatarUrl,
         'isVideo': widget.isVideo,
-        'prePreparedRoom': _preparedRoom,
-        'preFetchedToken': _preFetchedToken,
         'initialCameraOff': _cameraOff,
       });
     }
@@ -229,11 +176,6 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
     _connectCtrl.dispose();
     _timer?.cancel();
     CallAudioService().stop(); // đảm bảo dừng âm thanh khi out
-    
-    // Ngắt kết nối pre-warmed Room nếu chưa dùng
-    if (_preparedRoom != null && _connecting == false) {
-      _preparedRoom?.disconnect();
-    }
     super.dispose();
   }
 
@@ -250,8 +192,9 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
     _logSent = true;
     CallAudioService().stop();
     if (_currentCall != null) {
-      ref.read(chatRepositoryProvider)
-         .sendMessage(widget.conversationId, content, messageType: 'call_log');
+      ref
+          .read(chatRepositoryProvider)
+          .sendMessage(widget.conversationId, content, messageType: 'call_log');
     }
     if (mounted) context.pop();
   }
@@ -259,260 +202,274 @@ class _OutgoingCallScreenState extends ConsumerState<OutgoingCallScreen>
   @override
   Widget build(BuildContext context) {
     if (_currentCall != null) {
-      ref.listen<AsyncValue<CallModel>>(callStateProvider(_currentCall!.id), (prev, next) {
+      ref.listen<AsyncValue<CallModel>>(callStateProvider(_currentCall!.id),
+          (prev, next) {
         if (next.hasValue) {
           final call = next.value!;
           if (call.status == CallStatus.accepted && !_connecting) {
             _onConnected(call);
           } else if (call.status == CallStatus.declined) {
-            _sendLogAndPop(widget.isVideo ? 'Cuộc gọi video bị từ chối' : 'Cuộc gọi thoại bị từ chối');
+            _sendLogAndPop(widget.isVideo
+                ? 'Cuộc gọi video bị từ chối'
+                : 'Cuộc gọi thoại bị từ chối');
           } else if (call.status == CallStatus.missed) {
-            _sendLogAndPop(widget.isVideo ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ');
+            _sendLogAndPop(
+                widget.isVideo ? 'Cuộc gọi video nhỡ' : 'Cuộc gọi thoại nhỡ');
           } else if (call.status == CallStatus.ended) {
-            _sendLogAndPop(widget.isVideo ? 'Cuộc gọi video đã kết thúc' : 'Cuộc gọi thoại đã kết thúc');
+            _sendLogAndPop(widget.isVideo
+                ? 'Cuộc gọi video đã kết thúc'
+                : 'Cuộc gọi thoại đã kết thúc');
+          } else if (call.status == CallStatus.cancelled) {
+            _sendLogAndPop(widget.isVideo
+                ? 'Cuộc gọi video đã hủy'
+                : 'Cuộc gọi thoại đã hủy');
           }
         }
       });
     }
 
-    final localParticipant = _preparedRoom?.localParticipant;
-    final trackPub = localParticipant?.videoTrackPublications.firstOrNull;
-    final hasVideo = widget.isVideo && !_cameraOff && trackPub != null && trackPub.track != null && !trackPub.muted;
-
     const avatarRadius = 56.0;
 
     // Đường dẫn ảnh nền tuỳ chỉnh (sau này bạn thêm file thì đổi giá trị null thành 'assets/images/tên_file.jpg')
-    const String? customBackgroundPath = 'assets/images/outgoing.jpg';
+    const customBackgroundPath = 'assets/images/outgoing.jpg';
 
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
           // 1. Background (Ảnh tuỳ chỉnh, ảnh avatar làm mờ, hoặc preview camera của người gọi)
-          if (hasVideo) ...[
-            VideoTrackRenderer(trackPub.track as VideoTrack),
-            Container(
-              color: Colors.black.withValues(alpha: 0.35),
-            ),
-          ] else if (customBackgroundPath != null)
-            Image.asset(customBackgroundPath, fit: BoxFit.cover)
-          else if (widget.calleeAvatarUrl != null)
-            Image.network(widget.calleeAvatarUrl!, fit: BoxFit.cover)
-          else
-            Container(color: const Color(0xFF1A2940)),
-            
-          // 2. Lớp phủ
-          if (!hasVideo && customBackgroundPath == null)
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.6),
-              ),
-            ),
-          
+          Image.asset(customBackgroundPath, fit: BoxFit.cover),
+
           // 3. Nội dung chính
           SafeArea(
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Header
-                  Padding(
-                    padding: const EdgeInsets.only(top: 24),
-                    child: Column(
-                      children: [
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          child: _connecting
-                              ? Row(
-                                  key: const ValueKey('connecting'),
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 1.5,
-                                        color: AppColors.success,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Đang kết nối...',
-                                      key: const ValueKey('connecting_text'),
-                                      style: const TextStyle(
-                                        color: AppColors.success,
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Text(
-                                  widget.isVideo ? 'Gọi video...' : 'Đang gọi...',
-                                  key: const ValueKey('ringing'),
-                                  style: const TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 15,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                        ),
-                        const SizedBox(height: 4),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          child: _connecting
-                              ? const SizedBox.shrink(key: ValueKey('no_timer'))
-                              : Text(
-                                  _elapsedStr,
-                                  key: const ValueKey('timer'),
-                                  style: const TextStyle(
-                                    color: Colors.white30,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Avatar + tên
-                  Column(
-                    children: [
-                      Stack(
-                        alignment: Alignment.center,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.only(top: 24),
+                      child: Column(
                         children: [
-                          // Ripple rings
-                          AnimatedBuilder(
-                            animation: _pulseCtrl,
-                            builder: (_, __) => Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                _Ring(scale: _pulse3.value, opacity: (1 - _pulse3.value / 2.2).clamp(0, 0.12)),
-                                _Ring(scale: _pulse2.value, opacity: (1 - _pulse2.value / 1.9).clamp(0, 0.18)),
-                                _Ring(scale: _pulse1.value, opacity: (1 - _pulse1.value / 1.6).clamp(0, 0.25)),
-                              ],
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            child: _connecting
+                                ? const Row(
+                                    key: ValueKey('connecting'),
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 1.5,
+                                          color: AppColors.success,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Đang kết nối...',
+                                        key: ValueKey('connecting_text'),
+                                        style: TextStyle(
+                                          color: AppColors.success,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Text(
+                                    widget.isVideo
+                                        ? 'Gọi video...'
+                                        : 'Đang gọi...',
+                                    key: const ValueKey('ringing'),
+                                    style: const TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 15,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 4),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _connecting
+                                ? const SizedBox.shrink(
+                                    key: ValueKey('no_timer'))
+                                : Text(
+                                    _elapsedStr,
+                                    key: const ValueKey('timer'),
+                                    style: const TextStyle(
+                                      color: Colors.white30,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Avatar + tên
+                    Column(
+                      children: [
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Ripple rings
+                            AnimatedBuilder(
+                              animation: _pulseCtrl,
+                              builder: (_, __) => Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  _Ring(
+                                      scale: _pulse3.value,
+                                      opacity: (1 - _pulse3.value / 2.2)
+                                          .clamp(0, 0.12)),
+                                  _Ring(
+                                      scale: _pulse2.value,
+                                      opacity: (1 - _pulse2.value / 1.9)
+                                          .clamp(0, 0.18)),
+                                  _Ring(
+                                      scale: _pulse1.value,
+                                      opacity: (1 - _pulse1.value / 1.6)
+                                          .clamp(0, 0.25)),
+                                ],
+                              ),
                             ),
-                          ),
-                          // Glowing ring xung quanh avatar
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 400),
-                        width: avatarRadius * 2 + 20,
-                        height: avatarRadius * 2 + 20,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _connecting
-                                ? AppColors.success.withValues(alpha: 0.8)
-                                : AppColors.primary.withValues(alpha: 0.5),
-                            width: _connecting ? 3 : 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (_connecting ? AppColors.success : AppColors.primary)
-                                  .withValues(alpha: 0.4),
-                              blurRadius: _connecting ? 50 : 30,
-                              spreadRadius: _connecting ? 12 : 5,
+                            // Glowing ring xung quanh avatar
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 400),
+                              width: avatarRadius * 2 + 20,
+                              height: avatarRadius * 2 + 20,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: _connecting
+                                      ? AppColors.success.withValues(alpha: 0.8)
+                                      : AppColors.primary
+                                          .withValues(alpha: 0.5),
+                                  width: _connecting ? 3 : 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (_connecting
+                                            ? AppColors.success
+                                            : AppColors.primary)
+                                        .withValues(alpha: 0.4),
+                                    blurRadius: _connecting ? 50 : 30,
+                                    spreadRadius: _connecting ? 12 : 5,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: AppAvatar(
+                                  imageUrl: widget.calleeAvatarUrl,
+                                  name: widget.calleeName,
+                                  radius: avatarRadius,
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                        child: Center(
-                          child: AppAvatar(
-                            imageUrl: widget.calleeAvatarUrl,
-                            name: widget.calleeName,
-                            radius: avatarRadius,
+                        const SizedBox(height: 20),
+                        Text(
+                          widget.calleeName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.5,
                           ),
                         ),
-                      ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        widget.calleeName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.5,
+                        const SizedBox(height: 6),
+                        Text(
+                          widget.isVideo ? 'Video call' : 'Cuộc gọi thoại',
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 14,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        widget.isVideo ? 'Video call' : 'Cuộc gọi thoại',
-                        style: const TextStyle(
-                          color: Colors.white38,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Nút huỷ & Tắt/Bật cam (mờ dần khi kết nối)
-                  AnimatedOpacity(
-                    opacity: _connecting ? 0.0 : 1.0,
-                    duration: const Duration(milliseconds: 300),
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 48, left: 24, right: 24),
-                      child: widget.isVideo
-                          ? Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                // Nút Tắt/Bật cam
-                                _CallActionButton(
-                                  icon: _cameraOff
-                                      ? CupertinoIcons.video_camera_solid
-                                      : CupertinoIcons.video_camera,
-                                  label: _cameraOff ? 'Bật cam' : 'Tắt cam',
-                                  color: _cameraOff
-                                      ? Colors.white.withValues(alpha: 0.3)
-                                      : Colors.white.withValues(alpha: 0.15),
-                                  onTap: () async {
-                                    final targetState = !_cameraOff;
-                                    await _preparedRoom?.localParticipant?.setCameraEnabled(!targetState);
-                                    setState(() {
-                                      _cameraOff = targetState;
-                                    });
-                                  },
-                                ),
-                                // Nút Huỷ
-                                _CallActionButton(
-                                  icon: CupertinoIcons.phone_down_fill,
-                                  label: 'Huỷ',
-                                  color: AppColors.error,
-                                  onTap: _connecting
-                                      ? null
-                                      : () async {
-                                          if (_currentCall != null) {
-                                            await ref.read(callRepositoryProvider).updateStatus(_currentCall!.id, CallStatus.cancelled);
-                                          }
-                                          widget.onCancel?.call();
-                                          _sendLogAndPop('Cuộc gọi video đã hủy');
-                                        },
-                                ),
-                              ],
-                            )
-                          : _CallActionButton(
-                              icon: CupertinoIcons.phone_down_fill,
-                              label: 'Huỷ',
-                              color: AppColors.error,
-                              onTap: _connecting
-                                  ? null
-                                  : () async {
-                                      if (_currentCall != null) {
-                                        await ref.read(callRepositoryProvider).updateStatus(_currentCall!.id, CallStatus.cancelled);
-                                      }
-                                      widget.onCancel?.call();
-                                      _sendLogAndPop('Cuộc gọi thoại đã hủy');
-                                    },
-                            ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+
+                    // Nút huỷ & Tắt/Bật cam (mờ dần khi kết nối)
+                    AnimatedOpacity(
+                      opacity: _connecting ? 0.0 : 1.0,
+                      duration: const Duration(milliseconds: 300),
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                            bottom: 48, left: 24, right: 24),
+                        child: widget.isVideo
+                            ? Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  // Nút Tắt/Bật cam
+                                  _CallActionButton(
+                                    icon: _cameraOff
+                                        ? CupertinoIcons.video_camera_solid
+                                        : CupertinoIcons.video_camera,
+                                    label: _cameraOff ? 'Bật cam' : 'Tắt cam',
+                                    color: _cameraOff
+                                        ? Colors.white.withValues(alpha: 0.3)
+                                        : Colors.white.withValues(alpha: 0.15),
+                                    onTap: () async {
+                                      final targetState = !_cameraOff;
+                                      setState(() {
+                                        _cameraOff = targetState;
+                                      });
+                                    },
+                                  ),
+                                  // Nút Huỷ
+                                  _CallActionButton(
+                                    icon: CupertinoIcons.phone_down_fill,
+                                    label: 'Huỷ',
+                                    color: AppColors.error,
+                                    onTap: _connecting
+                                        ? null
+                                        : () async {
+                                            if (_currentCall != null) {
+                                              await ref
+                                                  .read(callRepositoryProvider)
+                                                  .updateStatus(
+                                                      _currentCall!.id,
+                                                      CallStatus.cancelled,
+                                                      reason:
+                                                          'caller_cancelled');
+                                            }
+                                            widget.onCancel?.call();
+                                            _sendLogAndPop(
+                                                'Cuộc gọi video đã hủy');
+                                          },
+                                  ),
+                                ],
+                              )
+                            : _CallActionButton(
+                                icon: CupertinoIcons.phone_down_fill,
+                                label: 'Huỷ',
+                                color: AppColors.error,
+                                onTap: _connecting
+                                    ? null
+                                    : () async {
+                                        if (_currentCall != null) {
+                                          await ref
+                                              .read(callRepositoryProvider)
+                                              .updateStatus(_currentCall!.id,
+                                                  CallStatus.cancelled,
+                                                  reason: 'caller_cancelled');
+                                        }
+                                        widget.onCancel?.call();
+                                        _sendLogAndPop('Cuộc gọi thoại đã hủy');
+                                      },
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ), // SafeArea close
         ],
       ),
@@ -546,8 +503,9 @@ class IncomingCallScreen extends ConsumerStatefulWidget {
 }
 
 // THÊM ĐOẠN NÀY ĐỂ CHECK CUỘC GỌI QUÁ HẠN
-bool _isCallExpired(DateTime startedAt) {
-  return DateTime.now().difference(startedAt).inSeconds > 59; // Quá 59s coi như cuộc gọi cũ
+bool _isCallExpired(CallModel call) {
+  return call.expiresAt?.isBefore(DateTime.now()) ??
+      DateTime.now().difference(call.startedAt).inSeconds > 60;
 }
 
 class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
@@ -556,23 +514,11 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
   late final AnimationController _pulseCtrl;
   late final Animation<double> _shake;
 
-  String? _preFetchedToken;
-  Room? _preparedRoom;
   bool _accepted = false;
 
   @override
   void initState() {
     super.initState();
-
-    // Nếu cuộc gọi truyền vào đã không còn 'ringing' hoặc đã quá hạn, đóng màn hình luôn
-    if (widget.callModel != null) {
-      if (widget.callModel!.status != CallStatus.ringing || _isCallExpired(widget.callModel!.startedAt)) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) context.pop();
-        });
-        return; // Không chạy tiếp logic bên dưới nữa
-      }
-    }
 
     _shakeCtrl = AnimationController(
       vsync: this,
@@ -585,11 +531,23 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
       TweenSequenceItem(tween: Tween(begin: -6.0, end: 6.0), weight: 2),
       TweenSequenceItem(tween: Tween(begin: 6.0, end: 0.0), weight: 1),
     ]).animate(_shakeCtrl);
-
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
-    )..repeat();
+    );
+
+    // Nếu cuộc gọi truyền vào đã không còn 'ringing' hoặc đã quá hạn, đóng màn hình luôn
+    if (widget.callModel != null) {
+      if (widget.callModel!.status != CallStatus.ringing ||
+          _isCallExpired(widget.callModel!)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.pop();
+        });
+        return; // Không chạy tiếp logic bên dưới nữa
+      }
+    }
+
+    _pulseCtrl.repeat();
 
     // Rung nhẹ icon điện thoại
     Future.doWhile(() async {
@@ -602,37 +560,6 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
 
     // Phát cộng chuông gọi đến khi mọi điều kiện kiểm tra bên trên đều hợp lệ
     CallAudioService().playRingtone();
-
-    if (widget.callModel != null) {
-      _preWarmConnection(widget.callModel!);
-    }
-  }
-
-  Future<void> _preWarmConnection(CallModel call) async {
-    try {
-      final repo = ref.read(callRepositoryProvider);
-      debugPrint('⚡⚡ [IncomingCallScreen] Đang pre-warm LiveKit token & connection...');
-      final token = await repo.getLiveKitToken(call.roomName);
-      if (!mounted) return;
-      _preFetchedToken = token;
-      
-      final url = repo.getLiveKitUrl();
-      final room = Room(
-        roomOptions: const RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
-        ),
-      );
-      await room.prepareConnection(url, token);
-      if (!mounted) {
-        await room.disconnect();
-        return;
-      }
-      _preparedRoom = room;
-      debugPrint('⚡⚡ [IncomingCallScreen] Pre-warm LiveKit connection THÀNH CÔNG!');
-    } catch (e) {
-      debugPrint('⚠️ [IncomingCallScreen] Pre-warm LiveKit connection thất bại: $e');
-    }
   }
 
   @override
@@ -640,21 +567,18 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
     _shakeCtrl.dispose();
     _pulseCtrl.dispose();
     CallAudioService().stop(); // dừng cộng chuông
-    
-    // Ngắt kết nối pre-warmed Room nếu chưa được chấp nhận
-    if (_preparedRoom != null && !_accepted) {
-      _preparedRoom?.disconnect();
-    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.callModel != null) {
-      ref.listen<AsyncValue<CallModel>>(callStateProvider(widget.callModel!.id), (prev, next) {
+      ref.listen<AsyncValue<CallModel>>(callStateProvider(widget.callModel!.id),
+          (prev, next) {
         if (next.hasValue) {
           final call = next.value!;
-          if (call.status == CallStatus.cancelled || call.status == CallStatus.missed || call.status != CallStatus.ringing) {
+          final answeredHere = call.status == CallStatus.accepted && _accepted;
+          if (!answeredHere && call.status != CallStatus.ringing) {
             CallAudioService().stop();
             if (mounted) context.pop();
           }
@@ -662,187 +586,198 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
       });
 
       // Kiểm tra thêm một lần nữa ở hàm build cho chắc chắn
-      if (widget.callModel!.status != CallStatus.ringing || _isCallExpired(widget.callModel!.startedAt)) {
-         CallAudioService().stop();
-         return const Scaffold(body: SizedBox.shrink()); // Trả về giao diện trống trước khi bị pop
+      if (widget.callModel!.status != CallStatus.ringing ||
+          _isCallExpired(widget.callModel!)) {
+        CallAudioService().stop();
+        return const Scaffold(
+            body: SizedBox.shrink()); // Trả về giao diện trống trước khi bị pop
       }
     }
 
     // Đường dẫn ảnh nền tuỳ chỉnh (sau này bạn thêm file thì đổi giá trị null thành 'assets/images/tên_file.jpg')
-    const String? customBackgroundPath = 'assets/images/incoming.jpg';
+    const customBackgroundPath = 'assets/images/incoming.jpg';
 
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
           // 1. Background (Ảnh tuỳ chỉnh hoặc ảnh avatar làm mờ)
-          if (customBackgroundPath != null)
-            Image.asset(customBackgroundPath, fit: BoxFit.cover)
-          else if (widget.callerAvatarUrl != null)
-            Image.network(widget.callerAvatarUrl!, fit: BoxFit.cover)
-          else
-            Container(color: const Color(0xFF1A2940)),
-            
-          // 2. Lớp phủ
-          if (customBackgroundPath == null)
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.6),
-              ),
-            ),
-          
+          Image.asset(customBackgroundPath, fit: BoxFit.cover),
+
           // 3. Nội dung chính
           SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 60),
+            child: Column(
+              children: [
+                const SizedBox(height: 60),
 
-              // Incoming label
-              AnimatedBuilder(
-                animation: _shake,
-                builder: (_, child) => Transform.translate(
-                  offset: Offset(_shake.value, 0),
-                  child: child,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      widget.isVideo
-                          ? CupertinoIcons.videocam_fill
-                          : CupertinoIcons.phone_fill,
-                      color: AppColors.success,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      widget.isVideo
-                          ? 'Cuộc gọi video đến'
-                          : 'Cuộc gọi thoại đến',
-                      style: const TextStyle(
-                        color: Colors.white60,
-                        fontSize: 15,
-                        letterSpacing: 0.2,
+                // Incoming label
+                AnimatedBuilder(
+                  animation: _shake,
+                  builder: (_, child) => Transform.translate(
+                    offset: Offset(_shake.value, 0),
+                    child: child,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        widget.isVideo
+                            ? CupertinoIcons.videocam_fill
+                            : CupertinoIcons.phone_fill,
+                        color: AppColors.success,
+                        size: 18,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 48),
-
-              // Avatar
-              AnimatedBuilder(
-                animation: _pulseCtrl,
-                builder: (_, child) => Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.success.withValues(
-                          alpha: (0.4 * (1 - _pulseCtrl.value)).clamp(0.05, 0.4),
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.isVideo
+                            ? 'Cuộc gọi video đến'
+                            : 'Cuộc gọi thoại đến',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 15,
+                          letterSpacing: 0.2,
                         ),
-                        blurRadius: 30 + 20 * _pulseCtrl.value,
-                        spreadRadius: 5 + 10 * _pulseCtrl.value,
                       ),
                     ],
                   ),
-                  child: child,
                 ),
-                child: AppAvatar(
-                  imageUrl: widget.callerAvatarUrl,
-                  name: widget.callerName,
-                  radius: 64,
-                ),
-              ),
 
-              const SizedBox(height: 28),
+                const SizedBox(height: 48),
 
-              Text(
-                widget.callerName,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                widget.isVideo ? 'Muốn video call với bạn' : 'Đang gọi điện cho bạn',
-                style: const TextStyle(
-                  color: Colors.white38,
-                  fontSize: 14,
-                ),
-              ),
-
-              const Spacer(),
-
-              // Nút decline & accept
-              Padding(
-                padding: const EdgeInsets.fromLTRB(48, 0, 48, 56),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Từ chối
-                    Column(
-                      children: [
-                        _CallActionButton(
-                          icon: CupertinoIcons.phone_down_fill,
-                          label: 'Từ chối',
-                          color: AppColors.error,
-                          size: 64,
-                          onTap: () async {
-                            CallAudioService().stop();
-                            if (widget.callModel != null) {
-                              await ref.read(callRepositoryProvider).updateStatus(widget.callModel!.id, CallStatus.declined);
-                            }
-                            widget.onDecline?.call();
-                            if (mounted) context.pop();
-                          },
+                // Avatar
+                AnimatedBuilder(
+                  animation: _pulseCtrl,
+                  builder: (_, child) => Container(
+                    width: 140,
+                    height: 140,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.success.withValues(
+                            alpha:
+                                (0.4 * (1 - _pulseCtrl.value)).clamp(0.05, 0.4),
+                          ),
+                          blurRadius: 30 + 20 * _pulseCtrl.value,
+                          spreadRadius: 5 + 10 * _pulseCtrl.value,
                         ),
                       ],
                     ),
-
-                    // Nhấc máy
-                    Column(
-                      children: [
-                        _CallActionButton(
-                          icon: widget.isVideo
-                              ? CupertinoIcons.videocam_fill
-                              : CupertinoIcons.phone_fill,
-                          label: 'Nhấc máy',
-                          color: AppColors.success,
-                          size: 64,
-                          onTap: () async {
-                            _accepted = true;
-                            CallAudioService().stop();
-                            if (widget.callModel != null) {
-                              await ref.read(callRepositoryProvider).updateStatus(widget.callModel!.id, CallStatus.accepted);
-                            }
-                            widget.onAccept?.call();
-                            if (mounted) {
-                              context.pushReplacement('/call/active', extra: {
-                                'callModel': widget.callModel,
-                                'otherName': widget.callerName,
-                                'avatarUrl': widget.callerAvatarUrl,
-                                'isVideo': widget.isVideo,
-                                'prePreparedRoom': _preparedRoom,
-                                'preFetchedToken': _preFetchedToken,
-                              });
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
+                    child: child,
+                  ),
+                  child: AppAvatar(
+                    imageUrl: widget.callerAvatarUrl,
+                    name: widget.callerName,
+                    radius: 64,
+                  ),
                 ),
-              ),
-            ],
-          ),
+
+                const SizedBox(height: 28),
+
+                Text(
+                  widget.callerName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.isVideo
+                      ? 'Muốn video call với bạn'
+                      : 'Đang gọi điện cho bạn',
+                  style: const TextStyle(
+                    color: Colors.white38,
+                    fontSize: 14,
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Nút decline & accept
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(48, 0, 48, 56),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Từ chối
+                      Column(
+                        children: [
+                          _CallActionButton(
+                            icon: CupertinoIcons.phone_down_fill,
+                            label: 'Từ chối',
+                            color: AppColors.error,
+                            size: 64,
+                            onTap: () async {
+                              CallAudioService().stop();
+                              if (widget.callModel != null) {
+                                await ref
+                                    .read(callRepositoryProvider)
+                                    .updateStatus(widget.callModel!.id,
+                                        CallStatus.declined,
+                                        reason: 'callee_declined');
+                              }
+                              widget.onDecline?.call();
+                              if (context.mounted) context.pop();
+                            },
+                          ),
+                        ],
+                      ),
+
+                      // Nhấc máy
+                      Column(
+                        children: [
+                          _CallActionButton(
+                            icon: widget.isVideo
+                                ? CupertinoIcons.videocam_fill
+                                : CupertinoIcons.phone_fill,
+                            label: 'Nhấc máy',
+                            color: AppColors.success,
+                            size: 64,
+                            onTap: () async {
+                              CallAudioService().stop();
+                              if (widget.callModel != null) {
+                                final repo = ref.read(callRepositoryProvider);
+                                final deviceId = await repo.getDeviceId();
+                                _accepted = true;
+                                try {
+                                  await repo.updateStatus(
+                                    widget.callModel!.id,
+                                    CallStatus.accepted,
+                                    deviceId: deviceId,
+                                  );
+                                } catch (e) {
+                                  _accepted = false;
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text(
+                                              'Cuộc gọi không còn khả dụng')),
+                                    );
+                                  }
+                                  return;
+                                }
+                              }
+                              widget.onAccept?.call();
+                              if (context.mounted) {
+                                context.pushReplacement('/call/active', extra: {
+                                  'callModel': widget.callModel,
+                                  'otherName': widget.callerName,
+                                  'avatarUrl': widget.callerAvatarUrl,
+                                  'isVideo': widget.isVideo,
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ), // SafeArea close
         ],
       ),
@@ -882,6 +817,7 @@ class ActiveCallScreen extends ConsumerStatefulWidget {
 class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
   Room? _room;
   LocalParticipant? _localParticipant;
+  String? _serverUrl;
 
   bool _muted = false;
   bool _speakerOn = false;
@@ -890,27 +826,39 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
 
   int _seconds = 0;
   Timer? _timer;
+  bool _mediaConnected = false;
 
   bool _logSent = false;
 
   void _sendLog(CallModel call) {
     if (_logSent) return;
-    final currentUser = ref.read(supabaseServiceProvider).client.auth.currentUser;
+    final currentUser =
+        ref.read(supabaseServiceProvider).client.auth.currentUser;
     if (currentUser != null && call.callerId == currentUser.id) {
       _logSent = true;
       final typeStr = widget.isVideo ? 'video' : 'thoại';
-      ref.read(chatRepositoryProvider)
-         .sendMessage(call.conversationId, 'Cuộc gọi $typeStr - $_durationStr', messageType: 'call_log');
+      ref.read(chatRepositoryProvider).sendMessage(
+          call.conversationId, 'Cuộc gọi $typeStr - $_durationStr',
+          messageType: 'call_log');
     }
   }
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _connectToRoom();
+  }
+
+  void _startDurationWhenReady() {
+    if (_mediaConnected || (_room?.remoteParticipants.isEmpty ?? true)) return;
+    _mediaConnected = true;
+    final callId = widget.callModel?.id;
+    if (callId != null) {
+      unawaited(ref.read(callRepositoryProvider).markConnected(callId));
+    }
+    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _seconds++);
     });
-    _connectToRoom();
   }
 
   Future<void> _connectToRoom() async {
@@ -918,15 +866,20 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
 
     try {
       debugPrint('==== BẮT ĐẦU KẾT NỐI LIVEKIT ====');
-      
+
       String token;
       if (widget.preFetchedToken != null) {
         token = widget.preFetchedToken!;
         debugPrint('👉 Sử dụng pre-fetched token thành công!');
       } else {
         debugPrint('1. Đang lấy token cho room: ${widget.callModel!.roomName}');
-        token = await ref.read(callRepositoryProvider).getLiveKitToken(widget.callModel!.roomName);
-        debugPrint('👉 Đã lấy token thành công! Token (50 ký tự đầu): ${token.length > 50 ? token.substring(0, 50) : token}...');
+        final credentials = await ref
+            .read(callRepositoryProvider)
+            .getLiveKitCredentials(widget.callModel!.id);
+        token = credentials.participantToken;
+        _serverUrl = credentials.serverUrl;
+        debugPrint(
+            '👉 Đã lấy token thành công! Token (50 ký tự đầu): ${token.length > 50 ? token.substring(0, 50) : token}...');
       }
 
       debugPrint('2. Đang tạo Room và xin quyền...');
@@ -947,41 +900,52 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
           ),
         );
       }
-      
+
       // Request permissions
       if (!kIsWeb) {
-        await [Permission.camera, Permission.microphone].request();
+        final requested = widget.isVideo
+            ? await [Permission.camera, Permission.microphone].request()
+            : await [Permission.microphone].request();
+        if (requested[Permission.microphone]?.isGranted != true) {
+          throw StateError('Microphone permission denied');
+        }
+        if (widget.isVideo && requested[Permission.camera]?.isGranted != true) {
+          throw StateError('Camera permission denied');
+        }
       }
 
-      final url = ref.read(callRepositoryProvider).getLiveKitUrl();
-      
+      final url =
+          _serverUrl ?? ref.read(callRepositoryProvider).getLiveKitUrl();
+
       if (!isPreConnected) {
         debugPrint('3. Đang gọi room.connect tới URL: $url');
         await room.connect(
           url,
           token,
-          connectOptions: ConnectOptions(
+          connectOptions: const ConnectOptions(
             timeouts: Timeouts(
-              connection: const Duration(seconds: 20),
-              peerConnection: const Duration(seconds: 20),
-              publish: const Duration(seconds: 15),
-              subscribe: const Duration(seconds: 15),
-              debounce: const Duration(milliseconds: 100),
-              iceRestart: const Duration(seconds: 15),
+              connection: Duration(seconds: 20),
+              peerConnection: Duration(seconds: 20),
+              publish: Duration(seconds: 15),
+              subscribe: Duration(seconds: 15),
+              debounce: Duration(milliseconds: 100),
+              iceRestart: Duration(seconds: 15),
             ),
           ),
         );
-        
+
         debugPrint('👉 Đã kết nối WebRTC thành công!');
 
         debugPrint('4. Đang bật microphone/camera...');
         // 3. Enable tracks
         await room.localParticipant?.setMicrophoneEnabled(true);
         if (widget.isVideo) {
-          await room.localParticipant?.setCameraEnabled(!widget.initialCameraOff);
+          await room.localParticipant
+              ?.setCameraEnabled(!widget.initialCameraOff);
         }
       } else {
-        debugPrint('👉 Room đã kết nối từ trước, bỏ qua bước connect và bật mic/camera!');
+        debugPrint(
+            '👉 Room đã kết nối từ trước, bỏ qua bước connect và bật mic/camera!');
       }
 
       if (mounted) {
@@ -994,20 +958,23 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
 
         // Listen for participants
         _room?.addListener(_onRoomEvent);
+        _startDurationWhenReady();
         debugPrint('==== HOÀN TẤT SETUP KHÔNG CÓ LỖI ====');
       }
     } catch (e, stackTrace) {
       debugPrint('❌❌ LiveKit connection error: $e');
       debugPrint('Stack trace: $stackTrace');
-      
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi kết nối phòng gọi: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Lỗi kết nối phòng gọi: $e')));
         _endCall();
       }
     }
   }
 
   void _onRoomEvent() {
+    _startDurationWhenReady();
     if (mounted) setState(() {});
   }
 
@@ -1023,15 +990,17 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
 
   Future<void> _endCall() async {
     await _disconnectRoom();
-    
+
     if (widget.callModel != null) {
       final call = widget.callModel!;
       _sendLog(call);
       try {
-        await ref.read(callRepositoryProvider).updateStatus(call.id, CallStatus.ended);
+        await ref
+            .read(callRepositoryProvider)
+            .updateStatus(call.id, CallStatus.ended, reason: 'hangup');
       } catch (_) {}
     }
-    
+
     widget.onEnd?.call();
     if (mounted) context.pop();
   }
@@ -1056,10 +1025,12 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.callModel != null) {
-      ref.listen<AsyncValue<CallModel>>(callStateProvider(widget.callModel!.id), (prev, next) {
+      ref.listen<AsyncValue<CallModel>>(callStateProvider(widget.callModel!.id),
+          (prev, next) {
         if (next.hasValue) {
           final call = next.value!;
-          if (call.status == CallStatus.ended || call.status == CallStatus.declined) {
+          if (call.status == CallStatus.ended ||
+              call.status == CallStatus.declined) {
             _sendLog(call);
             _disconnectRoom();
             if (mounted) context.pop();
@@ -1068,40 +1039,46 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
       });
     }
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: () => setState(() => _controlsVisible = !_controlsVisible),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Background — khi là voice call hiện avatar lớn blur
-            if (!widget.isVideo) _buildVoiceBackground(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_endCall());
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: GestureDetector(
+          onTap: () => setState(() => _controlsVisible = !_controlsVisible),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background — khi là voice call hiện avatar lớn blur
+              if (!widget.isVideo) _buildVoiceBackground(),
 
-            // Remote video
-            if (widget.isVideo && _room != null) _buildRemoteVideo(),
+              // Remote video
+              if (widget.isVideo && _room != null) _buildRemoteVideo(),
 
-            // Header — thời gian
-            _buildHeader(),
+              // Header — thời gian
+              _buildHeader(),
 
-            // Local video thumbnail (góc trên phải — chỉ video call)
-            if (widget.isVideo)
-              Positioned(
-                top: MediaQuery.of(context).padding.top + 20,
-                right: 26,
-                child: _buildLocalVideoThumbnail(),
+              // Local video thumbnail (góc trên phải — chỉ video call)
+              if (widget.isVideo)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 20,
+                  right: 26,
+                  child: _buildLocalVideoThumbnail(),
+                ),
+
+              // Control bar ở dưới
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                bottom: _controlsVisible ? 0 : -180,
+                left: 0,
+                right: 0,
+                child: _buildControlBar(),
               ),
-
-            // Control bar ở dưới
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              bottom: _controlsVisible ? 0 : -180,
-              left: 0,
-              right: 0,
-              child: _buildControlBar(),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1119,7 +1096,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
           )
         else
           Container(color: const Color(0xFF1A2940)),
-        
+
         // Phủ mờ và lớp màu tối
         BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
@@ -1185,7 +1162,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
     }
     final remoteParticipant = participants.first;
     final trackPub = remoteParticipant.videoTrackPublications.firstOrNull;
-    
+
     if (trackPub != null && trackPub.track != null && !trackPub.muted) {
       return VideoTrackRenderer(trackPub.track as VideoTrack);
     }
@@ -1211,7 +1188,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
     }
 
     final trackPub = _localParticipant!.videoTrackPublications.firstOrNull;
-    
+
     Widget child;
     if (trackPub != null && trackPub.track != null && !_cameraOff) {
       child = VideoTrackRenderer(trackPub.track as VideoTrack);
@@ -1266,7 +1243,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
-            _durationStr,
+            _mediaConnected ? _durationStr : 'Đang kết nối…',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 14,
@@ -1298,7 +1275,9 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _ControlButton(
-                    icon: _muted ? CupertinoIcons.mic_slash_fill : CupertinoIcons.mic_fill,
+                    icon: _muted
+                        ? CupertinoIcons.mic_slash_fill
+                        : CupertinoIcons.mic_fill,
                     label: _muted ? 'Bật mic' : 'Tắt mic',
                     active: _muted,
                     onTap: () {
@@ -1308,7 +1287,9 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
                   ),
                   if (widget.isVideo)
                     _ControlButton(
-                      icon: _cameraOff ? CupertinoIcons.video_camera_solid : CupertinoIcons.video_camera,
+                      icon: _cameraOff
+                          ? CupertinoIcons.video_camera_solid
+                          : CupertinoIcons.video_camera,
                       label: _cameraOff ? 'Bật cam' : 'Tắt cam',
                       active: _cameraOff,
                       onTap: () async {
@@ -1322,7 +1303,13 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
                         : CupertinoIcons.speaker_fill,
                     label: _speakerOn ? 'Loa ngoài' : 'Loa trong',
                     active: _speakerOn,
-                    onTap: () => setState(() => _speakerOn = !_speakerOn),
+                    onTap: () async {
+                      final next = !_speakerOn;
+                      if (!kIsWeb) {
+                        await _room?.setSpeakerOn(next);
+                      }
+                      if (mounted) setState(() => _speakerOn = next);
+                    },
                   ),
                   _CallActionButton(
                     icon: CupertinoIcons.phone_down_fill,

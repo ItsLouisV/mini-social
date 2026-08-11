@@ -47,7 +47,8 @@ class _VioraAppState extends ConsumerState<VioraApp>
       _startPresence(Supabase.instance.client.auth.currentUser?.id);
     });
 
-    ref.listenManual<AsyncValue<CallModel?>>(incomingCallProvider, (prev, next) async {
+    ref.listenManual<AsyncValue<CallModel?>>(incomingCallProvider,
+        (prev, next) async {
       final call = next.valueOrNull;
 
       if (call == null) {
@@ -60,21 +61,28 @@ class _VioraAppState extends ConsumerState<VioraApp>
 
       _isShowingIncomingCall = true;
 
+      String callerName = 'Cuộc gọi đến';
+      String? avatarUrl;
       try {
-        final callerProfile = await ref.read(profileRepositoryProvider).getProfile(call.callerId);
-        final router = ref.read(appRouterProvider);
-        router.push('/call/incoming', extra: {
-          'callModel': call,
-          'callerName': callerProfile.displayName,
-          'avatarUrl': callerProfile.avatarUrl,
-          'isVideo': call.type == CallType.video,
-        });
+        final callerProfile =
+            await ref.read(profileRepositoryProvider).getProfile(call.callerId);
+        callerName = callerProfile.displayName;
+        avatarUrl = callerProfile.avatarUrl;
       } catch (_) {
-        _isShowingIncomingCall = false;
+        // A profile/network failure must not hide an otherwise valid call.
       }
+      if (!mounted) return;
+      final router = ref.read(appRouterProvider);
+      router.push('/call/incoming', extra: {
+        'callModel': call,
+        'callerName': callerName,
+        'avatarUrl': avatarUrl,
+        'isVideo': call.type == CallType.video,
+      });
     });
 
-    ref.listenManual<AsyncValue<AuthState>>(authStateProvider, (prev, next) async {
+    ref.listenManual<AsyncValue<AuthState>>(authStateProvider,
+        (prev, next) async {
       final prevUser = prev?.valueOrNull?.session?.user;
       final nextUser = next.valueOrNull?.session?.user;
 
@@ -102,14 +110,19 @@ class _VioraAppState extends ConsumerState<VioraApp>
     ref.listenManual<bool>(sessionExpiredProvider, (prev, next) {
       if (next == true) {
         ref.read(sessionExpiredProvider.notifier).state = false;
-        final context = ref.read(appRouterProvider).routerDelegate.navigatorKey.currentContext;
+        final context = ref
+            .read(appRouterProvider)
+            .routerDelegate
+            .navigatorKey
+            .currentContext;
         if (context != null && context.mounted) {
           showCupertinoDialog(
             context: context,
             barrierDismissible: false,
             builder: (ctx) => CupertinoAlertDialog(
               title: const Text('Phiên đăng nhập hết hạn'),
-              content: const Text('Phiên đăng nhập của bạn đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.'),
+              content: const Text(
+                  'Phiên đăng nhập của bạn đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.'),
               actions: [
                 CupertinoDialogAction(
                   child: const Text('Đồng ý'),

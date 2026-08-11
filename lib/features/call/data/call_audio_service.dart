@@ -7,27 +7,41 @@ class CallAudioService {
   CallAudioService._();
 
   AudioPlayer? _player;
+  int _operation = 0;
 
   /// Phát tiếng chuông gọi đến (lặp lại)
   Future<void> playRingtone() async {
+    final operation = ++_operation;
     await _stop();
-    _player = AudioPlayer();
-    await _player!.setReleaseMode(ReleaseMode.loop);
-    await _player!.setVolume(1.0);
-    await _player!.play(AssetSource('sounds/ringtone.mp3'));
+    if (operation != _operation) return;
+    final player = AudioPlayer();
+    _player = player;
+    await player.setReleaseMode(ReleaseMode.loop);
+    await player.setVolume(1.0);
+    if (operation == _operation) {
+      await player.play(AssetSource('sounds/ringtone.mp3'));
+    }
   }
 
   /// Phát tiếng gọi đi / dialtone (lặp lại, nhỏ hơn)
   Future<void> playDialtone() async {
+    final operation = ++_operation;
     await _stop();
-    _player = AudioPlayer();
-    await _player!.setReleaseMode(ReleaseMode.loop);
-    await _player!.setVolume(0.5);
-    await _player!.play(AssetSource('sounds/dialtone.mp3'));
+    if (operation != _operation) return;
+    final player = AudioPlayer();
+    _player = player;
+    await player.setReleaseMode(ReleaseMode.loop);
+    await player.setVolume(0.5);
+    if (operation == _operation) {
+      await player.play(AssetSource('sounds/dialtone.mp3'));
+    }
   }
 
   /// Dừng âm thanh hiện tại
-  Future<void> stop() => _stop();
+  Future<void> stop() {
+    _operation++;
+    return _stop();
+  }
 
   Future<void> _stop() async {
     try {

@@ -14,6 +14,10 @@ class CallModel {
   final DateTime? connectedAt;
   final DateTime? endedAt;
   final int? durationSec;
+  final DateTime? expiresAt;
+  final String? answeredDeviceId;
+  final String? endReason;
+  final DateTime? mediaConnectedAt;
 
   const CallModel({
     required this.id,
@@ -27,6 +31,10 @@ class CallModel {
     this.connectedAt,
     this.endedAt,
     this.durationSec,
+    this.expiresAt,
+    this.answeredDeviceId,
+    this.endReason,
+    this.mediaConnectedAt,
   });
 
   factory CallModel.fromJson(Map<String, dynamic> json) => CallModel(
@@ -45,6 +53,14 @@ class CallModel {
             ? DateTime.parse(json['ended_at'] as String).toLocal()
             : null,
         durationSec: json['duration_sec'] as int?,
+        expiresAt: json['expires_at'] != null
+            ? DateTime.parse(json['expires_at'] as String).toLocal()
+            : null,
+        answeredDeviceId: json['answered_device_id'] as String?,
+        endReason: json['end_reason'] as String?,
+        mediaConnectedAt: json['media_connected_at'] != null
+            ? DateTime.parse(json['media_connected_at'] as String).toLocal()
+            : null,
       );
 
   bool get isVideo => type == CallType.video;

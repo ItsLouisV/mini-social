@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/supabase_service.dart';
 import '../data/call_repository.dart';
 import '../domain/call_model.dart';
+import '../../auth/providers/auth_provider.dart';
 
 /// Cung cấp instance của CallRepository
 final callRepositoryProvider = Provider<CallRepository>((ref) {
@@ -17,7 +18,8 @@ final incomingCallProvider = StreamProvider<CallModel?>((ref) {
   // Lấy userId ngay lập tức — không chờ auth event
   // Đây là nguyên nhân Android không nhận được cuộc gọi:
   // onAuthStateChange chỉ bắn khi login/logout, không bắn khi app khởi động bình thường
-  final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+  final currentUserId = ref.watch(currentUserIdProvider) ??
+      Supabase.instance.client.auth.currentUser?.id;
 
   if (currentUserId == null) {
     return Stream.value(null);
@@ -27,7 +29,8 @@ final incomingCallProvider = StreamProvider<CallModel?>((ref) {
 });
 
 /// Theo dõi trạng thái của 1 cuộc gọi cụ thể
-final callStateProvider = StreamProvider.family<CallModel, String>((ref, callId) {
+final callStateProvider =
+    StreamProvider.family<CallModel, String>((ref, callId) {
   final repo = ref.watch(callRepositoryProvider);
   return repo.watchCall(callId);
 });

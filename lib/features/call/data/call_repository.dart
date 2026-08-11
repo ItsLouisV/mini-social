@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/services/supabase_service.dart';
@@ -14,50 +16,72 @@ class CallRepository {
 
   String getLiveKitUrl() => dotenv.env['LIVEKIT_URL'] ?? '';
 
+  Future<String> getDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString('call_device_id');
+    if (id == null || id.length < 8) {
+      id = 'device_${const Uuid().v4().replaceAll('-', '')}';
+      await prefs.setString('call_device_id', id);
+    }
+    return id;
+  }
+
   /// Tạo cuộc gọi mới trong bảng calls
   Future<CallModel> createCall({
     required String conversationId,
     required String calleeId,
     required bool isVideo,
   }) async {
-    final roomName = const Uuid().v4();
-    final data = await _client.from('calls').insert({
-      'conversation_id': conversationId,
-      'caller_id': _client.auth.currentUser!.id,
-      'callee_id': calleeId,
-      'type': isVideo ? 'video' : 'voice',
-      'room_name': roomName,
-      'status': 'ringing',
-    }).select().single();
-    return CallModel.fromJson(data);
+    final callerId = _client.auth.currentUser?.id;
+    if (callerId == null) throw StateError('Unauthenticated');
+    if (callerId == calleeId) {
+      throw ArgumentError('Bạn không thể tự gọi cho chính mình');
+    }
+    final data = await _client.rpc('start_call', params: {
+      'p_conversation_id': conversationId,
+      'p_callee_id': calleeId,
+      'p_type': isVideo ? 'video' : 'voice',
+    });
+    return CallModel.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   /// Cập nhật trạng thái cuộc gọi
-  Future<void> updateStatus(String callId, CallStatus status) async {
-    final updates = <String, dynamic>{'status': status.name};
+  Future<CallModel> updateStatus(
+    String callId,
+    CallStatus status, {
+    String? deviceId,
+    String? reason,
+  }) async {
+    final data = await _client.rpc('transition_call', params: {
+      'p_call_id': callId,
+      'p_new_status': status.name,
+      'p_device_id': deviceId,
+      'p_reason': reason,
+    });
+    return CallModel.fromJson(Map<String, dynamic>.from(data as Map));
+  }
 
-    if (status == CallStatus.accepted) {
-      updates['connected_at'] = DateTime.now().toUtc().toIso8601String();
-    }
-    if (status == CallStatus.ended ||
-        status == CallStatus.declined ||
-        status == CallStatus.missed ||
-        status == CallStatus.cancelled) {
-      updates['ended_at'] = DateTime.now().toUtc().toIso8601String();
-    }
-
-    await _client.from('calls').update(updates).eq('id', callId);
+  Future<CallModel> markConnected(String callId) async {
+    final data = await _client.rpc('mark_call_connected', params: {
+      'p_call_id': callId,
+    });
+    return CallModel.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   /// Lấy LiveKit token từ Edge Function
-  Future<String> getLiveKitToken(String roomName) async {
-    final user = _client.auth.currentUser!;
+  Future<LiveKitCredentials> getLiveKitCredentials(String callId) async {
+    final deviceId = await getDeviceId();
+    final sessionId = 'session_${const Uuid().v4().replaceAll('-', '')}';
     final res = await _client.functions.invoke('livekit-token', body: {
-      'roomName': roomName,
-      'participantIdentity': user.id,
-      'participantName': user.userMetadata?['full_name'] ?? user.email ?? 'Unknown',
+      'callId': callId,
+      'deviceId': deviceId,
+      'clientSessionId': sessionId,
     });
-    return res.data['token'] as String;
+    final data = Map<String, dynamic>.from(res.data as Map);
+    return LiveKitCredentials(
+      serverUrl: data['serverUrl'] as String,
+      participantToken: data['participantToken'] as String,
+    );
   }
 
   /// Lắng nghe cuộc gọi đến bằng Realtime Channel (Postgres Changes)
@@ -79,7 +103,7 @@ class CallRepository {
       ),
       callback: (payload) {
         final data = payload.newRecord;
-        if (data['status'] == 'ringing') {
+        if (data['status'] == 'ringing' && data['caller_id'] != currentUserId) {
           controller.add(CallModel.fromJson(data));
         }
       },
@@ -108,7 +132,7 @@ class CallRepository {
     try {
       channel.subscribe((status, [error]) async {
         if (status == RealtimeSubscribeStatus.channelError) {
-          print('Supabase Realtime incoming calls channel error: $error');
+          debugPrint('Supabase Realtime incoming calls channel error: $error');
           if (error != null) {
             await _service.handleAuthError(error);
           }
@@ -120,6 +144,7 @@ class CallRepository {
               .from('calls')
               .select()
               .eq('callee_id', currentUserId)
+              .neq('caller_id', currentUserId)
               .eq('status', 'ringing')
               .order('started_at', ascending: false)
               .limit(1)
@@ -133,12 +158,13 @@ class CallRepository {
           }
 
           final call = CallModel.fromJson(data);
-          final isExpired =
-              DateTime.now().difference(call.startedAt).inSeconds > 45;
+          final isExpired = call.expiresAt?.isBefore(DateTime.now()) ??
+              DateTime.now().difference(call.startedAt).inSeconds > 60;
 
           if (isExpired) {
             // Dọn dẹp cuộc gọi bị kẹt trạng thái từ phiên trước
-            await updateStatus(call.id, CallStatus.missed);
+            await updateStatus(call.id, CallStatus.missed,
+                reason: 'stale_ringing');
             controller.add(null);
           } else {
             controller.add(call);
@@ -148,7 +174,7 @@ class CallRepository {
         }
       });
     } catch (e) {
-      print('Error subscribing to incoming calls channel: $e');
+      debugPrint('Error subscribing to incoming calls channel: $e');
     }
 
     // Hủy channel khi không còn lắng nghe stream để tránh rò rỉ bộ nhớ
@@ -168,7 +194,8 @@ class CallRepository {
     final channel = _client.channel('call_state_$callId');
 
     try {
-      channel.onPostgresChanges(
+      channel
+          .onPostgresChanges(
         event: PostgresChangeEvent.update,
         schema: 'public',
         table: 'calls',
@@ -178,18 +205,30 @@ class CallRepository {
           value: callId,
         ),
         callback: (payload) {
-          controller.add(CallModel.fromJson(payload.newRecord));
+          if (!controller.isClosed) {
+            controller.add(CallModel.fromJson(payload.newRecord));
+          }
         },
-      ).subscribe((status, [error]) async {
+      )
+          .subscribe((status, [error]) async {
         if (status == RealtimeSubscribeStatus.channelError) {
-          print('Supabase Realtime watch call channel error: $error');
+          debugPrint('Supabase Realtime watch call channel error: $error');
           if (error != null) {
             await _service.handleAuthError(error);
           }
         }
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          try {
+            final data =
+                await _client.from('calls').select().eq('id', callId).single();
+            if (!controller.isClosed) controller.add(CallModel.fromJson(data));
+          } catch (e, stack) {
+            if (!controller.isClosed) controller.addError(e, stack);
+          }
+        }
       });
     } catch (e) {
-      print('Error subscribing to watch call channel: $e');
+      debugPrint('Error subscribing to watch call channel: $e');
     }
 
     controller.onCancel = () {
@@ -201,4 +240,14 @@ class CallRepository {
 
     return controller.stream;
   }
+}
+
+class LiveKitCredentials {
+  final String serverUrl;
+  final String participantToken;
+
+  const LiveKitCredentials({
+    required this.serverUrl,
+    required this.participantToken,
+  });
 }
