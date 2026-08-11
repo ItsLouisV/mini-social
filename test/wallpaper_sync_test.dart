@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('Wallpaper History & Sorting Logic Tests', () {
     test('Should sort active wallpaper to the 1st position in list', () {
-      final rawHistory = ['path_A', 'path_B', 'path_C', 'path_D'];
-      final activeWallpaper = 'path_C';
+      const rawHistory = ['path_A', 'path_B', 'path_C', 'path_D'];
+      const activeWallpaper = 'path_C';
 
       final historyList = List<String>.from(rawHistory);
       if (activeWallpaper.isNotEmpty && historyList.contains(activeWallpaper)) {
@@ -18,8 +18,8 @@ void main() {
     });
 
     test('Should not modify history if active wallpaper is not in history', () {
-      final rawHistory = ['path_A', 'path_B', 'path_D'];
-      final activeWallpaper = 'path_C';
+      const rawHistory = ['path_A', 'path_B', 'path_D'];
+      const activeWallpaper = 'path_C';
 
       final historyList = List<String>.from(rawHistory);
       if (activeWallpaper.isNotEmpty && historyList.contains(activeWallpaper)) {

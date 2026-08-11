@@ -20,6 +20,7 @@ import '../../providers/chat_provider.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import 'full_screen_image_viewer.dart';
 import 'message_context_menu_route.dart';
+import 'expandable_message_text.dart';
 import 'message_popup_menu_content.dart';
 import 'voice_message_bubble.dart';
 
@@ -65,6 +66,7 @@ class MessageBubble extends ConsumerStatefulWidget {
 
 class _MessageBubbleState extends ConsumerState<MessageBubble> {
   bool _tapped = false;
+  bool _isMessageExpanded = false;
   final GlobalKey _bubbleKey = GlobalKey();
 
   // Translation state
@@ -384,13 +386,92 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Text(
-                  message.content ?? '',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: isMine ? myTextColor : theirTextColor,
-                    height: 1.35,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ExpandableMessageText(
+                      text: message.content ?? '',
+                      expanded: _isMessageExpanded,
+                      onToggle: () => setState(
+                        () => _isMessageExpanded = !_isMessageExpanded,
+                      ),
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isMine ? myTextColor : theirTextColor,
+                        height: 1.35,
+                      ),
+                    ),
+                    if (_isTranslating || _showTranslation) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isMine
+                              ? Colors.white.withValues(alpha: 0.16)
+                              : getChatThemePrimaryColor(themeName)
+                                  .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: _isTranslating
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 11,
+                                    height: 11,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: isMine
+                                          ? Colors.white.withValues(alpha: 0.7)
+                                          : getChatThemePrimaryColor(themeName),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 7),
+                                  Text(
+                                    'Đang dịch...',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontStyle: FontStyle.italic,
+                                      color: isMine
+                                          ? Colors.white.withValues(alpha: 0.75)
+                                          : theme.hintColor,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  FaIcon(
+                                    FontAwesomeIcons.language,
+                                    size: 13,
+                                    color: (isMine
+                                            ? Colors.white
+                                            : getChatThemePrimaryColor(themeName))
+                                        .withValues(alpha: 0.8),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      _translatedText ?? '',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isMine
+                                            ? myTextColor
+                                            : theirTextColor,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
           ],
@@ -405,6 +486,11 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
         messageSize: size,
         messageWidget: overlayBubbleWidget,
         isMine: isMine,
+        keepAnchorVisible: true,
+        backdropOpacity: 0.72,
+        anchorMenuGap: 28,
+        estimatedMenuHeight: 350,
+        allowScaleOvershoot: false,
         menuContentWidget: MessagePopupMenuContent(
           isMine: isMine,
           isPinned: widget.isPinned,
@@ -898,8 +984,12 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        message.content ?? '',
+                      ExpandableMessageText(
+                        text: message.content ?? '',
+                        expanded: _isMessageExpanded,
+                        onToggle: () => setState(
+                          () => _isMessageExpanded = !_isMessageExpanded,
+                        ),
                         style: TextStyle(
                           fontSize: 15,
                           color: isMine ? myTextColor : theirTextColor,
@@ -1099,7 +1189,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                     padding: EdgeInsets.only(
                       top: 3,
                       bottom: 4,
-                      left: isMine ? 0 : 6,
+                      left: isMine ? 0 : (widget.isGroup ? 40 : 6),
                       right: isMine ? 6 : 0,
                     ),
                     child: Row(

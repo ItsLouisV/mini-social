@@ -12,12 +12,34 @@ import '../../../social/providers/follow_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../shared/widgets/skeletons/tile_skeleton_loading.dart';
 
+final _hiddenNotificationIdsProvider =
+    StateProvider.autoDispose<Set<String>>((ref) => <String>{});
+
+Future<void> _deleteNotificationOptimistically(
+  WidgetRef ref,
+  String notificationId,
+) async {
+  HapticFeedback.mediumImpact();
+  final hiddenIdsNotifier = ref.read(_hiddenNotificationIdsProvider.notifier);
+  final repository = ref.read(socialRepositoryProvider);
+
+  hiddenIdsNotifier.update((ids) => {...ids, notificationId});
+
+  try {
+    await repository.deleteNotification(notificationId);
+  } catch (_) {
+    // Server không xóa được: đưa item trở lại danh sách.
+    hiddenIdsNotifier.update((ids) => {...ids}..remove(notificationId));
+  }
+}
+
 class NotificationScreen extends ConsumerWidget {
   const NotificationScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationsAsync = ref.watch(notificationsProvider);
+    final hiddenNotificationIds = ref.watch(_hiddenNotificationIdsProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -46,7 +68,12 @@ class NotificationScreen extends ConsumerWidget {
           ),
           notificationsAsync.when(
             data: (notifications) {
-              if (notifications.isEmpty) {
+              final visibleNotifications = notifications.where((notification) {
+                final id = notification['id']?.toString();
+                return id == null || !hiddenNotificationIds.contains(id);
+              }).toList();
+
+              if (visibleNotifications.isEmpty) {
                 return const SliverFillRemaining(
                   hasScrollBody: false,
                   child: EmptyStateWidget(
@@ -62,7 +89,7 @@ class NotificationScreen extends ConsumerWidget {
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final n = notifications[index];
+                      final n = visibleNotifications[index];
                       final notifId = n['id']?.toString() ?? 'notif_$index';
                       return Dismissible(
                         key: Key(notifId),
@@ -90,16 +117,13 @@ class NotificationScreen extends ConsumerWidget {
                         onDismissed: (direction) {
                           final id = n['id'] as String?;
                           if (id != null) {
-                            HapticFeedback.mediumImpact();
-                            ref.read(socialRepositoryProvider).deleteNotification(id).then((_) {
-                              ref.invalidate(notificationsProvider);
-                            });
+                            _deleteNotificationOptimistically(ref, id);
                           }
                         },
                         child: _NotificationTile(notification: n),
                       );
                     },
-                    childCount: notifications.length,
+                    childCount: visibleNotifications.length,
                   ),
                 ),
               );
@@ -326,29 +350,62 @@ class _NotificationTile extends ConsumerWidget {
                       if (notifId == null) return;
                       showModalBottomSheet(
                         context: context,
+                        useRootNavigator: true,
+                        useSafeArea: true,
+                        isScrollControlled: true,
                         backgroundColor: Colors.transparent,
                         builder: (ctx) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: theme.brightness == Brightness.dark
-                                  ? const Color(0xFF1E1E2F)
-                                  : Colors.white,
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: SafeArea(
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 18),
+                            child: Container(
+                              constraints: const BoxConstraints(minHeight: 176),
+                              decoration: BoxDecoration(
+                                color: theme.brightness == Brightness.dark
+                                    ? const Color(0xFF1E1E2F)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.22),
+                                    blurRadius: 24,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              padding: const EdgeInsets.fromLTRB(0, 10, 0, 18),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  Container(
+                                    width: 38,
+                                    height: 4,
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    decoration: BoxDecoration(
+                                      color: theme.hintColor.withValues(alpha: 0.35),
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
                                   ListTile(
-                                    leading: const Icon(CupertinoIcons.trash, color: Colors.redAccent),
-                                    title: const Text('Xóa thông báo này', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
-                                    onTap: () {
+                                    leading: const Icon(
+                                      CupertinoIcons.trash,
+                                      color: Colors.redAccent,
+                                    ),
+                                    title: const Text(
+                                      'Xóa thông báo này',
+                                      style: TextStyle(
+                                        color: Colors.redAccent,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: const Text(
+                                      'Thông báo sẽ bị xóa khỏi danh sách của bạn',
+                                    ),
+                                    onTap: () async {
                                       Navigator.pop(ctx);
-                                      HapticFeedback.mediumImpact();
-                                      ref.read(socialRepositoryProvider).deleteNotification(notifId).then((_) {
-                                        ref.invalidate(notificationsProvider);
-                                      });
+                                      await _deleteNotificationOptimistically(
+                                        ref,
+                                        notifId,
+                                      );
                                     },
                                   ),
                                 ],

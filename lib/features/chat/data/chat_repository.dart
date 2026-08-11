@@ -410,7 +410,7 @@ class ChatRepository {
       try {
         final Uri uri = Uri.parse(oldAvatarUrl);
         final String path = uri.path;
-        final String bucketPrefix = '/${SupabaseConstants.messagesBucket}/';
+        const String bucketPrefix = '/${SupabaseConstants.messagesBucket}/';
         if (path.contains(bucketPrefix)) {
           final String oldFilePath = path.substring(path.indexOf(bucketPrefix) + bucketPrefix.length);
           await _client.storage.from(SupabaseConstants.messagesBucket).remove([oldFilePath]);
@@ -439,7 +439,7 @@ class ChatRepository {
       try {
         final Uri uri = Uri.parse(oldAvatarUrl);
         final String path = uri.path;
-        final String bucketPrefix = '/${SupabaseConstants.messagesBucket}/';
+        const String bucketPrefix = '/${SupabaseConstants.messagesBucket}/';
         if (path.contains(bucketPrefix)) {
           final String oldFilePath = path.substring(path.indexOf(bucketPrefix) + bucketPrefix.length);
           await _client.storage.from(SupabaseConstants.messagesBucket).remove([oldFilePath]);
@@ -646,7 +646,7 @@ class ChatRepository {
       try {
         final Uri uri = Uri.parse(avatarUrl);
         final String path = uri.path;
-        final String bucketPrefix = '/${SupabaseConstants.messagesBucket}/';
+        const String bucketPrefix = '/${SupabaseConstants.messagesBucket}/';
         if (path.contains(bucketPrefix)) {
           final String filePath = path.substring(path.indexOf(bucketPrefix) + bucketPrefix.length);
           await _client.storage.from(SupabaseConstants.messagesBucket).remove([filePath]);
@@ -1040,7 +1040,7 @@ class ChatRepository {
       }
 
       return realMsg;
-    } catch (e, stack) {
+    } catch (e) {
       debugPrint('⚠️ [ChatRepository.sendMessage Error]: $e. Enqueueing to offline sync queue...');
       
       // Đẩy vào Outbox Sync Queue khi không có mạng

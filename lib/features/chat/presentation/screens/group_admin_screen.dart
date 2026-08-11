@@ -2,13 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/toast_service.dart';
 import '../../../../shared/widgets/app_avatar.dart';
-import '../../domain/conversation_member_model.dart';
-import '../../domain/group_ban_model.dart';
 import '../../providers/chat_provider.dart';
 
 /// Màn hình quản lý quyền nhóm (cho Owner/Admin).
@@ -135,8 +132,8 @@ class GroupAdminScreen extends ConsumerWidget {
                   dividerColor: dividerColor,
                   icon: CupertinoIcons.at,
                   gradientColors: [Colors.blue, Colors.cyan],
-                  title: '@everyone mention',
-                  subtitle: 'Thành viên có thể tag @everyone hoặc @all',
+                  title: '@all mention',
+                  subtitle: 'Thành viên có thể dùng @all để nhắc cả nhóm',
                   value: conv.allowMemberMentionAll,
                   permissionKey: 'allow_member_mention_all',
                   showDivider: true,

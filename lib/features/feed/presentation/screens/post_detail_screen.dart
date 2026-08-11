@@ -14,7 +14,6 @@ import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
 import '../widgets/image_carousel.dart';
 import '../widgets/post_actions.dart';
-import '../../../social/data/ai_repository.dart';
 import 'package:flutter/services.dart';
 import '../../../chat/presentation/widgets/message_context_menu_route.dart';
 import '../../../../shared/widgets/report_bottom_sheet.dart';

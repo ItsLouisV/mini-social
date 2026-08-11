@@ -164,9 +164,6 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
 
     final senderName = _getSenderName(latestMsg);
 
-    final mediaUrl = latestMsg.firstMediaUrl;
-    // final hasImageThumbnail = latestMsg.isImage && mediaUrl != null && mediaUrl.isNotEmpty;
-
     final bannerBgColor = widget.hasWallpaper
         ? (isDark
             ? Colors.black.withValues(alpha: 0.65)

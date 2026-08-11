@@ -67,7 +67,7 @@ class GroupPermissions {
   /// Can delete / recall someone else's message (only owner/admin).
   bool get canDeleteOthersMessage => isAdmin;
 
-  /// Can use @everyone / @all mention (owner/admin always; member if toggle is on).
+  /// Can use @all mention (owner/admin always; member if toggle is on).
   bool get canMentionAll => isAdmin || allowMemberMentionAll;
 
   // ── Member management ─────────────────────────────────────────────────────

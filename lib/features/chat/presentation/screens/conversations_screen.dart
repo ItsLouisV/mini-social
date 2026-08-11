@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../../core/localization/app_translations.dart';
-import '../../../../core/constants/app_svg_icons.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';

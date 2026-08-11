@@ -43,6 +43,7 @@ import '../../features/social/providers/follow_provider.dart';
 import '../../features/call/presentation/screens/call_screens.dart';
 import '../../features/feed/providers/feed_provider.dart';
 import '../../features/chat/presentation/screens/group_admin_screen.dart';
+import '../../features/chat/presentation/screens/group_members_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _feedTabKey = GlobalKey<NavigatorState>(debugLabel: 'feedTab');
@@ -265,6 +266,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) {
           final conversationId = state.pathParameters['conversationId']!;
           return CupertinoPage(child: GroupAdminScreen(conversationId: conversationId));
+        },
+      ),
+
+      GoRoute(
+        path: '/chat/:conversationId/members',
+        name: 'group-members',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) {
+          final conversationId = state.pathParameters['conversationId']!;
+          return CupertinoPage(
+            child: GroupMembersScreen(conversationId: conversationId),
+          );
         },
       ),
       // ── Call routes ──────────────────────────────────────────────────
@@ -588,15 +601,12 @@ class _IosTabBar extends StatelessWidget {
 
     // Padding ngang (thu nhỏ ở compact để tabbar đủ chỗ)
     final hPadExpanded = (28.0 * scale).clamp(12.0, 60.0);
-    final hPadCompact  = (54.0 * scale).clamp(24.0, 90.0);
 
     // Chiều cao tabbar
     final barHeightExpanded = (58.0 * scale).clamp(48.0, 76.0);
-    final barHeightCompact  = (43.0 * scale).clamp(36.0, 58.0);
 
     // Bo góc ngoài
     final outerRadiusExpanded = (28.0 * scale).clamp(18.0, 40.0);
-    final outerRadiusCompact  = (20.0 * scale).clamp(14.0, 30.0);
 
     // Nút + ở giữa
     final fabSizeExpanded     = (36.0 * scale).clamp(28.0, 52.0);
@@ -889,4 +899,3 @@ class _TabItem extends StatelessWidget {
     );
   }
 }
-

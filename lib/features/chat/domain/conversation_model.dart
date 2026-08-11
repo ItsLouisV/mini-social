@@ -20,7 +20,7 @@ class ConversationModel {
   final bool adminOnlyMessaging;    // Only owner/admin can send messages
   final bool allowMemberInvite;     // Members can invite new members
   final bool allowMemberPin;        // Members can pin/unpin messages
-  final bool allowMemberMentionAll; // Members can @everyone
+  final bool allowMemberMentionAll; // Members can use @all
   final bool allowMemberEditInfo;   // Members can edit name/avatar/description
 
   // Custom states from conversation_members & profiles

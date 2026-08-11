@@ -115,16 +115,22 @@ class UpstashRedisService {
 
   // ── 2. Online / Offline Presence ────────────────────────────────────────
 
-  /// Đặt trạng thái Online với TTL (mặc định 30s)
-  Future<void> setUserOnline(String userId, {int ttlSeconds = 30}) async {
+  /// Đặt trạng thái online và đồng thời cập nhật mốc hoạt động gần nhất.
+  Future<void> setUserOnline(String userId, {int ttlSeconds = 75}) async {
     if (userId.isEmpty) return;
-    await executeCommand(['SET', 'user:online:$userId', 'online', 'EX', ttlSeconds]);
+    await executePipeline([
+      ['SET', 'user:online:$userId', 'online', 'EX', ttlSeconds],
+      ['SET', 'user:last_active:$userId', DateTime.now().toUtc().millisecondsSinceEpoch],
+    ]);
   }
 
-  /// Đặt trạng thái Offline
+  /// Đặt trạng thái offline và lưu thời điểm hoạt động cuối.
   Future<void> setUserOffline(String userId) async {
     if (userId.isEmpty) return;
-    await executeCommand(['DEL', 'user:online:$userId']);
+    await executePipeline([
+      ['DEL', 'user:online:$userId'],
+      ['SET', 'user:last_active:$userId', DateTime.now().toUtc().millisecondsSinceEpoch],
+    ]);
   }
 
   /// Kiểm tra một user có online hay không
@@ -132,6 +138,31 @@ class UpstashRedisService {
     if (userId.isEmpty) return false;
     final res = await executeCommand(['GET', 'user:online:$userId']);
     return res != null && res.toString() == 'online';
+  }
+
+  /// Lấy cùng lúc trạng thái online và thời điểm hoạt động cuối.
+  Future<({bool isOnline, DateTime? lastActive})> getUserPresence(
+    String userId,
+  ) async {
+    if (userId.isEmpty) return (isOnline: false, lastActive: null);
+
+    final results = await executePipeline([
+      ['GET', 'user:online:$userId'],
+      ['GET', 'user:last_active:$userId'],
+    ]);
+    final onlineValue = results.isNotEmpty ? results[0] : null;
+    final lastActiveValue = results.length > 1 ? results[1] : null;
+    final milliseconds = int.tryParse(lastActiveValue?.toString() ?? '');
+
+    return (
+      isOnline: onlineValue?.toString() == 'online',
+      lastActive: milliseconds == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(
+              milliseconds,
+              isUtc: true,
+            ).toLocal(),
+    );
   }
 
   /// Lấy danh sách trạng thái Online của nhiều user cùng lúc (Pipeline)

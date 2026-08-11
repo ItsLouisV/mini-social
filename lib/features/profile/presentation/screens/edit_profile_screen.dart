@@ -625,7 +625,6 @@ class _CustomTagCustom extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     final borderColor = theme.colorScheme.primary.withValues(alpha: 0.3);
     final textColor = theme.colorScheme.primary;

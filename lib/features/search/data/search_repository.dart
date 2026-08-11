@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../profile/domain/profile_model.dart';
 import '../../feed/domain/post_model.dart';

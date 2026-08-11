@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart' show Color, Colors;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
@@ -47,6 +47,27 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
 final userOnlineStatusProvider = FutureProvider.family<bool, String>((ref, userId) async {
   final redis = ref.watch(upstashRedisServiceProvider);
   return redis.isUserOnline(userId);
+});
+
+class UserPresence {
+  final bool isOnline;
+  final DateTime? lastActive;
+
+  const UserPresence({required this.isOnline, this.lastActive});
+}
+
+final userPresenceProvider =
+    StreamProvider.autoDispose.family<UserPresence, String>((ref, userId) async* {
+  final redis = ref.watch(upstashRedisServiceProvider);
+
+  while (true) {
+    final presence = await redis.getUserPresence(userId);
+    yield UserPresence(
+      isOnline: presence.isOnline,
+      lastActive: presence.lastActive,
+    );
+    await Future<void>.delayed(const Duration(seconds: 30));
+  }
 });
 
 final userTypingStatusProvider = FutureProvider.family<bool, Map<String, String>>((ref, params) async {

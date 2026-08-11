@@ -1,6 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:realtime_client/realtime_client.dart';
 import 'package:viora/core/services/upstash_redis_service.dart';
 import 'package:viora/features/chat/domain/conversation_model.dart';
 import 'package:viora/features/chat/domain/message_model.dart';
@@ -94,7 +92,6 @@ void main() {
     });
 
     test('Should identify message types correctly', () {
-      final now = DateTime.now();
       final textMsg = MessageModel(
         id: '1',
         conversationId: 'c',

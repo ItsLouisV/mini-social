@@ -5,8 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/localization/app_translations.dart';
-import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../../shared/widgets/error_widget.dart';
@@ -23,8 +21,6 @@ class TrashScreen extends ConsumerWidget {
     final trashedAsync = ref.watch(trashedPostsProvider);
 
     final groupedBg = theme.scaffoldBackgroundColor;
-    final cardBg = theme.colorScheme.surface;
-
     return CupertinoPageScaffold(
       backgroundColor: groupedBg,
       navigationBar: CupertinoNavigationBar(

@@ -26,6 +26,7 @@ import '../../providers/hidden_chat_provider.dart';
 import '../../domain/group_permissions.dart';
 import '../widgets/message_context_menu_route.dart';
 import '../widgets/passcode_dialog.dart';
+import '../widgets/group_member_actions.dart';
 
 class ConversationSettingsScreen extends ConsumerStatefulWidget {
   final String conversationId;
@@ -409,13 +410,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                                 onTap: () {
                                   HapticFeedback.selectionClick();
                                   ref.read(chatThemeColorProvider.notifier).setTheme(widget.conversationId, item.id);
-                                  ScaffoldMessenger.of(context).clearSnackBars();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Đã cập nhật chủ đề chat sang ${item.name}'),
-                                      duration: const Duration(seconds: 1),
-                                    ),
-                                  );
+                                  ToastService.showSuccess(context, 'Đã cập nhật chủ đề chat ${item.name}');
                                 },
                                 child: Container(
                                   margin: const EdgeInsets.only(right: 12),
@@ -594,6 +589,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
 
   Widget _buildCardContainer(Color cardBgColor, {required List<Widget> children}) {
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: cardBgColor,
         borderRadius: BorderRadius.circular(20),
@@ -783,21 +779,15 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     FullScreenImageViewer.open(context, imageUrl);
   }
 
-
-
-
-
   Future<void> _handleToggleHide(BuildContext context, WidgetRef ref, dynamic conv, String currentUserId) async {
     final isHidden = conv.isHidden(currentUserId);
     if (isHidden) {
       final success = await PasscodeDialog.show(context, mode: PasscodeMode.verify);
       if (success == true) {
         ref.read(chatRepositoryProvider).toggleHide(conv);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đã hiển thị lại cuộc trò chuyện')),
-          );
-        }
+        // if (context.mounted) {
+        //   ToastService.showSuccess(context, 'Đã hiển thị lại cuộc trò chuyện');
+        // }
       }
     } else {
       final convs = ref.read(conversationsProvider).valueOrNull ?? [];
@@ -816,9 +806,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       } else {
         ref.read(chatRepositoryProvider).toggleHide(conv);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đã ẩn cuộc trò chuyện')),
-          );
+          ToastService.showSuccess(context, 'Đã ẩn cuộc trò chuyện');
           context.go('/chat');
         }
       }
@@ -829,11 +817,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: Text(isChatBlocked ? 'Bỏ chặn tin nhắn từ $userName?' : 'Chặn tin nhắn từ $userName?'),
+        title: Text(isChatBlocked ? 'Bỏ chặn $userName?' : 'Chặn $userName?'),
         content: Text(
           isChatBlocked
-              ? 'Người dùng này sẽ có thể nhắn tin cho bạn trở lại.'
-              : 'Người dùng này sẽ không thể nhắn tin cho bạn nữa.',
+              ? '$userName sẽ có thể nhắn tin cho bạn trở lại.'
+              : '$userName sẽ không thể nhắn tin cho bạn nữa.',
         ),
         actions: [
           CupertinoDialogAction(
@@ -852,19 +840,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                 }
                 ref.invalidate(chatBlockedUserIdsProvider);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(isChatBlocked
-                          ? 'Đã bỏ chặn tin nhắn từ $userName'
-                          : 'Đã chặn tin nhắn từ $userName'),
-                    ),
-                  );
+                  ToastService.showSuccess(context, isChatBlocked ? 'Đã bỏ chặn $userName' : 'Đã chặn $userName');
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
-                  );
+                  debugPrint('Lỗi: $e');
                 }
               }
             },
@@ -955,6 +935,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     } catch (e) {
       if (context.mounted) {
         ToastService.showError(context, 'Lỗi đổi ảnh nhóm: $e');
+        debugPrint('Lỗi đổi ảnh nhóm: $e');
       }
     }
   }
@@ -971,6 +952,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     GroupPermissions? perms,
   ) {
     final membersAsync = ref.watch(groupMembersProvider(conv.id));
+    final totalMembers = membersAsync.valueOrNull?.length ?? 0;
+    final remainingMembers = totalMembers > 3 ? totalMembers - 3 : 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -978,31 +961,65 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildSectionHeader('DANH SÁCH THÀNH VIÊN'),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _openGroupMembers(context, conv.id),
+              child: _buildSectionHeader(
+                remainingMembers > 0
+                    ? 'DANH SÁCH THÀNH VIÊN (+$remainingMembers)'
+                    : 'DANH SÁCH THÀNH VIÊN'
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.only(right: 8, bottom: 8),
-              child: GestureDetector(
-                onTap: () => _showAddMemberModal(context, ref, conv),
-                child: const Row(
-                  children: [
-                    Icon(CupertinoIcons.person_badge_plus, size: 14, color: AppColors.primary),
-                    SizedBox(width: 4),
-                    Text(
-                      'Thêm thành viên',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showAddMemberModal(context, ref, conv),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Icon(CupertinoIcons.person_badge_plus, size: 14, color: AppColors.primary),
+                          SizedBox(width: 4),
+                          Text(
+                            'Thêm thành viên',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _openGroupMembers(context, conv.id),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(
+                        CupertinoIcons.chevron_right,
+                        size: 24,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  )
+                ]
+              )
             ),
           ],
         ),
         _buildCardContainer(
-          cardBgColor,
+          Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF1E1E2C)
+              : Colors.white,
           children: [
             membersAsync.when(
               data: (members) {
@@ -1012,8 +1029,10 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                     child: Text('Chưa có danh sách thành viên'),
                   );
                 }
+
+                final previewMembers = members.take(3).toList();
                 return Column(
-                  children: members.asMap().entries.map((entry) {
+                  children: previewMembers.asMap().entries.map((entry) {
                     final idx = entry.key;
                     final m = entry.value;
                     final isMe = m.userId == currentUserId;
@@ -1078,7 +1097,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                           trailing: const Icon(CupertinoIcons.ellipsis, size: 18, color: Colors.grey),
                           onTap: () => _showMemberContextMenu(context, ref, conv, m, itemKey, isGroupAdmin, isOwner, isMe, currentUserId, cardBgColor),
                         ),
-                        if (idx < members.length - 1)
+                        if (idx < previewMembers.length - 1)
                           Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
                       ],
                     );
@@ -1100,6 +1119,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     );
   }
 
+  bool _isLoading = true;
+
   void _showMemberContextMenu(
     BuildContext context,
     WidgetRef ref,
@@ -1113,141 +1134,151 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     Color cardBgColor,
   ) {
     HapticFeedback.mediumImpact();
-    final renderBox = itemKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
 
-    final size = renderBox.size;
-    final position = renderBox.localToGlobal(Offset.zero);
+    GroupMemberActions.show(
+      context: context,
+      member: member,
+      itemKey: itemKey,
 
-    final overlayMemberWidget = Container(
-      width: size.width,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: cardBgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          AppAvatar(
-            imageUrl: member.profile?.avatarUrl,
-            name: member.profile?.displayName ?? 'Thành viên',
-            radius: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        isMe ? '${member.profile?.displayName ?? "Tôi"} (Tôi)' : (member.profile?.displayName ?? 'Thành viên'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    if (member.isOwner)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text('👑 Trưởng nhóm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber)),
-                      )
-                    else if (member.isCoAdmin)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.purple.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text('⭐ Phó nhóm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.purple)),
-                      ),
-                  ],
-                ),
-                if (member.profile?.username != null && member.profile!.username.isNotEmpty)
-                  Text(
-                    '@${member.profile!.username}',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+      isCurrentUser: isMe,
+      currentUserIsOwner: isOwner,
+      currentUserIsAdmin: isGroupAdmin,
 
-    Navigator.push(
-      context,
-      MessageContextMenuRoute(
-        messagePosition: position,
-        messageSize: size,
-        messageWidget: overlayMemberWidget,
-        isMine: false,
-        estimatedMenuHeight: 110.0,
-        menuContentWidget: MemberPopupMenuContent(
-          member: member,
-          isCoAdmin: member.isCoAdmin,
-          isGroupAdmin: isGroupAdmin,
-          isOwner: isOwner,
-          isMe: isMe,
-          onToggleCoAdmin: () async {
-            Navigator.pop(context);
-            // Only owner can promote/demote (phó nhóm only set by owner)
-            if (!isOwner) return;
-            final newRole = member.isCoAdmin ? 'member' : 'admin';
-            await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, newRole);
-            ref.invalidate(groupMembersProvider(conv.id));
-            ref.invalidate(conversationsProvider);
-            if (context.mounted) {
-              ToastService.showSuccess(
-                context,
-                member.isCoAdmin ? 'Đã gỡ quyền Phó nhóm' : 'Đã thăng cấp làm Phó nhóm',
-              );
-            }
-          },
-          onMuteMember: isGroupAdmin && !isMe && !member.isOwner
-              ? () => _showMuteDurationPicker(context, ref, conv.id, member)
-              : null,
-          onBanMember: isOwner && !isMe && !member.isOwner
-              ? () async {
-                  Navigator.pop(context);
-                  await _confirmBanMember(context, ref, conv.id, member);
-                }
-              : null,
-          onTransferOwnership: isOwner && !isMe && !member.isOwner
-              ? () async {
-                  Navigator.pop(context);
-                  await _confirmTransferOwnership(context, ref, conv.id, member);
-                }
-              : null,
-          onRemoveMember: () async {
-            Navigator.pop(context);
-            await ref.read(chatRepositoryProvider).removeGroupMember(conv.id, member.userId);
-            ref.invalidate(groupMembersProvider(conv.id));
-            ref.invalidate(conversationsProvider);
-            if (context.mounted) {
-              ToastService.showSuccess(context, 'Đã xóa thành viên khỏi nhóm');
-            }
-          },
-          onViewProfile: () {
-            Navigator.pop(context);
-            context.push('/profile/${member.userId}');
-          },
-          onDirectMessage: () async {
-            Navigator.pop(context);
-            final chatRepo = ref.read(chatRepositoryProvider);
-            final directConv = await chatRepo.getOrCreateConversation(member.userId);
-            if (context.mounted) {
-              context.push('/chat/${directConv.id}');
-            }
-          },
-        ),
-      ),
+      // ============================================================
+      // TRANG CÁ NHÂN
+      // ============================================================
+
+      onViewProfile: () {
+        context.push('/profile/${member.userId}');
+      },
+
+      // ============================================================
+      // NHẮN TIN
+      // Không hiện khi bấm chính mình
+      // ============================================================
+
+      onMessage: !isMe ? () async {
+        final chatRepo = ref.read(chatRepositoryProvider);
+
+        final directConv = await chatRepo.getOrCreateConversation(member.userId);
+
+        if (!context.mounted) return;
+
+        context.push('/chat/${directConv.id}');
+      } : null,
+
+      // ============================================================
+      // THĂNG PHÓ NHÓM
+      //
+      // Chỉ:
+      // Owner
+      // -> người khác
+      // -> member thường
+      // ============================================================
+
+      onMakeAdmin: isOwner && !isMe && !member.isOwner && !member.isCoAdmin ? () async {
+        try {
+          await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, 'admin');
+          ref.invalidate(groupMembersProvider(conv.id));
+          ref.invalidate(conversationsProvider);
+
+          if (!context.mounted) return;
+          ToastService.showSuccess(context, 'Đã thăng cấp làm Phó nhóm');
+        } catch (e) {
+          if (!context.mounted) return;
+          ToastService.showError(context, 'Lỗi thay đổi quyền');
+          debugPrint('Lỗi thăng cấp phó nhóm: $e');
+        }
+      } : null,
+
+      // ============================================================
+      // GỠ PHÓ NHÓM
+      //
+      // Chỉ Owner mới được gỡ
+      // ============================================================
+
+      onRemoveAdmin: isOwner && !isMe && !member.isOwner && member.isCoAdmin ? () async {
+        try {
+          await ref
+            .read(chatRepositoryProvider)
+            .updateMemberRole(conv.id, member.userId, 'member');
+
+          ref.invalidate(groupMembersProvider(conv.id));
+          ref.invalidate(conversationsProvider);
+
+          if (!context.mounted) return;
+
+          ToastService.showSuccess(context, 'Đã gỡ quyền Phó nhóm');
+        } catch (e) {
+          if (!context.mounted) return;
+          ToastService.showError(context, 'Lỗi thay đổi quyền');
+          debugPrint('Lỗi gỡ quyền phó nhóm: $e');
+        }
+      } : null,
+
+      // ============================================================
+      // TẮT TIẾNG
+      //
+      // Owner / Admin
+      // Không được mute:
+      // - chính mình
+      // - Owner
+      // ============================================================
+
+      onMuteMember: isGroupAdmin && !isMe && !member.isOwner ? () {
+        _showMuteDurationPicker(context, ref, conv.id, member);
+      } : null,
+
+      // ============================================================
+      // CHUYỂN OWNER
+      //
+      // Chỉ Owner hiện tại
+      // ============================================================
+
+      onTransferOwnership: isOwner && !isMe && !member.isOwner ? () async {
+        await _confirmTransferOwnership(context, ref, conv.id, member);
+      } : null,
+
+      // ============================================================
+      // BAN MEMBER
+      //
+      // Hiện tại logic cũ của bạn:
+      // chỉ Owner được ban
+      // ============================================================
+
+      onBanMember: isOwner && !isMe && !member.isOwner ? () async {
+        await _confirmBanMember(context, ref, conv.id, member);
+      } : null,
+
+      // ============================================================
+      // XÓA KHỎI NHÓM
+      //
+      // Owner/Admin
+      // Không xóa:
+      // - chính mình
+      // - Owner
+      // ============================================================
+
+      onRemoveMember: isGroupAdmin && !isMe && !member.isOwner ? () async {
+        try {
+          await ref
+            .read(chatRepositoryProvider)
+            .removeGroupMember(conv.id, member.userId);
+
+          ref.invalidate(groupMembersProvider(conv.id));
+          ref.invalidate(conversationsProvider);
+
+          if (!context.mounted) return;
+
+          ToastService.showSuccess(context, 'Đã xóa thành viên khỏi nhóm');
+        } catch (e) {
+          if (!context.mounted) return;
+
+          ToastService.showError(context, 'Lỗi xóa thành viên');
+
+          debugPrint("Lỗi xóa thành viên: $e");
+        }
+      } : null,
     );
   }
 
@@ -1261,6 +1292,13 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _AddMemberModalSheet(conv: conv, currentUserId: currentUserId),
+    );
+  }
+
+  void _openGroupMembers(BuildContext context, String convId) {
+    context.pushNamed(
+      'group-members',
+      pathParameters: {'conversationId': convId},
     );
   }
 
@@ -1367,7 +1405,6 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     String conversationId,
     ConversationMemberModel member,
   ) {
-    Navigator.pop(context);
     final name = member.profile?.displayName ?? 'Thành viên';
     final durations = [
       ('1 giờ', const Duration(hours: 1)),
@@ -1834,178 +1871,3 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
     }
   }
 }
-
-class MemberPopupMenuContent extends StatelessWidget {
-  final ConversationMemberModel member;
-  final bool isCoAdmin;
-  final bool isGroupAdmin;
-  final bool isOwner;
-  final bool isMe;
-  final VoidCallback onToggleCoAdmin;
-  final VoidCallback onRemoveMember;
-  final VoidCallback onViewProfile;
-  final VoidCallback onDirectMessage;
-  final VoidCallback? onMuteMember;
-  final VoidCallback? onBanMember;
-  final VoidCallback? onTransferOwnership;
-
-  const MemberPopupMenuContent({
-    super.key,
-    required this.member,
-    required this.isCoAdmin,
-    required this.isGroupAdmin,
-    required this.isOwner,
-    required this.isMe,
-    required this.onToggleCoAdmin,
-    required this.onRemoveMember,
-    required this.onViewProfile,
-    required this.onDirectMessage,
-    this.onMuteMember,
-    this.onBanMember,
-    this.onTransferOwnership,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final containerColor = isDark ? const Color(0xFF1E1E2C) : Colors.white;
-
-    final List<_GridMemberActionItem> actionItems = [
-      if (!isMe)
-        _GridMemberActionItem(
-          icon: CupertinoIcons.chat_bubble_fill,
-          label: 'Nhắn tin',
-          onTap: onDirectMessage,
-          iconColor: Colors.blue,
-        ),
-      _GridMemberActionItem(
-        icon: CupertinoIcons.person_crop_circle,
-        label: 'Trang cá nhân',
-        onTap: onViewProfile,
-        iconColor: Colors.teal,
-      ),
-      // Promote/demote to co-admin — owner only
-      if (isOwner && !isMe && !member.isOwner)
-        _GridMemberActionItem(
-          icon: isCoAdmin ? CupertinoIcons.star_slash : CupertinoIcons.star_fill,
-          label: isCoAdmin ? 'Gỡ phó nhóm' : 'Thăng phó nhóm',
-          onTap: onToggleCoAdmin,
-          iconColor: Colors.purpleAccent,
-        ),
-      // Mute member — owner/admin
-      if (onMuteMember != null)
-        _GridMemberActionItem(
-          icon: member.isEffectivelyMutedByAdmin
-              ? CupertinoIcons.speaker_2_fill
-              : CupertinoIcons.speaker_slash_fill,
-          label: member.isEffectivelyMutedByAdmin ? 'Bỏ tắt tiếng' : 'Tắt tiếng',
-          onTap: onMuteMember!,
-          iconColor: Colors.orange,
-        ),
-      // Remove from group — owner/admin
-      if (isGroupAdmin && !isMe && !member.isOwner)
-        _GridMemberActionItem(
-          icon: CupertinoIcons.person_badge_minus,
-          label: 'Xóa khỏi nhóm',
-          onTap: onRemoveMember,
-          iconColor: Colors.red,
-          isDestructive: true,
-        ),
-      // Transfer ownership — owner only
-      if (onTransferOwnership != null)
-        _GridMemberActionItem(
-          icon: CupertinoIcons.checkmark_shield_fill,
-          label: 'Chuyển Owner',
-          onTap: onTransferOwnership!,
-          iconColor: Colors.amber,
-        ),
-      // Ban member — owner only
-      if (onBanMember != null)
-        _GridMemberActionItem(
-          icon: CupertinoIcons.xmark_shield_fill,
-          label: 'Cấm vĩnh viễn',
-          onTap: onBanMember!,
-          iconColor: Colors.deepOrange,
-          isDestructive: true,
-        ),
-    ];
-
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: containerColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.18),
-              blurRadius: 16,
-              spreadRadius: 2,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 14,
-          alignment: WrapAlignment.start,
-          children: actionItems.map((item) {
-            return SizedBox(
-              width: 58,
-              child: GestureDetector(
-                onTap: item.onTap,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: item.isDestructive
-                            ? Colors.red.withValues(alpha: 0.12)
-                            : item.iconColor.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        item.icon,
-                        color: item.isDestructive ? Colors.red : item.iconColor,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      item.label,
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-}
-
-class _GridMemberActionItem {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color iconColor;
-  final bool isDestructive;
-
-  const _GridMemberActionItem({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.iconColor,
-    this.isDestructive = false,
-  });
-}
-

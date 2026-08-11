@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import 'features/call/domain/call_model.dart';
 import 'features/call/providers/call_provider.dart';
 import 'features/profile/providers/profile_provider.dart';
 import 'features/chat/data/local_chat_repository_exports.dart';
+import 'features/chat/providers/chat_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 
 class MyCustomScrollBehavior extends MaterialScrollBehavior {
@@ -30,12 +32,20 @@ class VioraApp extends ConsumerStatefulWidget {
   ConsumerState<VioraApp> createState() => _VioraAppState();
 }
 
-class _VioraAppState extends ConsumerState<VioraApp> {
+class _VioraAppState extends ConsumerState<VioraApp>
+    with WidgetsBindingObserver {
   bool _isShowingIncomingCall = false;
+  Timer? _presenceHeartbeat;
+  String? _presenceUserId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startPresence(Supabase.instance.client.auth.currentUser?.id);
+    });
 
     ref.listenManual<AsyncValue<CallModel?>>(incomingCallProvider, (prev, next) async {
       final call = next.valueOrNull;
@@ -67,6 +77,15 @@ class _VioraAppState extends ConsumerState<VioraApp> {
     ref.listenManual<AsyncValue<AuthState>>(authStateProvider, (prev, next) async {
       final prevUser = prev?.valueOrNull?.session?.user;
       final nextUser = next.valueOrNull?.session?.user;
+
+      if (prevUser?.id != nextUser?.id) {
+        if (prevUser != null) {
+          await ref
+              .read(upstashRedisServiceProvider)
+              .setUserOffline(prevUser.id);
+        }
+        _startPresence(nextUser?.id);
+      }
 
       if (nextUser == null && prevUser != null) {
         final localRepo = ref.read(localChatRepositoryProvider);
@@ -104,6 +123,54 @@ class _VioraAppState extends ConsumerState<VioraApp> {
         }
       }
     });
+  }
+
+  void _startPresence(String? userId) {
+    _presenceHeartbeat?.cancel();
+    _presenceUserId = userId;
+    if (userId == null || userId.isEmpty) return;
+
+    final redis = ref.read(upstashRedisServiceProvider);
+    unawaited(redis.setUserOnline(userId));
+    _presenceHeartbeat = Timer.periodic(const Duration(seconds: 25), (_) {
+      unawaited(redis.setUserOnline(userId));
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final userId = _presenceUserId;
+    if (state == AppLifecycleState.resumed) {
+      _startPresence(
+        userId ?? Supabase.instance.client.auth.currentUser?.id,
+      );
+      return;
+    }
+
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      _presenceHeartbeat?.cancel();
+      if (userId != null) {
+        unawaited(
+          ref.read(upstashRedisServiceProvider).setUserOffline(userId),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _presenceHeartbeat?.cancel();
+    final userId = _presenceUserId;
+    if (userId != null) {
+      unawaited(
+        ref.read(upstashRedisServiceProvider).setUserOffline(userId),
+      );
+    }
+    super.dispose();
   }
 
   @override

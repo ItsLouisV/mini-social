@@ -2,13 +2,17 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-class MessageContextMenuRoute extends PageRouteBuilder {
+class MessageContextMenuRoute<T> extends PageRouteBuilder<T> {
   final Offset messagePosition;
   final Size messageSize;
   final Widget messageWidget;
   final Widget menuContentWidget;
   final bool isMine;
   final double estimatedMenuHeight;
+  final bool keepAnchorVisible;
+  final double backdropOpacity;
+  final double anchorMenuGap;
+  final bool allowScaleOvershoot;
 
   MessageContextMenuRoute({
     required this.messagePosition,
@@ -17,6 +21,10 @@ class MessageContextMenuRoute extends PageRouteBuilder {
     required this.menuContentWidget,
     required this.isMine,
     this.estimatedMenuHeight = 246.0,
+    this.keepAnchorVisible = false,
+    this.backdropOpacity = 0.6,
+    this.anchorMenuGap = 16.0,
+    this.allowScaleOvershoot = true,
   }) : super(
           opaque: false,
           barrierDismissible: true,
@@ -32,6 +40,10 @@ class MessageContextMenuRoute extends PageRouteBuilder {
               isMine: isMine,
               animation: animation,
               menuHeight: estimatedMenuHeight,
+              keepAnchorVisible: keepAnchorVisible,
+              backdropOpacity: backdropOpacity,
+              anchorMenuGap: anchorMenuGap,
+              allowScaleOvershoot: allowScaleOvershoot,
             );
           },
         );
@@ -45,6 +57,10 @@ class _MessageContextMenuOverlay extends StatelessWidget {
   final bool isMine;
   final Animation<double> animation;
   final double menuHeight;
+  final bool keepAnchorVisible;
+  final double backdropOpacity;
+  final double anchorMenuGap;
+  final bool allowScaleOvershoot;
 
   const _MessageContextMenuOverlay({
     required this.messagePosition,
@@ -54,6 +70,10 @@ class _MessageContextMenuOverlay extends StatelessWidget {
     required this.isMine,
     required this.animation,
     required this.menuHeight,
+    required this.keepAnchorVisible,
+    required this.backdropOpacity,
+    required this.anchorMenuGap,
+    required this.allowScaleOvershoot,
   });
 
   @override
@@ -64,7 +84,11 @@ class _MessageContextMenuOverlay extends StatelessWidget {
     
     // Decide whether to place menu above or below the bubble
     final spaceBelow = screenHeight - (messagePosition.dy + messageSize.height);
-    final placeMenuAbove = spaceBelow < menuHeight && messagePosition.dy > menuHeight;
+    // Member actions follow the Messenger/Zalo pattern: the selected member
+    // stays above the actions. If space is tight, both are moved upward.
+    final placeMenuAbove = !keepAnchorVisible &&
+        spaceBelow < menuHeight &&
+        messagePosition.dy > menuHeight;
 
     // Vector to center of screen
     final bubbleCenterX = messagePosition.dx + messageSize.width / 2;
@@ -85,10 +109,14 @@ class _MessageContextMenuOverlay extends StatelessWidget {
     );
 
     // Fast scale-up animation with bounce curve
-    final scaleAnimation = Tween<double>(begin: 0.92, end: 1.05).animate(
+    final scaleAnimation = Tween<double>(
+      begin: allowScaleOvershoot ? 0.92 : 0.96,
+      end: allowScaleOvershoot ? 1.05 : 1.0,
+    ).animate(
       CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOutBack, // Quick spring nảy lên
+        curve:
+            allowScaleOvershoot ? Curves.easeOutBack : Curves.easeOutCubic,
         reverseCurve: Curves.easeIn,
       ),
     );
@@ -111,12 +139,16 @@ class _MessageContextMenuOverlay extends StatelessWidget {
               opacity: opacityAnimation,
               child: kIsWeb
                   ? Container(
-                      color: Colors.black.withValues(alpha: 0.6),
+                      color: Colors.black.withValues(alpha: backdropOpacity),
                     )
                   : BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 12.0, sigmaY: 12.0),
                       child: Container(
-                        color: Colors.transparent,
+                        color: Colors.black.withValues(
+                          alpha: (backdropOpacity - 0.6)
+                              .clamp(0.0, 0.3)
+                              .toDouble(),
+                        ),
                       ),
                     ),
             ),
@@ -128,7 +160,39 @@ class _MessageContextMenuOverlay extends StatelessWidget {
               // Diagonal shift towards center (10% of distance)
               final shiftFactor = 0.10 * animation.value;
               final animatedBubbleLeft = messagePosition.dx + (dxToCenter * shiftFactor);
-              final animatedBubbleTop = messagePosition.dy + (dyToCenter * shiftFactor);
+              var animatedBubbleTop = messagePosition.dy + (dyToCenter * shiftFactor);
+
+              // Member-action menus can be taller than the remaining viewport.
+              // Move the anchor and menu as one unit so neither covers the other.
+              if (keepAnchorVisible) {
+                const safeTop = 20.0;
+                const safeBottom = 20.0;
+                final menuGap = anchorMenuGap;
+
+                final maxBubbleTop = screenHeight -
+                    safeBottom -
+                    messageSize.height -
+                    menuGap -
+                    menuHeight;
+                final contentFitsViewport = messageSize.height +
+                        menuGap +
+                        menuHeight <=
+                    screenHeight - safeTop - safeBottom;
+
+                // If a message itself is taller than the viewport, allow its
+                // top edge to move beyond the screen. The action menu remains
+                // fully visible below it, matching modern chat applications.
+                final targetBubbleTop = contentFitsViewport
+                    ? messagePosition.dy
+                        .clamp(safeTop, maxBubbleTop)
+                        .toDouble()
+                    : (messagePosition.dy < maxBubbleTop
+                        ? messagePosition.dy
+                        : maxBubbleTop);
+
+                animatedBubbleTop = messagePosition.dy +
+                    ((targetBubbleTop - messagePosition.dy) * animation.value);
+              }
 
               // Horizontal positioning for the menu based on animated bubble position
               double menuLeft;
@@ -142,10 +206,10 @@ class _MessageContextMenuOverlay extends StatelessWidget {
               // Vertical positioning for menu
               double menuTop;
               if (placeMenuAbove) {
-                menuTop = animatedBubbleTop - menuHeight - 13.0;
+                menuTop = animatedBubbleTop - menuHeight - anchorMenuGap;
                 menuTop = menuTop.clamp(20.0, screenHeight - menuHeight - 20.0);
               } else {
-                menuTop = animatedBubbleTop + messageSize.height + 13.0;
+                menuTop = animatedBubbleTop + messageSize.height + anchorMenuGap;
                 menuTop = menuTop.clamp(20.0, screenHeight - menuHeight - 20.0);
               }
 

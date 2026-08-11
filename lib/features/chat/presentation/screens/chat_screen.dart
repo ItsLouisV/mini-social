@@ -20,7 +20,6 @@ import 'package:realtime_client/src/types.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../core/services/supabase_service.dart';
-import '../../../../core/services/upstash_redis_service.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
@@ -37,6 +36,9 @@ import '../widgets/elastic_scroll_to_bottom_button.dart';
 import '../widgets/chat_pinned_banner.dart';
 import '../../presentation/widgets/message_popup_menu_content.dart';
 import '../../presentation/widgets/message_context_menu_route.dart';
+import '../../presentation/widgets/expandable_message_text.dart';
+import '../../presentation/widgets/chat_mention_suggestions.dart';
+import '../../presentation/widgets/chat_presence_subtitle.dart';
 import '../../../social/data/ai_repository.dart';
 import '../../../../core/localization/locale_provider.dart';
 import '../../../../core/localization/app_language.dart';
@@ -187,6 +189,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   XFile? _pendingImage;
   Uint8List? _pendingImagePreviewBytes;
   MessageModel? _replyingToMessage;
+  ChatMentionMatch? _activeMention;
 
   // Cache kết quả grouping để không tính lại trong mỗi build()
   List<MessageModel> _cachedMessages = [];
@@ -1023,6 +1026,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _pendingImage = null;
       _pendingImagePreviewBytes = null;
       _replyingToMessage = null;
+      _activeMention = null;
     });
     _messageController.clear();
 
@@ -1187,6 +1191,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     final isGroup = conversation?.isGroup ?? false;
     final otherUser = conversation?.otherUser;
+    final memberCount = isGroup
+        ? (ref
+                .watch(conversationMembersProvider(widget.conversationId))
+                .valueOrNull
+                ?.length ??
+            conversation?.members?.length ??
+            0)
+        : 0;
 
     final titleName = isGroup
         ? (conversation?.name?.isNotEmpty == true ? conversation!.name! : 'Nhóm trò chuyện')
@@ -1282,15 +1294,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                     const SizedBox(width: 8),
                     Flexible(
-                      child: Text(
-                        titleName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          letterSpacing: -0.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            titleName,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              letterSpacing: -0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          ChatPresenceSubtitle(
+                            isGroup: isGroup,
+                            memberCount: memberCount,
+                            userId: otherUser?.id,
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1920,6 +1943,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Input Bar ─────────────────────────────────────────────────────────────────
 
+  void _updateActiveMention(TextEditingValue value) {
+    final next = ChatMentionMatch.fromValue(value);
+    if (next?.start == _activeMention?.start &&
+        next?.end == _activeMention?.end &&
+        next?.query == _activeMention?.query) {
+      return;
+    }
+    setState(() => _activeMention = next);
+  }
+
+  void _insertMention(ChatMentionOption option) {
+    final match = _activeMention;
+    if (match == null) return;
+
+    final value = _messageController.value;
+    final replacement = '@${option.token} ';
+    final nextText = value.text.replaceRange(match.start, match.end, replacement);
+    final nextCaret = match.start + replacement.length;
+    _messageController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextCaret),
+    );
+    setState(() => _activeMention = null);
+    _focusNode.requestFocus();
+  }
+
   Widget _buildInput(ThemeData theme, bool hasWallpaper, bool isBlocked, bool isBlockedBy) {
     final isDark = theme.brightness == Brightness.dark;
 
@@ -1979,6 +2028,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final themeName = themeState[widget.conversationId] ?? 'blue';
     final chatThemeColor = getChatThemePrimaryColor(themeName);
 
+    final conversations = ref.watch(conversationsProvider).valueOrNull ?? const [];
+    final conversation = conversations.cast<ConversationModel?>().firstWhere(
+          (item) => item?.id == widget.conversationId,
+          orElse: () => null,
+        );
+    final isGroup = conversation?.isGroup == true;
+    final currentUserId = ref.watch(currentUserIdProvider) ?? '';
+    final members = isGroup
+        ? (ref.watch(groupMembersProvider(widget.conversationId)).valueOrNull ??
+            const <ConversationMemberModel>[])
+        : const <ConversationMemberModel>[];
+    final permissions =
+        isGroup ? ref.watch(groupPermissionsProvider(widget.conversationId)) : null;
+    final mentionOptions = isGroup && _activeMention != null
+        ? ChatMentionOption.build(
+            members: members,
+            currentUserId: currentUserId,
+            canMentionAll: permissions?.canMentionAll ?? false,
+            query: _activeMention!.query,
+          )
+        : const <ChatMentionOption>[];
+
     if (_isRecordingVoice) {
       return VoiceRecorderBar(
         themeColor: isVanishMode ? Colors.purpleAccent : chatThemeColor,
@@ -2024,6 +2095,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       children: [
         if (_replyingToMessage != null) _buildReplyPreview(theme, hasWallpaper),
         if (hasPendingImage) _buildImagePreview(theme, hasWallpaper),
+        if (_activeMention != null && isGroup)
+          ChatMentionSuggestions(
+            options: mentionOptions,
+            accentColor: chatThemeColor,
+            onSelected: _insertMention,
+          ),
         Container(
           padding: EdgeInsets.only(
             left: 8,
@@ -2156,6 +2233,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                     maxLines: null,
                     textInputAction: TextInputAction.newline,
+                    onChanged: (_) => _updateActiveMention(
+                      _messageController.value,
+                    ),
                     onSubmitted: (_) => _send(),
                   ),
                 ),
@@ -2432,6 +2512,7 @@ class _MessageBubble extends ConsumerStatefulWidget {
 
 class _MessageBubbleState extends ConsumerState<_MessageBubble> {
   bool _tapped = false;
+  bool _isMessageExpanded = false;
   final GlobalKey _bubbleKey = GlobalKey();
 
   // Translation state
@@ -2692,13 +2773,92 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
               Padding(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 10),
-                child: Text(
-                  message.content ?? '',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: isMine ? myTextColor : theirTextColor,
-                    height: 1.35,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ExpandableMessageText(
+                      text: message.content ?? '',
+                      expanded: _isMessageExpanded,
+                      onToggle: () => setState(
+                        () => _isMessageExpanded = !_isMessageExpanded,
+                      ),
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isMine ? myTextColor : theirTextColor,
+                        height: 1.35,
+                      ),
+                    ),
+                    if (_isTranslating || _showTranslation) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isMine
+                              ? Colors.white.withValues(alpha: 0.16)
+                              : getChatThemePrimaryColor(themeName)
+                                  .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: _isTranslating
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 11,
+                                    height: 11,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: isMine
+                                          ? Colors.white.withValues(alpha: 0.7)
+                                          : getChatThemePrimaryColor(themeName),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 7),
+                                  Text(
+                                    'Đang dịch...',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontStyle: FontStyle.italic,
+                                      color: isMine
+                                          ? Colors.white.withValues(alpha: 0.75)
+                                          : theme.hintColor,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  FaIcon(
+                                    FontAwesomeIcons.language,
+                                    size: 13,
+                                    color: (isMine
+                                            ? Colors.white
+                                            : getChatThemePrimaryColor(themeName))
+                                        .withValues(alpha: 0.8),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      _translatedText ?? '',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isMine
+                                            ? myTextColor
+                                            : theirTextColor,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
           ],
@@ -2713,6 +2873,11 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
         messageSize: size,
         messageWidget: overlayBubbleWidget,
         isMine: isMine,
+        keepAnchorVisible: true,
+        backdropOpacity: 0.72,
+        anchorMenuGap: 28,
+        estimatedMenuHeight: 350,
+        allowScaleOvershoot: false,
         menuContentWidget: MessagePopupMenuContent(
           isMine: isMine,
           isPinned: widget.isPinned,
@@ -3204,8 +3369,12 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        message.content ?? '',
+                      ExpandableMessageText(
+                        text: message.content ?? '',
+                        expanded: _isMessageExpanded,
+                        onToggle: () => setState(
+                          () => _isMessageExpanded = !_isMessageExpanded,
+                        ),
                         style: TextStyle(
                           fontSize: 15,
                           color: isMine ? myTextColor : theirTextColor,
@@ -3395,7 +3564,7 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                     padding: EdgeInsets.only(
                       top: 3,
                       bottom: 4,
-                      left: isMine ? 0 : 6,
+                      left: isMine ? 0 : (widget.isGroup ? 40 : 6),
                       right: isMine ? 6 : 0,
                     ),
                     child: Row(

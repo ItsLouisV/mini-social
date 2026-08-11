@@ -4,7 +4,6 @@ import 'package:async/async.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../profile/domain/profile_model.dart';
 import '../../../core/services/supabase_service.dart';
 import '../domain/comment_model.dart';
 import '../domain/post_model.dart';
@@ -607,12 +606,19 @@ class PostRepository {
 
     String validReason = 'other';
     final r = reason.toLowerCase();
-    if (r.contains('spam') || r.contains('rác')) validReason = 'spam';
-    else if (r.contains('quấy rối') || r.contains('harass')) validReason = 'harassment';
-    else if (r.contains('tình dục') || r.contains('nude')) validReason = 'nudity_sexual';
-    else if (r.contains('bạo lực') || r.contains('violence')) validReason = 'violence_gore';
-    else if (r.contains('thù ghét') || r.contains('hate')) validReason = 'hate_speech';
-    else if (r.contains('lừa đảo') || r.contains('sai sự thật')) validReason = 'misinformation';
+    if (r.contains('spam') || r.contains('rác')) {
+      validReason = 'spam';
+    } else if (r.contains('quấy rối') || r.contains('harass')) {
+      validReason = 'harassment';
+    } else if (r.contains('tình dục') || r.contains('nude')) {
+      validReason = 'nudity_sexual';
+    } else if (r.contains('bạo lực') || r.contains('violence')) {
+      validReason = 'violence_gore';
+    } else if (r.contains('thù ghét') || r.contains('hate')) {
+      validReason = 'hate_speech';
+    } else if (r.contains('lừa đảo') || r.contains('sai sự thật')) {
+      validReason = 'misinformation';
+    }
 
     final data = await _client.from('reports').insert({
       'content_type': 'post',

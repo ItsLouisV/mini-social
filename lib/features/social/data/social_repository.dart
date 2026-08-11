@@ -130,7 +130,8 @@ class SocialRepository {
     await _client
         .from(SupabaseConstants.notificationsTable)
         .delete()
-        .eq('id', notificationId);
+        .eq('id', notificationId)
+        .eq('receiver_id', currentUserId!);
   }
 
   Future<int> getUnreadCount() async {
