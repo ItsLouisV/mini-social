@@ -120,7 +120,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                     Stack(
                       children: [
                         GestureDetector(
-                          onTap: isGroup ? () => _pickAndChangeGroupAvatar(context, ref, conv) : null,
+                          onTap: isGroup && (perms?.canEditGroupInfo ?? false)
+                              ? () => _pickAndChangeGroupAvatar(context, ref, conv)
+                              : null,
                           child: Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
@@ -136,7 +138,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                             ),
                           ),
                         ),
-                        if (isGroup)
+                        if (isGroup && (perms?.canEditGroupInfo ?? false))
                           Positioned(
                             bottom: 2,
                             right: 2,
@@ -156,7 +158,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                               ),
                             ),
                           )
-                        else
+                        else if (!isGroup)
                           Positioned(
                             bottom: 4,
                             right: 4,
@@ -184,7 +186,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                             letterSpacing: -0.5,
                           ),
                         ),
-                        if (isGroup) ...[
+                        if (isGroup && (perms?.canEditGroupInfo ?? false)) ...[
                           const SizedBox(width: 6),
                           GestureDetector(
                             onTap: () => _showRenameGroupDialog(context, ref, conv),
@@ -975,29 +977,30 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _showAddMemberModal(context, ref, conv),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Icon(CupertinoIcons.person_badge_plus, size: 14, color: AppColors.primary),
-                          SizedBox(width: 4),
-                          Text(
-                            'Thêm thành viên',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
+                  if (perms?.canInviteMembers ?? false) ...[
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showAddMemberModal(context, ref, conv),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Icon(CupertinoIcons.person_badge_plus, size: 14, color: AppColors.primary),
+                            SizedBox(width: 4),
+                            Text(
+                              'Thêm thành viên',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(width: 10),
+                    const SizedBox(width: 10),
+                  ],
 
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -1225,7 +1228,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       // - Owner
       // ============================================================
 
-      onMuteMember: isGroupAdmin && !isMe && !member.isOwner ? () {
+      onMuteMember: isGroupAdmin &&
+              !isMe &&
+              !member.isOwner &&
+              (isOwner || !member.isCoAdmin)
+          ? () {
         _showMuteDurationPicker(context, ref, conv.id, member);
       } : null,
 
@@ -1259,7 +1266,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       // - Owner
       // ============================================================
 
-      onRemoveMember: isGroupAdmin && !isMe && !member.isOwner ? () async {
+      onRemoveMember: isGroupAdmin &&
+              !isMe &&
+              !member.isOwner &&
+              (isOwner || !member.isCoAdmin)
+          ? () async {
         try {
           await ref
             .read(chatRepositoryProvider)

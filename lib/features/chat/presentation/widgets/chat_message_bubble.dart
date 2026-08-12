@@ -236,9 +236,8 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
     final myTextColor = (themeName == 'blue')
         ? (isDark ? AppColors.darkChatTextSender : AppColors.chatTextSender)
         : Colors.white;
-    final theirTextColor = isDark
-        ? AppColors.darkChatTextReceiver
-        : AppColors.chatTextReceiver;
+    final theirTextColor =
+        isDark ? AppColors.darkChatTextReceiver : AppColors.chatTextReceiver;
 
     final hasCaption = message.isImage &&
         message.content != null &&
@@ -318,9 +317,17 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                           children: [
                             Text(
                               () {
-                                if (message.replyToMessage!.senderId == widget.currentUserId) return 'Bạn';
-                                final replyProfile = ref.watch(profileProvider(message.replyToMessage!.senderId)).valueOrNull;
-                                return replyProfile?.displayName ?? replyProfile?.fullName ?? (widget.isGroup ? 'Thành viên' : widget.otherUserName);
+                                if (message.replyToMessage!.senderId ==
+                                    widget.currentUserId) return 'Bạn';
+                                final replyProfile = ref
+                                    .watch(profileProvider(
+                                        message.replyToMessage!.senderId))
+                                    .valueOrNull;
+                                return replyProfile?.displayName ??
+                                    replyProfile?.fullName ??
+                                    (widget.isGroup
+                                        ? 'Thành viên'
+                                        : widget.otherUserName);
                               }(),
                               style: TextStyle(
                                 fontSize: 12,
@@ -451,7 +458,8 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                                     size: 13,
                                     color: (isMine
                                             ? Colors.white
-                                            : getChatThemePrimaryColor(themeName))
+                                            : getChatThemePrimaryColor(
+                                                themeName))
                                         .withValues(alpha: 0.8),
                                   ),
                                   const SizedBox(width: 6),
@@ -495,13 +503,13 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
           isMine: isMine,
           isPinned: widget.isPinned,
           isText: message.isText,
+          isRecalled: message.isRecalled,
           hasMyReaction: message.reactions.values
               .any((users) => users.contains(widget.currentUserId)),
           onClearAllReactions: () {
             Navigator.pop(context);
             ref
-                .read(
-                    realtimeMessagesProvider(message.conversationId).notifier)
+                .read(realtimeMessagesProvider(message.conversationId).notifier)
                 .clearMyReactions(message.id);
           },
           onReply: () {
@@ -576,12 +584,11 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                     onPressed: () async {
                       Navigator.pop(ctx);
                       await ref
-                          .read(
-                              realtimeMessagesProvider(message.conversationId)
-                                  .notifier)
-                          .deleteMessageLocally(message.id);
+                          .read(realtimeMessagesProvider(message.conversationId)
+                              .notifier)
+                          .deleteMessage(message.id);
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Đã xóa tin nhắn phía bạn'),
+                        content: Text('Đã xóa tin nhắn vĩnh viễn'),
                         duration: Duration(seconds: 1),
                       ));
                     },
@@ -601,8 +608,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
           onReact: (emoji) {
             Navigator.pop(context);
             ref
-                .read(
-                    realtimeMessagesProvider(message.conversationId).notifier)
+                .read(realtimeMessagesProvider(message.conversationId).notifier)
                 .toggleReaction(message.id, emoji);
           },
           onTranslate: message.isText
@@ -659,7 +665,8 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
         ),
         content: const Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Text('Có lỗi xảy ra khi gửi tin nhắn này. Bạn có muốn thử lại không?'),
+          child: Text(
+              'Có lỗi xảy ra khi gửi tin nhắn này. Bạn có muốn thử lại không?'),
         ),
         actions: [
           CupertinoDialogAction(
@@ -681,8 +688,9 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                 widget.onRetrySend!(widget.message);
               } else {
                 ref
-                    .read(realtimeMessagesProvider(widget.message.conversationId)
-                        .notifier)
+                    .read(
+                        realtimeMessagesProvider(widget.message.conversationId)
+                            .notifier)
                     .retryFailedMessage(widget.message.id);
               }
             },
@@ -750,9 +758,8 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
     final myTextColor = (themeName == 'blue')
         ? (isDark ? AppColors.darkChatTextSender : AppColors.chatTextSender)
         : Colors.white;
-    final theirTextColor = isDark
-        ? AppColors.darkChatTextReceiver
-        : AppColors.chatTextReceiver;
+    final theirTextColor =
+        isDark ? AppColors.darkChatTextReceiver : AppColors.chatTextReceiver;
 
     final showTime = _tapped ||
         widget.showInlineTime ||
@@ -785,9 +792,8 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                       : (isMine ? myBubbleColor : theirBubbleColor))),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isHighlighted
-                ? theme.colorScheme.primary
-                : Colors.transparent,
+            color:
+                isHighlighted ? theme.colorScheme.primary : Colors.transparent,
             width: isHighlighted ? 1.5 : 0,
           ),
         ),
@@ -799,7 +805,8 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
             children: [
               if (!isMine && widget.isGroup && widget.showSenderInfo)
                 Padding(
-                  padding: const EdgeInsets.only(left: 14, right: 14, top: 8, bottom: 2),
+                  padding: const EdgeInsets.only(
+                      left: 14, right: 14, top: 8, bottom: 2),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -865,9 +872,17 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                             children: [
                               Text(
                                 () {
-                                  if (message.replyToMessage!.senderId == widget.currentUserId) return 'Bạn';
-                                  final replyProfile = ref.watch(profileProvider(message.replyToMessage!.senderId)).valueOrNull;
-                                  return replyProfile?.displayName ?? replyProfile?.fullName ?? (widget.isGroup ? 'Thành viên' : widget.otherUserName);
+                                  if (message.replyToMessage!.senderId ==
+                                      widget.currentUserId) return 'Bạn';
+                                  final replyProfile = ref
+                                      .watch(profileProvider(
+                                          message.replyToMessage!.senderId))
+                                      .valueOrNull;
+                                  return replyProfile?.displayName ??
+                                      replyProfile?.fullName ??
+                                      (widget.isGroup
+                                          ? 'Thành viên'
+                                          : widget.otherUserName);
                                 }(),
                                 style: TextStyle(
                                   fontSize: 12,
@@ -917,9 +932,8 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                                   width: 32,
                                   height: 32,
                                 ),
-                                errorWidget: (_, __, ___) => const Icon(
-                                    CupertinoIcons.photo,
-                                    size: 16),
+                                errorWidget: (_, __, ___) =>
+                                    const Icon(CupertinoIcons.photo, size: 16),
                               ),
                             ),
                           ),
@@ -1115,14 +1129,19 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                 setState(() => _tapped = !_tapped);
               }
             },
-            onDoubleTap: message.isFailed || message.isRecalled || message.isSending
-                ? null
-                : widget.onSwipeToReply,
-            onSecondaryTapDown: message.isFailed || message.isRecalled || message.isSending
-                ? (message.isFailed ? (d) => _showFailedMessageMenu(context) : null)
+            onDoubleTap:
+                message.isFailed || message.isRecalled || message.isSending
+                    ? null
+                    : widget.onSwipeToReply,
+            onSecondaryTapDown: message.isFailed || message.isSending
+                ? (message.isFailed
+                    ? (d) => _showFailedMessageMenu(context)
+                    : null)
                 : (d) => _showCustomContextMenu(context),
-            onLongPressStart: message.isFailed || message.isRecalled || message.isSending
-                ? (message.isFailed ? (d) => _showFailedMessageMenu(context) : null)
+            onLongPressStart: message.isFailed || message.isSending
+                ? (message.isFailed
+                    ? (d) => _showFailedMessageMenu(context)
+                    : null)
                 : (d) => _showCustomContextMenu(context),
             child: Row(
               mainAxisAlignment:
@@ -1180,7 +1199,6 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
               ],
             ),
           ),
-
           AnimatedSize(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeInOut,
@@ -1438,8 +1456,8 @@ class _ImageBubble extends StatelessWidget {
                       width: 200,
                       height: 160,
                       color: Colors.grey.withValues(alpha: 0.2),
-                      child: const Icon(CupertinoIcons.photo,
-                          color: Colors.grey),
+                      child:
+                          const Icon(CupertinoIcons.photo, color: Colors.grey),
                     ),
                   ),
           ),
@@ -1642,8 +1660,7 @@ class _SwipeToReplyState extends State<SwipeToReply>
                       boxShadow: _isTriggered
                           ? [
                               BoxShadow(
-                                color:
-                                    replyThemeColor.withValues(alpha: 0.25),
+                                color: replyThemeColor.withValues(alpha: 0.25),
                                 blurRadius: 6,
                                 spreadRadius: 1,
                                 offset: const Offset(0, 2),
@@ -1718,8 +1735,7 @@ class _ReactionsBottomSheetState extends ConsumerState<_ReactionsBottomSheet> {
         }
       }
     } else {
-      final entry = activeReactions.firstWhere(
-          (e) => e.key == _selectedTab,
+      final entry = activeReactions.firstWhere((e) => e.key == _selectedTab,
           orElse: () => activeReactions.first);
       for (final userId in entry.value) {
         items.add((userId: userId, emoji: entry.key));
@@ -1895,7 +1911,8 @@ class _VanishTimerIndicatorState extends State<_VanishTimerIndicator> {
   void initState() {
     super.initState();
     final durationSecs = _getVanishDuration(widget.message.messageType);
-    _expirationTime = widget.message.createdAt.add(Duration(seconds: durationSecs));
+    _expirationTime =
+        widget.message.createdAt.add(Duration(seconds: durationSecs));
     _updateTimeLeft();
 
     _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
@@ -1949,7 +1966,8 @@ class _VanishTimerIndicatorState extends State<_VanishTimerIndicator> {
       decoration: BoxDecoration(
         color: Colors.purple.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.purple.withValues(alpha: 0.25), width: 0.5),
+        border: Border.all(
+            color: Colors.purple.withValues(alpha: 0.25), width: 0.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

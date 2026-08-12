@@ -104,9 +104,11 @@ class MessageModel {
       replyToMessage: json['reply_to_message'] != null
           ? (json['reply_to_message'] is List
               ? ((json['reply_to_message'] as List).isNotEmpty
-                  ? MessageModel.fromJson((json['reply_to_message'] as List).first as Map<String, dynamic>)
+                  ? MessageModel.fromJson((json['reply_to_message'] as List)
+                      .first as Map<String, dynamic>)
                   : null)
-              : MessageModel.fromJson(json['reply_to_message'] as Map<String, dynamic>))
+              : MessageModel.fromJson(
+                  json['reply_to_message'] as Map<String, dynamic>))
           : null,
       callId: json['call_id'] as String?,
       reactions: parsedReactions,
@@ -128,9 +130,16 @@ class MessageModel {
     };
   }
 
-  bool get isText => messageType == 'text' || messageType.startsWith('vanish_text');
-  bool get isImage => messageType == 'image' || messageType.startsWith('vanish_image');
-  bool get isVoice => messageType == 'voice' || messageType.startsWith('vanish_voice');
+  bool get isText =>
+      messageType == 'text' || messageType.startsWith('vanish_text');
+  bool get isImage =>
+      messageType == 'image' || messageType.startsWith('vanish_image');
+  bool get isVideo =>
+      messageType == 'video' || messageType.startsWith('vanish_video');
+  bool get isFile =>
+      messageType == 'file' || messageType.startsWith('vanish_file');
+  bool get isVoice =>
+      messageType == 'voice' || messageType.startsWith('vanish_voice');
   bool get isCall => messageType == 'call_log';
   bool get isRecalled => messageType == 'recalled';
   bool get isVanish => messageType.startsWith('vanish_');

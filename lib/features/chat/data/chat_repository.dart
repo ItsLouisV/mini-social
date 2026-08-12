@@ -43,7 +43,8 @@ class ChatRepository {
     try {
       final memberRows = await _client
           .from('conversation_members')
-          .select('*, conversation:conversations(*, last_message_sender:messages!fk_last_message(sender_id))')
+          .select(
+              '*, conversation:conversations(*, last_message_sender:messages!fk_last_message(sender_id))')
           .eq('user_id', userId);
 
       final conversations = <ConversationModel>[];
@@ -103,7 +104,8 @@ class ChatRepository {
           'is_muted': model.isMuted,
           'is_hidden': model.isHiddenState,
           'other_user_id': model.otherUser?.id,
-          'other_user_name': model.otherUser?.fullName ?? model.otherUser?.username,
+          'other_user_name':
+              model.otherUser?.fullName ?? model.otherUser?.username,
           'other_user_avatar': model.otherUser?.avatarUrl,
         });
       }
@@ -116,37 +118,43 @@ class ChatRepository {
 
       return conversations;
     } catch (e) {
-      debugPrint('⚠️ [ChatRepository] Failed fetching online conversations, loading from local DB: $e');
+      debugPrint(
+          '⚠️ [ChatRepository] Failed fetching online conversations, loading from local DB: $e');
       // Offline fallback: read from local DB
       if (_isarService != null) {
         final cached = _isarService!.getConversations();
-        return cached.map((c) => ConversationModel(
-          id: c['id'] as String,
-          type: c['type'] as String? ?? 'direct',
-          name: c['name'] as String?,
-          avatarUrl: c['avatar_url'] as String?,
-          lastMessage: c['last_message'] as String?,
-          lastMessageAt: DateTime.tryParse(c['last_message_at']?.toString() ?? ''),
-          createdAt: DateTime.tryParse(c['last_message_at']?.toString() ?? '') ?? DateTime.now(),
-          myMemberState: ConversationMemberModel(
-            id: 'offline_${c['id']}',
-            conversationId: c['id'] as String,
-            userId: currentUserId ?? '',
-            unreadCount: (c['unread_count'] as int?) ?? 0,
-            isPinned: (c['is_pinned'] as bool?) ?? false,
-            isMuted: (c['is_muted'] as bool?) ?? false,
-            isHidden: (c['is_hidden'] as bool?) ?? false,
-          ),
-          otherUser: c['other_user_id'] != null
-              ? ProfileModel(
-                  id: c['other_user_id'] as String,
-                  username: c['other_user_name'] as String? ?? '',
-                  fullName: c['other_user_name'] as String?,
-                  avatarUrl: c['other_user_avatar'] as String?,
-                  createdAt: DateTime.now(),
-                )
-              : null,
-        )).toList();
+        return cached
+            .map((c) => ConversationModel(
+                  id: c['id'] as String,
+                  type: c['type'] as String? ?? 'direct',
+                  name: c['name'] as String?,
+                  avatarUrl: c['avatar_url'] as String?,
+                  lastMessage: c['last_message'] as String?,
+                  lastMessageAt:
+                      DateTime.tryParse(c['last_message_at']?.toString() ?? ''),
+                  createdAt: DateTime.tryParse(
+                          c['last_message_at']?.toString() ?? '') ??
+                      DateTime.now(),
+                  myMemberState: ConversationMemberModel(
+                    id: 'offline_${c['id']}',
+                    conversationId: c['id'] as String,
+                    userId: currentUserId ?? '',
+                    unreadCount: (c['unread_count'] as int?) ?? 0,
+                    isPinned: (c['is_pinned'] as bool?) ?? false,
+                    isMuted: (c['is_muted'] as bool?) ?? false,
+                    isHidden: (c['is_hidden'] as bool?) ?? false,
+                  ),
+                  otherUser: c['other_user_id'] != null
+                      ? ProfileModel(
+                          id: c['other_user_id'] as String,
+                          username: c['other_user_name'] as String? ?? '',
+                          fullName: c['other_user_name'] as String?,
+                          avatarUrl: c['other_user_avatar'] as String?,
+                          createdAt: DateTime.now(),
+                        )
+                      : null,
+                ))
+            .toList();
       }
       rethrow;
     }
@@ -184,13 +192,11 @@ class ChatRepository {
   Stream<void> watchConversationsStream() {
     final stream1 = _client
         .from(SupabaseConstants.conversationsTable)
-        .stream(primaryKey: ['id'])
-        .map((_) {});
+        .stream(primaryKey: ['id']).map((_) {});
 
     final stream2 = _client
         .from('conversation_members')
-        .stream(primaryKey: ['id'])
-        .map((_) {});
+        .stream(primaryKey: ['id']).map((_) {});
 
     final controller = StreamController<void>();
     final s1 = stream1.listen((_) => controller.add(null), onError: (e) {});
@@ -245,7 +251,8 @@ class ChatRepository {
           {'conversation_id': convJson['id'], 'user_id': p2, 'role': 'member'},
         ]);
       } catch (e, stack) {
-        debugPrint('⚠️ [ChatRepository] Lỗi chèn conversation_members cho direct chat: $e\n$stack');
+        debugPrint(
+            '⚠️ [ChatRepository] Lỗi chèn conversation_members cho direct chat: $e\n$stack');
       }
     }
 
@@ -290,15 +297,22 @@ class ChatRepository {
     String? avatarUrl;
     if (avatar != null) {
       try {
-        final ext = avatar.name.contains('.') ? avatar.name.split('.').last.toLowerCase() : 'jpg';
+        final ext = avatar.name.contains('.')
+            ? avatar.name.split('.').last.toLowerCase()
+            : 'jpg';
         final fileName = '$userId/group_avatars/${_uuid.v4()}.$ext';
         final compressedBytes = await ImageCompressor.compressXFile(avatar);
-        await _client.storage.from(SupabaseConstants.messagesBucket).uploadBinary(
-          fileName,
-          compressedBytes,
-          fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg'),
-        );
-        avatarUrl = _client.storage.from(SupabaseConstants.messagesBucket).getPublicUrl(fileName);
+        await _client.storage
+            .from(SupabaseConstants.messagesBucket)
+            .uploadBinary(
+              fileName,
+              compressedBytes,
+              fileOptions: FileOptions(
+                  contentType: ext == 'png' ? 'image/png' : 'image/jpeg'),
+            );
+        avatarUrl = _client.storage
+            .from(SupabaseConstants.messagesBucket)
+            .getPublicUrl(fileName);
       } catch (e, stack) {
         debugPrint('❌ [ChatRepository] Lỗi tải lên ảnh nhóm: $e\n$stack');
       }
@@ -332,23 +346,28 @@ class ChatRepository {
 
       await _client.from('conversation_members').insert(memberRows);
     } catch (e, stack) {
-      debugPrint('❌ [ChatRepository] Lỗi chèn conversation_members, rollback: $e\n$stack');
+      debugPrint(
+          '❌ [ChatRepository] Lỗi chèn conversation_members, rollback: $e\n$stack');
       // Rollback: xoá conversation vừa tạo để không để lại "group ma"
-      await _client.from(SupabaseConstants.conversationsTable).delete().eq('id', convId);
+      await _client
+          .from(SupabaseConstants.conversationsTable)
+          .delete()
+          .eq('id', convId);
       throw Exception('Không thể tạo nhóm, vui lòng thử lại.');
     }
 
     // 3. Giờ đã là member thật sự trong conversation_members, RLS select() hợp lệ
     final created = await _client
-      .from(SupabaseConstants.conversationsTable)
-      .select()
-      .eq('id', convId)
-      .single();
+        .from(SupabaseConstants.conversationsTable)
+        .select()
+        .eq('id', convId)
+        .single();
 
     try {
       await sendMessage(convId, 'Đã tạo nhóm "$name"', messageType: 'system');
     } catch (e, stack) {
-      debugPrint('❌ [ChatRepository] Lỗi chèn tin nhắn hệ thống tạo nhóm: $e\n$stack');
+      debugPrint(
+          '❌ [ChatRepository] Lỗi chèn tin nhắn hệ thống tạo nhóm: $e\n$stack');
     }
 
     // Gửi thông báo song song thay vì tuần tự
@@ -372,7 +391,8 @@ class ChatRepository {
           });
         }
       } catch (e, stack) {
-        debugPrint('❌ [ChatRepository] Lỗi gửi thông báo tới member $mId: $e\n$stack');
+        debugPrint(
+            '❌ [ChatRepository] Lỗi gửi thông báo tới member $mId: $e\n$stack');
       }
     }));
 
@@ -388,19 +408,25 @@ class ChatRepository {
         .select('avatar_url')
         .eq('id', conversationId)
         .maybeSingle();
-    final oldAvatarUrl = (oldData?['avatar_url'] ?? oldData?['group_avatar_url']) as String?;
+    final oldAvatarUrl =
+        (oldData?['avatar_url'] ?? oldData?['group_avatar_url']) as String?;
 
-    final ext = newAvatar.name.contains('.') ? newAvatar.name.split('.').last.toLowerCase() : 'jpg';
+    final ext = newAvatar.name.contains('.')
+        ? newAvatar.name.split('.').last.toLowerCase()
+        : 'jpg';
     final fileName = '$userId/group_avatars/${_uuid.v4()}.$ext';
     final compressedBytes = await ImageCompressor.compressXFile(newAvatar);
 
     await _client.storage.from(SupabaseConstants.messagesBucket).uploadBinary(
           fileName,
           compressedBytes,
-          fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg'),
+          fileOptions: FileOptions(
+              contentType: ext == 'png' ? 'image/png' : 'image/jpeg'),
         );
 
-    final newAvatarUrl = _client.storage.from(SupabaseConstants.messagesBucket).getPublicUrl(fileName);
+    final newAvatarUrl = _client.storage
+        .from(SupabaseConstants.messagesBucket)
+        .getPublicUrl(fileName);
 
     await _client.from(SupabaseConstants.conversationsTable).update({
       'avatar_url': newAvatarUrl,
@@ -412,12 +438,17 @@ class ChatRepository {
         final String path = uri.path;
         const String bucketPrefix = '/${SupabaseConstants.messagesBucket}/';
         if (path.contains(bucketPrefix)) {
-          final String oldFilePath = path.substring(path.indexOf(bucketPrefix) + bucketPrefix.length);
-          await _client.storage.from(SupabaseConstants.messagesBucket).remove([oldFilePath]);
-          debugPrint('🗑️ [ChatRepository] Đã dọn dẹp xóa ảnh nhóm cũ khỏi Storage: $oldFilePath');
+          final String oldFilePath =
+              path.substring(path.indexOf(bucketPrefix) + bucketPrefix.length);
+          await _client.storage
+              .from(SupabaseConstants.messagesBucket)
+              .remove([oldFilePath]);
+          debugPrint(
+              '🗑️ [ChatRepository] Đã dọn dẹp xóa ảnh nhóm cũ khỏi Storage: $oldFilePath');
         }
       } catch (e, stack) {
-        debugPrint('❌ [ChatRepository] Lỗi xóa ảnh nhóm cũ khỏi Storage: $e\n$stack');
+        debugPrint(
+            '❌ [ChatRepository] Lỗi xóa ảnh nhóm cũ khỏi Storage: $e\n$stack');
       }
     }
   }
@@ -429,7 +460,8 @@ class ChatRepository {
         .select('avatar_url')
         .eq('id', conversationId)
         .maybeSingle();
-    final oldAvatarUrl = (oldData?['avatar_url'] ?? oldData?['group_avatar_url']) as String?;
+    final oldAvatarUrl =
+        (oldData?['avatar_url'] ?? oldData?['group_avatar_url']) as String?;
 
     await _client.from(SupabaseConstants.conversationsTable).update({
       'avatar_url': null,
@@ -441,12 +473,17 @@ class ChatRepository {
         final String path = uri.path;
         const String bucketPrefix = '/${SupabaseConstants.messagesBucket}/';
         if (path.contains(bucketPrefix)) {
-          final String oldFilePath = path.substring(path.indexOf(bucketPrefix) + bucketPrefix.length);
-          await _client.storage.from(SupabaseConstants.messagesBucket).remove([oldFilePath]);
-          debugPrint('🗑️ [ChatRepository] Đã dọn dẹp xóa ảnh nhóm khỏi Storage: $oldFilePath');
+          final String oldFilePath =
+              path.substring(path.indexOf(bucketPrefix) + bucketPrefix.length);
+          await _client.storage
+              .from(SupabaseConstants.messagesBucket)
+              .remove([oldFilePath]);
+          debugPrint(
+              '🗑️ [ChatRepository] Đã dọn dẹp xóa ảnh nhóm khỏi Storage: $oldFilePath');
         }
       } catch (e, stack) {
-        debugPrint('❌ [ChatRepository] Lỗi xóa ảnh nhóm khỏi Storage: $e\n$stack');
+        debugPrint(
+            '❌ [ChatRepository] Lỗi xóa ảnh nhóm khỏi Storage: $e\n$stack');
       }
     }
   }
@@ -459,14 +496,16 @@ class ChatRepository {
   }
 
   /// Cập nhật mô tả nhóm
-  Future<void> updateGroupDescription(String conversationId, String description) async {
+  Future<void> updateGroupDescription(
+      String conversationId, String description) async {
     await _client.from(SupabaseConstants.conversationsTable).update({
       'description': description,
     }).eq('id', conversationId);
   }
 
   /// Bật / tắt chế độ chỉ admin mới nhắn được tin nhắn
-  Future<void> setAdminOnlyMessaging(String conversationId, {required bool enabled}) async {
+  Future<void> setAdminOnlyMessaging(String conversationId,
+      {required bool enabled}) async {
     await _client.from(SupabaseConstants.conversationsTable).update({
       'admin_only_messaging': enabled,
     }).eq('id', conversationId);
@@ -487,7 +526,8 @@ class ChatRepository {
       'allow_member_mention_all',
       'allow_member_edit_info',
     };
-    assert(valid.contains(permission), 'Invalid member permission key: $permission');
+    assert(valid.contains(permission),
+        'Invalid member permission key: $permission');
     await _client.from(SupabaseConstants.conversationsTable).update({
       permission: value,
     }).eq('id', conversationId);
@@ -559,7 +599,8 @@ class ChatRepository {
   }
 
   /// Bỏ mute admin đối với một thành viên
-  Future<void> unmuteMemberByAdmin(String conversationId, String targetUserId) async {
+  Future<void> unmuteMemberByAdmin(
+      String conversationId, String targetUserId) async {
     await _client
         .from('conversation_members')
         .update({
@@ -572,7 +613,8 @@ class ChatRepository {
 
   /// Chuyển quyền Owner sang thành viên khác.
   /// Người cũ → 'admin', người mới → 'owner'.
-  Future<void> transferOwnership(String conversationId, String newOwnerId) async {
+  Future<void> transferOwnership(
+      String conversationId, String newOwnerId) async {
     final uid = currentUserId!;
     await _client
         .from('conversation_members')
@@ -587,12 +629,12 @@ class ChatRepository {
     // Also update created_by to reflect new owner
     await _client
         .from(SupabaseConstants.conversationsTable)
-        .update({'created_by': newOwnerId})
-        .eq('id', conversationId);
+        .update({'created_by': newOwnerId}).eq('id', conversationId);
   }
 
   /// Thêm các thành viên mới vào nhóm
-  Future<void> addGroupMembers(String conversationId, List<String> newMemberIds) async {
+  Future<void> addGroupMembers(
+      String conversationId, List<String> newMemberIds) async {
     final memberRows = newMemberIds.map((mId) {
       return {
         'conversation_id': conversationId,
@@ -605,7 +647,9 @@ class ChatRepository {
     try {
       await _client.from('conversation_members').insert(memberRows);
     } catch (e, stack) {
-      debugPrint('❌ [ChatRepository] Lỗi chèn thêm conversation_members: $e\n$stack');
+      debugPrint(
+          '❌ [ChatRepository] Lỗi chèn thêm conversation_members: $e\n$stack');
+      rethrow;
     }
   }
 
@@ -630,8 +674,11 @@ class ChatRepository {
       debugPrint('⚠️ [ChatRepository] Lỗi lấy thông tin nhóm để giải tán: $e');
     }
 
-    final groupName = (groupData?['name'] ?? groupData?['group_name']) as String? ?? 'Nhóm trò chuyện';
-    final avatarUrl = (groupData?['avatar_url'] ?? groupData?['group_avatar_url']) as String?;
+    final groupName =
+        (groupData?['name'] ?? groupData?['group_name']) as String? ??
+            'Nhóm trò chuyện';
+    final avatarUrl =
+        (groupData?['avatar_url'] ?? groupData?['group_avatar_url']) as String?;
 
     List<String> memberIds = [];
     try {
@@ -639,7 +686,8 @@ class ChatRepository {
           .from('conversation_members')
           .select('user_id')
           .eq('conversation_id', conversationId);
-      memberIds = (membersData as List).map((m) => m['user_id'] as String).toList();
+      memberIds =
+          (membersData as List).map((m) => m['user_id'] as String).toList();
     } catch (_) {}
 
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
@@ -648,9 +696,13 @@ class ChatRepository {
         final String path = uri.path;
         const String bucketPrefix = '/${SupabaseConstants.messagesBucket}/';
         if (path.contains(bucketPrefix)) {
-          final String filePath = path.substring(path.indexOf(bucketPrefix) + bucketPrefix.length);
-          await _client.storage.from(SupabaseConstants.messagesBucket).remove([filePath]);
-          debugPrint('🗑️ [ChatRepository] Đã xóa ảnh đại diện nhóm khỏi Storage: $filePath');
+          final String filePath =
+              path.substring(path.indexOf(bucketPrefix) + bucketPrefix.length);
+          await _client.storage
+              .from(SupabaseConstants.messagesBucket)
+              .remove([filePath]);
+          debugPrint(
+              '🗑️ [ChatRepository] Đã xóa ảnh đại diện nhóm khỏi Storage: $filePath');
         }
       } catch (e) {
         debugPrint('⚠️ [ChatRepository] Lỗi dọn dẹp avatar nhóm: $e');
@@ -658,9 +710,13 @@ class ChatRepository {
     }
 
     try {
-      await _client.from(SupabaseConstants.conversationsTable).delete().eq('id', conversationId);
+      await _client
+          .from(SupabaseConstants.conversationsTable)
+          .delete()
+          .eq('id', conversationId);
     } catch (e, stack) {
-      debugPrint('❌ [ChatRepository] Lỗi xóa bản ghi conversation nhóm: $e\n$stack');
+      debugPrint(
+          '❌ [ChatRepository] Lỗi xóa bản ghi conversation nhóm: $e\n$stack');
       rethrow;
     }
 
@@ -673,36 +729,43 @@ class ChatRepository {
               'receiver_id': mId,
               'sender_id': userId,
               'type': 'group_dissolved',
-              'content': 'Trưởng nhóm đã giải tán nhóm "$groupName". Bạn không thể truy cập vào nhóm này nữa',
+              'content':
+                  'Trưởng nhóm đã giải tán nhóm "$groupName". Bạn không thể truy cập vào nhóm này nữa',
             });
           } catch (_) {
             await _client.from(SupabaseConstants.notificationsTable).insert({
               'receiver_id': mId,
               'sender_id': userId,
               'type': 'other',
-              'content': 'Trưởng nhóm đã giải tán nhóm "$groupName". Bạn không thể truy cập vào nhóm này nữa',
+              'content':
+                  'Trưởng nhóm đã giải tán nhóm "$groupName". Bạn không thể truy cập vào nhóm này nữa',
             });
           }
         } catch (e) {
-          debugPrint('⚠️ [ChatRepository] Lỗi gửi thông báo giải tán tới $mId: $e');
+          debugPrint(
+              '⚠️ [ChatRepository] Lỗi gửi thông báo giải tán tới $mId: $e');
         }
       }
     }
   }
 
   /// Lấy danh sách thành viên và vai trò trong nhóm từ bảng `conversation_members`
-  Future<List<ConversationMemberModel>> getConversationMembers(String conversationId) async {
+  Future<List<ConversationMemberModel>> getConversationMembers(
+      String conversationId) async {
     final data = await _client
         .from('conversation_members')
         .select('*, profile:profiles(*)')
         .eq('conversation_id', conversationId)
         .order('joined_at', ascending: true);
 
-    return (data as List).map((e) => ConversationMemberModel.fromJson(e)).toList();
+    return (data as List)
+        .map((e) => ConversationMemberModel.fromJson(e))
+        .toList();
   }
 
   /// Cập nhật vai trò thành viên (owner, admin, member)
-  Future<void> updateMemberRole(String conversationId, String targetUserId, String role) async {
+  Future<void> updateMemberRole(
+      String conversationId, String targetUserId, String role) async {
     await _client
         .from('conversation_members')
         .update({'role': role})
@@ -711,7 +774,35 @@ class ChatRepository {
   }
 
   /// Xóa thành viên khỏi nhóm hoặc rời nhóm
-  Future<void> removeGroupMember(String conversationId, String targetUserId) async {
+  Future<void> removeGroupMember(
+      String conversationId, String targetUserId) async {
+    final actorId = currentUserId;
+    if (actorId == null) throw StateError('Bạn chưa đăng nhập');
+
+    if (actorId != targetUserId) {
+      final rows = await _client
+          .from('conversation_members')
+          .select('user_id, role')
+          .eq('conversation_id', conversationId)
+          .inFilter('user_id', [actorId, targetUserId]);
+      final members = (rows as List).cast<Map<String, dynamic>>();
+      final actorRole = members
+          .where((row) => row['user_id'] == actorId)
+          .map((row) => row['role'] as String?)
+          .firstOrNull;
+      final targetRole = members
+          .where((row) => row['user_id'] == targetUserId)
+          .map((row) => row['role'] as String?)
+          .firstOrNull;
+
+      if (actorRole == 'admin' && targetRole != 'member') {
+        throw StateError('Phó nhóm chỉ có thể xóa thành viên thường');
+      }
+      if (actorRole != 'owner' && actorRole != 'admin') {
+        throw StateError('Bạn không có quyền xóa thành viên khỏi nhóm');
+      }
+    }
+
     await _client
         .from('conversation_members')
         .delete()
@@ -776,25 +867,37 @@ class ChatRepository {
     final userId = currentUserId!;
     final currentlyPinned = conv.isPinnedState;
 
-    await _client.from('conversation_members').update({
-      'is_pinned': !currentlyPinned,
-    }).eq('conversation_id', conv.id).eq('user_id', userId);
+    await _client
+        .from('conversation_members')
+        .update({
+          'is_pinned': !currentlyPinned,
+        })
+        .eq('conversation_id', conv.id)
+        .eq('user_id', userId);
   }
 
   Future<void> toggleMute(String convId, bool currentMuteState) async {
     final userId = currentUserId!;
-    await _client.from('conversation_members').update({
-      'is_muted': !currentMuteState,
-    }).eq('conversation_id', convId).eq('user_id', userId);
+    await _client
+        .from('conversation_members')
+        .update({
+          'is_muted': !currentMuteState,
+        })
+        .eq('conversation_id', convId)
+        .eq('user_id', userId);
   }
 
   Future<void> toggleHide(ConversationModel conv) async {
     final userId = currentUserId!;
     final currentlyHidden = conv.isHiddenState;
 
-    await _client.from('conversation_members').update({
-      'is_hidden': !currentlyHidden,
-    }).eq('conversation_id', conv.id).eq('user_id', userId);
+    await _client
+        .from('conversation_members')
+        .update({
+          'is_hidden': !currentlyHidden,
+        })
+        .eq('conversation_id', conv.id)
+        .eq('user_id', userId);
   }
 
   Future<void> markAsRead(ConversationModel conv) async {
@@ -803,13 +906,19 @@ class ChatRepository {
 
   Future<void> deleteConversation(String conversationId) async {
     try {
-      await _client.from(SupabaseConstants.messagesTable).delete().eq('conversation_id', conversationId);
+      await _client
+          .from(SupabaseConstants.messagesTable)
+          .delete()
+          .eq('conversation_id', conversationId);
     } catch (e, stack) {
       debugPrint('⚠️ [ChatRepository] Lỗi xóa tin nhắn: $e\n$stack');
     }
 
     try {
-      await _client.from(SupabaseConstants.conversationsTable).delete().eq('id', conversationId);
+      await _client
+          .from(SupabaseConstants.conversationsTable)
+          .delete()
+          .eq('id', conversationId);
     } catch (e, stack) {
       debugPrint('❌ [ChatRepository] Lỗi xóa cuộc trò chuyện: $e\n$stack');
       rethrow;
@@ -822,7 +931,8 @@ class ChatRepository {
   Future<List<MessageModel>> getMessages(String conversationId) async {
     final data = await _client
         .from(SupabaseConstants.messagesTable)
-        .select('*, reply_to_message:reply_to_message_id(*), reactions:message_reactions(emoji, user_id)')
+        .select(
+            '*, reply_to_message:reply_to_message_id(*), reactions:message_reactions(emoji, user_id)')
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true);
 
@@ -840,10 +950,13 @@ class ChatRepository {
     // 1. Nếu offset == 0, ưu tiên đọc hot cache từ Upstash Redis Cache trước (1-5ms)
     if (offset == 0 && _upstashRedis != null) {
       try {
-        final cachedJsonList = await _upstashRedis!.getCachedRecentMessages(conversationId);
+        final cachedJsonList =
+            await _upstashRedis!.getCachedRecentMessages(conversationId);
         if (cachedJsonList.isNotEmpty) {
-          final cachedMsgs = cachedJsonList.map((e) => MessageModel.fromJson(e)).toList();
-          debugPrint('⚡ [ChatRepository] 🚀 Hot hit Upstash Redis Cache: ${cachedMsgs.length} tin nhắn');
+          final cachedMsgs =
+              cachedJsonList.map((e) => MessageModel.fromJson(e)).toList();
+          debugPrint(
+              '⚡ [ChatRepository] 🚀 Hot hit Upstash Redis Cache: ${cachedMsgs.length} tin nhắn');
           return cachedMsgs;
         }
       } catch (e) {
@@ -855,7 +968,8 @@ class ChatRepository {
       // 2. Fetch từ Supabase Database
       final data = await _client
           .from(SupabaseConstants.messagesTable)
-          .select('*, reply_to_message:reply_to_message_id(*), reactions:message_reactions(emoji, user_id)')
+          .select(
+              '*, reply_to_message:reply_to_message_id(*), reactions:message_reactions(emoji, user_id)')
           .eq('conversation_id', conversationId)
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);
@@ -864,36 +978,43 @@ class ChatRepository {
 
       // 3. Sync messages to local DB (platform-independent)
       if (_isarService != null && msgs.isNotEmpty) {
-        final jsonMsgs = msgs.map((m) => {
-          'id': m.id,
-          'conversation_id': m.conversationId,
-          'sender_id': m.senderId,
-          'content': m.content ?? '',
-          'message_type': m.messageType,
-          'created_at': m.createdAt.toIso8601String(),
-          'reply_to_message_id': m.replyToMessageId,
-          'status': 'sent',
-          'media_urls': m.mediaUrls,
-        }).toList();
+        final jsonMsgs = msgs
+            .map((m) => {
+                  'id': m.id,
+                  'conversation_id': m.conversationId,
+                  'sender_id': m.senderId,
+                  'content': m.content ?? '',
+                  'message_type': m.messageType,
+                  'created_at': m.createdAt.toIso8601String(),
+                  'reply_to_message_id': m.replyToMessageId,
+                  'status': 'sent',
+                  'media_urls': m.mediaUrls,
+                })
+            .toList();
         await _isarService!.saveMessages(conversationId, jsonMsgs);
-        await _isarService!.pruneConversationMessages(conversationId, maxKeep: 100);
+        await _isarService!
+            .pruneConversationMessages(conversationId, maxKeep: 100);
       }
 
       if (offset == 0 && _upstashRedis != null && data.isNotEmpty) {
-        _upstashRedis!.cacheMessagesList(
+        _upstashRedis!
+            .cacheMessagesList(
           conversationId,
           List<Map<String, dynamic>>.from(data),
-        ).catchError((err) {
+        )
+            .catchError((err) {
           debugPrint('⚠️ [ChatRepository] Lỗi lưu Upstash Redis Cache: $err');
         });
       }
 
       return msgs;
     } catch (e) {
-      debugPrint('⚠️ [ChatRepository] Offline fallback for messages: loading from local DB: $e');
+      debugPrint(
+          '⚠️ [ChatRepository] Offline fallback for messages: loading from local DB: $e');
       // Offline fallback: load from local DB
       if (_isarService != null) {
-        final cached = _isarService!.getMessages(conversationId, limit: limit, offset: offset);
+        final cached = _isarService!
+            .getMessages(conversationId, limit: limit, offset: offset);
         return cached.map((m) {
           final rawMediaUrls = m['media_urls'];
           List<String> mediaUrls = const [];
@@ -906,7 +1027,8 @@ class ChatRepository {
             senderId: m['sender_id'] as String,
             content: m['content'] as String?,
             messageType: m['message_type'] as String? ?? 'text',
-            createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ?? DateTime.now(),
+            createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ??
+                DateTime.now(),
             replyToMessageId: m['reply_to_message_id'] as String?,
             mediaUrls: mediaUrls,
           );
@@ -975,7 +1097,8 @@ class ChatRepository {
         windowSeconds: 15,
       );
       if (!allowed) {
-        throw Exception('Bạn đang gửi tin nhắn quá nhanh (tối đa 5 tin/15s). Vui lòng đợi trong giây lát!');
+        throw Exception(
+            'Bạn đang gửi tin nhắn quá nhanh (tối đa 5 tin/15s). Vui lòng đợi trong giây lát!');
       }
     }
 
@@ -1034,15 +1157,19 @@ class ChatRepository {
       ]);
 
       if (_upstashRedis != null) {
-        _upstashRedis!.cacheRecentMessage(conversationId, data).catchError((err) {
-          debugPrint('⚠️ [ChatRepository] Lỗi cache recent message lên Upstash Redis: $err');
+        _upstashRedis!
+            .cacheRecentMessage(conversationId, data)
+            .catchError((err) {
+          debugPrint(
+              '⚠️ [ChatRepository] Lỗi cache recent message lên Upstash Redis: $err');
         });
       }
 
       return realMsg;
     } catch (e) {
-      debugPrint('⚠️ [ChatRepository.sendMessage Error]: $e. Enqueueing to offline sync queue...');
-      
+      debugPrint(
+          '⚠️ [ChatRepository.sendMessage Error]: $e. Enqueueing to offline sync queue...');
+
       // Đẩy vào Outbox Sync Queue khi không có mạng
       if (_syncEngine != null) {
         await _syncEngine!.enqueueAction(
@@ -1051,7 +1178,8 @@ class ChatRepository {
             'conversation_id': conversationId,
             'content': content,
             'message_type': messageType,
-            if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+            if (replyToMessageId != null)
+              'reply_to_message_id': replyToMessageId,
           },
         );
       }
@@ -1079,16 +1207,14 @@ class ChatRepository {
         ? image.name.split('.').last.toLowerCase()
         : 'jpg';
     final fileName = '$currentUserId/${_uuid.v4()}.$ext';
-    
+
     // Tự động nén ảnh tin nhắn chat
     final compressedBytes = await ImageCompressor.compressXFile(image);
     final contentType = ext == 'png'
         ? 'image/png'
         : (ext == 'gif' ? 'image/gif' : 'image/jpeg');
 
-    await _client.storage
-        .from(SupabaseConstants.messagesBucket)
-        .uploadBinary(
+    await _client.storage.from(SupabaseConstants.messagesBucket).uploadBinary(
           fileName,
           compressedBytes,
           fileOptions: FileOptions(
@@ -1109,8 +1235,7 @@ class ChatRepository {
           'content': caption ?? 'Đã gửi một ảnh',
           'media_urls': [url],
           'message_type': messageType,
-          if (replyToMessageId != null)
-            'reply_to_message_id': replyToMessageId,
+          if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
         })
         .select()
         .single();
@@ -1123,7 +1248,8 @@ class ChatRepository {
     // Invalidate Redis cache so next load fetches fresh from Supabase (contains media_urls)
     if (_upstashRedis != null) {
       _upstashRedis!.invalidateMessagesCache(conversationId).catchError((err) {
-        debugPrint('⚠️ [ChatRepository] Lỗi invalidate Redis cache (image): $err');
+        debugPrint(
+            '⚠️ [ChatRepository] Lỗi invalidate Redis cache (image): $err');
       });
     }
 
@@ -1140,9 +1266,7 @@ class ChatRepository {
     final fileName = '$currentUserId/${_uuid.v4()}.m4a';
 
     try {
-      await _client.storage
-          .from(SupabaseConstants.messagesBucket)
-          .uploadBinary(
+      await _client.storage.from(SupabaseConstants.messagesBucket).uploadBinary(
             fileName,
             Uint8List.fromList(audioBytes),
             fileOptions: const FileOptions(contentType: 'audio/m4a'),
@@ -1167,8 +1291,7 @@ class ChatRepository {
           'content': 'Tin nhắn thoại ($durLabel)',
           'media_urls': [url],
           'message_type': messageType,
-          if (replyToMessageId != null)
-            'reply_to_message_id': replyToMessageId,
+          if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
         })
         .select()
         .single();
@@ -1181,7 +1304,8 @@ class ChatRepository {
     // Invalidate Redis cache so next load fetches fresh from Supabase (contains media_urls)
     if (_upstashRedis != null) {
       _upstashRedis!.invalidateMessagesCache(conversationId).catchError((err) {
-        debugPrint('⚠️ [ChatRepository] Lỗi invalidate Redis cache (voice): $err');
+        debugPrint(
+            '⚠️ [ChatRepository] Lỗi invalidate Redis cache (voice): $err');
       });
     }
 
@@ -1194,12 +1318,17 @@ class ChatRepository {
 
     try {
       // 1. Reset unread count for current user in conversation_members
-      await _client.from('conversation_members').update({
-        'unread_count': 0,
-        'last_read_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('conversation_id', conversationId).eq('user_id', userId);
+      await _client
+          .from('conversation_members')
+          .update({
+            'unread_count': 0,
+            'last_read_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('conversation_id', conversationId)
+          .eq('user_id', userId);
     } catch (_) {
-      debugPrint('ℹ️ [ChatRepository.markAsSeen] Offline - skipped conversation_members update');
+      debugPrint(
+          'ℹ️ [ChatRepository.markAsSeen] Offline - skipped conversation_members update');
     }
 
     try {
@@ -1215,13 +1344,15 @@ class ChatRepository {
           .neq('sender_id', userId)
           .eq('is_seen', false);
     } catch (_) {
-      debugPrint('ℹ️ [ChatRepository.markAsSeen] Offline - skipped messages update');
+      debugPrint(
+          'ℹ️ [ChatRepository.markAsSeen] Offline - skipped messages update');
     }
 
     // 3. Invalidate Redis cache so next load fetches fresh is_seen: true from Supabase
     if (_upstashRedis != null) {
       _upstashRedis!.invalidateMessagesCache(conversationId).catchError((err) {
-        debugPrint('⚠️ [ChatRepository.markAsSeen] Lỗi invalidate Redis cache: $err');
+        debugPrint(
+            '⚠️ [ChatRepository.markAsSeen] Lỗi invalidate Redis cache: $err');
       });
     }
   }
@@ -1238,16 +1369,17 @@ class ChatRepository {
 
   Future<void> unpinMessage(String conversationId, String messageId) async {
     await _client
-      .from('pinned_messages')
-      .delete()
-      .eq('conversation_id', conversationId)
-      .eq('message_id', messageId);
+        .from('pinned_messages')
+        .delete()
+        .eq('conversation_id', conversationId)
+        .eq('message_id', messageId);
   }
 
-  Future<List<PinnedMessageModel>> getPinnedMessages(String conversationId) async {
+  Future<List<PinnedMessageModel>> getPinnedMessages(
+      String conversationId) async {
     final data = await _client
-      .from('pinned_messages')
-      .select('''
+        .from('pinned_messages')
+        .select('''
         *,
         message:message_id(
           *,
@@ -1259,30 +1391,20 @@ class ChatRepository {
           reply_to_message:reply_to_message_id(*)
         )
       ''')
-      .eq('conversation_id', conversationId)
-      .order('pinned_at', ascending: false);
+        .eq('conversation_id', conversationId)
+        .order('pinned_at', ascending: false);
 
-    return (data as List)
-      .map((e) => PinnedMessageModel.fromJson(e))
-      .toList();
+    return (data as List).map((e) => PinnedMessageModel.fromJson(e)).toList();
   }
 
   Future<void> recallMessage(String messageId) async {
     await _client
-        .from(SupabaseConstants.messagesTable)
-        .update({
-          'content': 'Tin nhắn đã thu hồi',
-          'message_type': 'recalled',
-          'media_urls': [],
-        })
-        .eq('id', messageId);
+        .rpc('recall_chat_message', params: {'p_message_id': messageId});
   }
 
   Future<void> deleteMessage(String messageId) async {
     await _client
-        .from(SupabaseConstants.messagesTable)
-        .delete()
-        .eq('id', messageId);
+        .rpc('delete_chat_message', params: {'p_message_id': messageId});
   }
 
   // ── Reactions ────────────────────────────────────────────────────────────────────

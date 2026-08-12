@@ -662,10 +662,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final mediaQuery = MediaQuery.of(context);
     final size = mediaQuery.size;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF090A10),
-      resizeToAvoidBottomInset: true,
-      body: Stack(
+    return Theme(
+      // Authentication has its own dark visual identity and must not follow
+      // the light/dark preference used by the signed-in application.
+      data: ThemeData.dark(useMaterial3: true).copyWith(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _Design.accentGlow,
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: const Color(0xFF090A10),
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF090A10),
+        resizeToAvoidBottomInset: true,
+        body: Stack(
         fit: StackFit.expand,
         children: [
           // ── 1. Fullscreen Wallpaper ─────────────────────────────────────
@@ -992,6 +1002,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             ),
           ),
         ],
+        ),
       ),
     );
   }

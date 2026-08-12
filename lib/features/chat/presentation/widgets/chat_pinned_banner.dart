@@ -16,6 +16,9 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
   final String currentUserId;
   final String otherUserName;
   final bool hasWallpaper;
+  final bool canManagePins;
+  final bool isExpanded;
+  final ValueChanged<bool> onExpandedChanged;
   final Function(PinnedMessageModel) onJumpToMessage;
   final Function(String messageId) onUnpinMessage;
 
@@ -26,6 +29,9 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
     required this.currentUserId,
     required this.otherUserName,
     this.hasWallpaper = false,
+    this.canManagePins = true,
+    this.isExpanded = false,
+    required this.onExpandedChanged,
     required this.onJumpToMessage,
     required this.onUnpinMessage,
   });
@@ -35,10 +41,8 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
 }
 
 class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
-  bool _isExpanded = false;
-
-  Widget? _buildMediaPreview(MessageModel msg, Color accentColor, {double size = 36}) {
-
+  Widget? _buildMediaPreview(MessageModel msg, Color accentColor,
+      {double size = 36}) {
     // Image
     if (msg.isImage) {
       final mediaUrl = msg.firstMediaUrl;
@@ -164,13 +168,12 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
 
     final senderName = _getSenderName(latestMsg);
 
-    final bannerBgColor = widget.hasWallpaper
-        ? (isDark
-            ? Colors.black.withValues(alpha: 0.65)
-            : Colors.white.withValues(alpha: 0.75))
-        : (isDark
-            ? const Color(0xFF1E1E2C).withValues(alpha: 0.9)
-            : Colors.white.withValues(alpha: 0.92));
+    // Keep the surface translucent so the conversation remains perceptible
+    // underneath, like a sheet of liquid glass.
+    final bannerBgColor = isDark
+        ? const Color(0xFF171722)
+            .withValues(alpha: widget.isExpanded ? 0.78 : 0.62)
+        : Colors.white.withValues(alpha: widget.isExpanded ? 0.82 : 0.68);
 
     final borderColor = isDark
         ? Colors.white.withValues(alpha: 0.12)
@@ -183,7 +186,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOutCubic,
@@ -215,7 +218,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                     onTap: () {
                       HapticFeedback.selectionClick();
                       if (widget.pinnedList.length > 1) {
-                        setState(() => _isExpanded = !_isExpanded);
+                        widget.onExpandedChanged(!widget.isExpanded);
                       } else {
                         widget.onJumpToMessage(latestPin);
                       }
@@ -334,7 +337,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                           // Action Button (Expand toggle or Unpin button)
                           if (widget.pinnedList.length > 1)
                             AnimatedRotation(
-                              turns: _isExpanded ? 0.5 : 0.0,
+                              turns: widget.isExpanded ? 0.5 : 0.0,
                               duration: const Duration(milliseconds: 250),
                               curve: Curves.easeInOutCubic,
                               child: Container(
@@ -352,7 +355,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                 ),
                               ),
                             )
-                          else
+                          else if (widget.canManagePins)
                             CupertinoButton(
                               padding: EdgeInsets.zero,
                               minSize: 28,
@@ -372,7 +375,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                   ),
 
                   // Expanded List of all Pinned Messages (Smooth animated expand)
-                  if (_isExpanded && widget.pinnedList.length > 1)
+                  if (widget.isExpanded && widget.pinnedList.length > 1)
                     Container(
                       constraints: const BoxConstraints(maxHeight: 220),
                       decoration: BoxDecoration(
@@ -411,7 +414,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
 
                           return InkWell(
                             onTap: () {
-                              setState(() => _isExpanded = false);
+                              widget.onExpandedChanged(false);
                               widget.onJumpToMessage(pin);
                             },
                             child: Padding(
@@ -469,20 +472,22 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                     ),
                                   ],
 
-                                  const SizedBox(width: 4),
-                                  CupertinoButton(
-                                    padding: EdgeInsets.zero,
-                                    minSize: 28,
-                                    onPressed: () {
-                                      HapticFeedback.lightImpact();
-                                      widget.onUnpinMessage(pin.messageId);
-                                    },
-                                    child: const Icon(
-                                      CupertinoIcons.trash,
-                                      size: 15,
-                                      color: Colors.redAccent,
+                                  if (widget.canManagePins) ...[
+                                    const SizedBox(width: 4),
+                                    CupertinoButton(
+                                      padding: EdgeInsets.zero,
+                                      minSize: 28,
+                                      onPressed: () {
+                                        HapticFeedback.lightImpact();
+                                        widget.onUnpinMessage(pin.messageId);
+                                      },
+                                      child: const Icon(
+                                        CupertinoIcons.trash,
+                                        size: 15,
+                                        color: Colors.redAccent,
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ),

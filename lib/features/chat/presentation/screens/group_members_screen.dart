@@ -269,7 +269,8 @@ class _GroupMembersScreenState
 
       onMuteMember: isGroupAdmin &&
               !isMe &&
-              !member.isOwner
+              !member.isOwner &&
+              (isOwner || !member.isCoAdmin)
           ? () {
               _showMuteDurationPicker(
                 member,
@@ -314,7 +315,8 @@ class _GroupMembersScreenState
 
       onRemoveMember: isGroupAdmin &&
               !isMe &&
-              !member.isOwner
+              !member.isOwner &&
+              (isOwner || !member.isCoAdmin)
           ? () {
               _confirmRemoveMember(
                 member,

@@ -7,6 +7,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/localization/app_translations.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/extensions/date_extension.dart';
+import '../../../../core/utils/media_save_service.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/parsed_caption_text.dart';
 import '../../../profile/providers/profile_provider.dart';
@@ -85,7 +86,8 @@ class _PostCardState extends ConsumerState<PostCard> {
       return _HiddenPostBanner(
         post: post,
         ref: ref,
-        message: 'Bạn sẽ không nhìn thấy bài viết của ${post.author?.displayName ?? 'người này'} trên Bảng feed trong 30 ngày.',
+        message:
+            'Bạn sẽ không nhìn thấy bài viết của ${post.author?.displayName ?? 'người này'} trên Bảng feed trong 30 ngày.',
         showFeedbackPills: true,
         onUndo: () async {
           try {
@@ -129,7 +131,8 @@ class _PostCardState extends ConsumerState<PostCard> {
       return _HiddenPostBanner(
         post: post,
         ref: ref,
-        message: 'Đã chuyển bài viết vào thùng rác. Các mục trong thùng rác sẽ bị xóa sau 30 ngày.',
+        message:
+            'Đã chuyển bài viết vào thùng rác. Các mục trong thùng rác sẽ bị xóa sau 30 ngày.',
         showFeedbackPills: false,
         onUndo: () async {
           try {
@@ -154,8 +157,12 @@ class _PostCardState extends ConsumerState<PostCard> {
       decoration: BoxDecoration(
         color: theme.cardColor,
         border: Border(
-          top: BorderSide(color: theme.dividerColor.withValues(alpha: isDark ? 0.05 : 0.08), width: 0.5),
-          bottom: BorderSide(color: theme.dividerColor.withValues(alpha: isDark ? 0.05 : 0.08), width: 0.5),
+          top: BorderSide(
+              color: theme.dividerColor.withValues(alpha: isDark ? 0.05 : 0.08),
+              width: 0.5),
+          bottom: BorderSide(
+              color: theme.dividerColor.withValues(alpha: isDark ? 0.05 : 0.08),
+              width: 0.5),
         ),
       ),
       child: Column(
@@ -268,8 +275,12 @@ class _PostCardState extends ConsumerState<PostCard> {
                   GestureDetector(
                     onTap: () async {
                       try {
-                        await ref.read(profileRepositoryProvider).muteUser(post.userId);
-                        ref.read(postLocalStatesProvider.notifier).snoozePost(post.id);
+                        await ref
+                            .read(profileRepositoryProvider)
+                            .muteUser(post.userId);
+                        ref
+                            .read(postLocalStatesProvider.notifier)
+                            .snoozePost(post.id);
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -291,14 +302,17 @@ class _PostCardState extends ConsumerState<PostCard> {
           const SizedBox(height: 10),
 
           // Badge kiểm duyệt: chỉ hiện với creator khi bài chưa được published
-          if (isOwner && post.moderationStatus != 'published' && post.moderationStatus != null) ...[
+          if (isOwner &&
+              post.moderationStatus != 'published' &&
+              post.moderationStatus != null) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
                   if (post.moderationStatus == 'pending')
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.orange.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -332,9 +346,11 @@ class _PostCardState extends ConsumerState<PostCard> {
                         ],
                       ),
                     )
-                  else if (post.moderationStatus == 'hidden' || post.moderationStatus == 'removed')
+                  else if (post.moderationStatus == 'hidden' ||
+                      post.moderationStatus == 'removed')
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.red.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -365,7 +381,8 @@ class _PostCardState extends ConsumerState<PostCard> {
                     )
                   else if (post.moderationStatus == 'shadow_limited')
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.amber.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
@@ -477,10 +494,12 @@ class _FacebookOptionsBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<_FacebookOptionsBottomSheet> createState() => _FacebookOptionsBottomSheetState();
+  State<_FacebookOptionsBottomSheet> createState() =>
+      _FacebookOptionsBottomSheetState();
 }
 
-class _FacebookOptionsBottomSheetState extends State<_FacebookOptionsBottomSheet> {
+class _FacebookOptionsBottomSheetState
+    extends State<_FacebookOptionsBottomSheet> {
   int _currentPage = 0; // 0: Main Menu, 1: Lựa chọn khác
 
   @override
@@ -502,7 +521,9 @@ class _FacebookOptionsBottomSheetState extends State<_FacebookOptionsBottomSheet
       child: AnimatedSize(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        child: _currentPage == 0 ? _buildMainMenu(context) : _buildOtherOptions(context),
+        child: _currentPage == 0
+            ? _buildMainMenu(context)
+            : _buildOtherOptions(context),
       ),
     );
   }
@@ -528,6 +549,34 @@ class _FacebookOptionsBottomSheetState extends State<_FacebookOptionsBottomSheet
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildDragHandle(theme),
+        if (widget.post.media.any((media) => media.type == 'image')) ...[
+          _buildOptionTile(
+            icon: CupertinoIcons.arrow_down_to_line,
+            title: 'Lưu ảnh',
+            subtitle: 'Lưu ảnh của bài viết vào thiết bị',
+            onTap: () async {
+              final urls = widget.post.media
+                  .where((media) => media.type == 'image')
+                  .map((media) => media.url)
+                  .where((url) => url.isNotEmpty)
+                  .toList();
+              Navigator.pop(context);
+              try {
+                await MediaSaveService.saveUrls(
+                  urls,
+                  fallbackBaseName: 'viora_post_${widget.post.id}',
+                );
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Không thể lưu ảnh: $e')),
+                  );
+                }
+              }
+            },
+          ),
+          const Divider(height: 1),
+        ],
         if (widget.isOwner) ...[
           _buildOptionTile(
             icon: CupertinoIcons.pencil,
@@ -567,8 +616,12 @@ class _FacebookOptionsBottomSheetState extends State<_FacebookOptionsBottomSheet
             onTap: () async {
               Navigator.pop(context);
               try {
-                await widget.ref.read(profileRepositoryProvider).muteUser(widget.post.userId);
-                widget.ref.read(postLocalStatesProvider.notifier).snoozePost(widget.post.id);
+                await widget.ref
+                    .read(profileRepositoryProvider)
+                    .muteUser(widget.post.userId);
+                widget.ref
+                    .read(postLocalStatesProvider.notifier)
+                    .snoozePost(widget.post.id);
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Lỗi ẩn bài viết: $e')),
@@ -635,8 +688,12 @@ class _FacebookOptionsBottomSheetState extends State<_FacebookOptionsBottomSheet
           onTap: () async {
             Navigator.pop(context);
             try {
-              await widget.ref.read(profileRepositoryProvider).muteUser(widget.post.userId);
-              widget.ref.read(postLocalStatesProvider.notifier).snoozePost(widget.post.id);
+              await widget.ref
+                  .read(profileRepositoryProvider)
+                  .muteUser(widget.post.userId);
+              widget.ref
+                  .read(postLocalStatesProvider.notifier)
+                  .snoozePost(widget.post.id);
             } catch (e) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Lỗi tạm ẩn: $e')),
@@ -658,7 +715,8 @@ class _FacebookOptionsBottomSheetState extends State<_FacebookOptionsBottomSheet
           onTap: () {
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Đã bật nhận thông báo cho bài viết này')),
+              const SnackBar(
+                  content: Text('Đã bật nhận thông báo cho bài viết này')),
             );
           },
         ),
@@ -703,15 +761,14 @@ class _FacebookOptionsBottomSheetState extends State<_FacebookOptionsBottomSheet
   }
 }
 
-
-
 // ── Xác nhận chuyển vào thùng rác ──
 void _confirmMoveToTrash(BuildContext context, WidgetRef ref, PostModel post) {
   showCupertinoDialog(
     context: context,
     builder: (ctx) => CupertinoAlertDialog(
       title: const Text('Chuyển vào thùng rác?'),
-      content: const Text('Bài viết sẽ biến mất khỏi bảng tin. Các mục trong thùng rác sẽ bị xóa sau 30 ngày.'),
+      content: const Text(
+          'Bài viết sẽ biến mất khỏi bảng tin. Các mục trong thùng rác sẽ bị xóa sau 30 ngày.'),
       actions: [
         CupertinoDialogAction(
           onPressed: () => ctx.pop(),
@@ -774,7 +831,8 @@ void _showWhySeeThisPostDialog(BuildContext context, PostModel post) {
 }
 
 // ── Dialog Báo cáo bài viết toàn cục ──
-void _showGlobalReportDialog(BuildContext context, WidgetRef ref, PostModel post) {
+void _showGlobalReportDialog(
+    BuildContext context, WidgetRef ref, PostModel post) {
   final currentUserId = ref.read(currentUserIdProvider) ?? '';
   showModalBottomSheet(
     context: context,
@@ -837,13 +895,16 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
       key: Key('dismiss_${widget.post.id}'),
       direction: DismissDirection.horizontal,
       onDismissed: (_) {
-        widget.ref.read(postLocalStatesProvider.notifier).dismissPost(widget.post.id);
+        widget.ref
+            .read(postLocalStatesProvider.notifier)
+            .dismissPost(widget.post.id);
       },
       child: Container(
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: theme.dividerColor.withValues(alpha: 0.15)),
         ),
@@ -852,23 +913,28 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
           children: [
             Row(
               children: [
-                const Icon(CupertinoIcons.eye_slash_fill, size: 16, color: Colors.blue),
+                const Icon(CupertinoIcons.eye_slash_fill,
+                    size: 16, color: Colors.blue),
                 const SizedBox(width: 8),
                 Text(
                   AppTranslations.tr(widget.ref, 'hidden_post'),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const Spacer(),
                 TextButton(
                   onPressed: widget.onUndo,
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     backgroundColor: isDark ? Colors.white10 : Colors.black12,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                   child: Text(
                     AppTranslations.tr(widget.ref, 'undo'),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
               ],
@@ -888,19 +954,23 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
               const SizedBox(height: 8),
               Text(
                 AppTranslations.tr(widget.ref, 'why_not_interested'),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _buildFeedbackPill('Không phù hợp với các mối quan tâm của tôi'),
+                  _buildFeedbackPill(
+                      'Không phù hợp với các mối quan tâm của tôi'),
                   _buildFeedbackPill('Lừa đảo'),
                   _buildFeedbackPill('Tình dục'),
                   _buildFeedbackPill('Gây phiền toái'),
-                  _buildFeedbackPill('Tôi không thích người sáng tạo nội dung này'),
-                  _buildFeedbackPill(AppTranslations.tr(widget.ref, 'other'), isOther: true),
+                  _buildFeedbackPill(
+                      'Tôi không thích người sáng tạo nội dung này'),
+                  _buildFeedbackPill(AppTranslations.tr(widget.ref, 'other'),
+                      isOther: true),
                 ],
               ),
               if (_selectedFeedbackReasons.isNotEmpty) ...[
@@ -913,8 +983,11 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
                         : () async {
                             setState(() => _isSubmitting = true);
                             try {
-                              final finalReasonStr = _selectedFeedbackReasons.join(', ');
-                              await widget.ref.read(postRepositoryProvider).reportPost(
+                              final finalReasonStr =
+                                  _selectedFeedbackReasons.join(', ');
+                              await widget.ref
+                                  .read(postRepositoryProvider)
+                                  .reportPost(
                                     postId: widget.post.id,
                                     reason: finalReasonStr,
                                   );
@@ -924,22 +997,26 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
                             } catch (e) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Lỗi gửi báo cáo: $e')),
+                                  SnackBar(
+                                      content: Text('Lỗi gửi báo cáo: $e')),
                                 );
                               }
                             } finally {
-                              if (mounted) setState(() => _isSubmitting = false);
+                              if (mounted)
+                                setState(() => _isSubmitting = false);
                             }
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
+                      disabledBackgroundColor:
+                          AppColors.primary.withValues(alpha: 0.6),
                       elevation: 2,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 8),
                     ),
                     child: _isSubmitting
                         ? const SizedBox(
@@ -952,7 +1029,10 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
                           )
                         : Text(
                             AppTranslations.tr(widget.ref, 'send'),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Colors.white),
                           ),
                   ),
                 ),
@@ -989,13 +1069,12 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.22 : 0.12)
+              ? theme.colorScheme.primary
+                  .withValues(alpha: isDark ? 0.22 : 0.12)
               : (isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected
-                ? theme.colorScheme.primary
-                : Colors.transparent,
+            color: isSelected ? theme.colorScheme.primary : Colors.transparent,
             width: 1.2,
           ),
         ),

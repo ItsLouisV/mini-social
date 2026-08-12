@@ -587,10 +587,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     final mediaQuery = MediaQuery.of(context);
     final size = mediaQuery.size;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF090A10),
-      resizeToAvoidBottomInset: true,
-      body: Stack(
+    return Theme(
+      // Keep auth screens consistently dark regardless of the app theme.
+      data: ThemeData.dark(useMaterial3: true).copyWith(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _Design.accentGlow,
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: const Color(0xFF090A10),
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF090A10),
+        resizeToAvoidBottomInset: true,
+        body: Stack(
         fit: StackFit.expand,
         children: [
           // ── 1. Fullscreen Wallpaper ─────────────────────────────────────
@@ -893,6 +902,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
             ),
           ),
         ],
+        ),
       ),
     );
   }
