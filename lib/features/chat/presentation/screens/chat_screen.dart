@@ -3228,11 +3228,11 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                         }
                         if (context.mounted) {
                           ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(
+                              .showSnackBar(SnackBar(
                             content: Text(deletePermanently
                                 ? 'Đã xóa tin nhắn vĩnh viễn'
                                 : 'Đã xóa tin nhắn phía bạn'),
-                            duration: Duration(seconds: 1),
+                            duration: const Duration(seconds: 1),
                           ));
                         }
                       } catch (e) {
