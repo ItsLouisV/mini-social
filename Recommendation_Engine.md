@@ -1,5 +1,7 @@
 # Kế hoạch nâng cấp Thuật toán Đề xuất Bài viết (Recommendation Engine) chuẩn Social Apps
 
+> Tài liệu này mô tả thiết kế v1 lịch sử. Kiến trúc đang áp dụng, hướng dẫn triển khai và roadmap mới nằm trong `RECOMMENDATION_V2.md`.
+
 Tài liệu này phân tích cách các mạng xã hội lớn (**TikTok**, **Instagram**, **Facebook**, **X/Twitter**) xây dựng hệ thống đề xuất (Feed Recommendation Engine) và đề xuất phương án nâng cấp cho **MiniSocial**.
 
 ---

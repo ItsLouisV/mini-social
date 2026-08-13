@@ -17,6 +17,7 @@ import '../widgets/image_carousel.dart';
 import '../widgets/post_actions.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../shared/widgets/report_bottom_sheet.dart';
+import '../../../../shared/widgets/restricted_content_reveal.dart';
 
 import '../../../social/data/recommendation_repository.dart';
 
@@ -42,6 +43,7 @@ class PostCard extends ConsumerStatefulWidget {
 class _PostCardState extends ConsumerState<PostCard> {
   late DateTime _viewStartTime;
   late final RecommendationRepository _recommendationRepository;
+  bool _showRestrictedContent = false;
 
   @override
   void initState() {
@@ -53,13 +55,14 @@ class _PostCardState extends ConsumerState<PostCard> {
   @override
   void dispose() {
     final durationMs = DateTime.now().difference(_viewStartTime).inMilliseconds;
-    if (durationMs >= 1200 && widget.currentUserId.isNotEmpty) {
+    if (durationMs >= 2000 && widget.currentUserId.isNotEmpty) {
       try {
         _recommendationRepository.trackInteraction(
           userId: widget.currentUserId,
           postId: widget.post.id,
           interactionType: 'view_dwell',
           durationMs: durationMs,
+          source: widget.post.recommendationSource,
         );
       } catch (e) {
         debugPrint('Error tracking view_dwell in dispose: $e');
@@ -77,6 +80,13 @@ class _PostCardState extends ConsumerState<PostCard> {
     final status = localStates[post.id] ?? PostLocalStatus.none;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    if (post.moderationStatus == 'shadow_limited' && !_showRestrictedContent) {
+      return RestrictedContentReveal(
+        actionLabel: 'Xem bài viết đã bị ẩn',
+        onReveal: () => setState(() => _showRestrictedContent = true),
+      );
+    }
 
     if (status == PostLocalStatus.dismissed) {
       return const SizedBox.shrink();
@@ -990,6 +1000,17 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
                                   .reportPost(
                                     postId: widget.post.id,
                                     reason: finalReasonStr,
+                                  );
+                              widget.ref
+                                  .read(recommendationRepositoryProvider)
+                                  .trackInteraction(
+                                    userId: widget.ref.read(
+                                          currentUserIdProvider,
+                                        ) ??
+                                        '',
+                                    postId: widget.post.id,
+                                    interactionType: 'report',
+                                    source: widget.post.recommendationSource,
                                   );
                               widget.ref
                                   .read(postLocalStatesProvider.notifier)

@@ -208,7 +208,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   // Trạng thái hiển thị nút cuộn xuống đáy
   bool _showScrollToBottomBtn = false;
   bool _hasScrolledToInitialUnread = false;
-  bool _isPinnedBannerExpanded = false;
 
   // Realtime Typing Indicator State
   RealtimeChannel? _typingChannel;
@@ -1183,8 +1182,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ref.watch(pinnedMessagesProvider(widget.conversationId));
     final pinnedMessages = pinnedAsync.valueOrNull ?? [];
     final pinnedIds = pinnedMessages.map((pm) => pm.messageId).toSet();
-    final isPinnedOverlayActive =
-        _isPinnedBannerExpanded && pinnedMessages.isNotEmpty;
     final currentUserId = ref.watch(currentUserIdProvider) ?? '';
     final theme = Theme.of(context);
     final wallpaperState = ref.watch(chatWallpaperProvider);
@@ -1447,187 +1444,171 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            AbsorbPointer(
-              absorbing: isPinnedOverlayActive,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        if (isVanishMode) const _VanishBackground(),
-                        messagesAsync.when(
-                          data: (messagesState) {
-                            final failedModels =
-                                messagesState.failedMessages.map((f) {
-                              return MessageModel(
-                                id: f.localId,
-                                conversationId: f.conversationId,
-                                senderId: f.senderId,
-                                content: f.content,
-                                mediaUrls: _decodeMediaUrls(f.mediaUrlsJson),
-                                messageType: f.messageType,
-                                createdAt:
-                                    DateTime.parse(f.createdAt).toLocal(),
-                                replyToMessageId: f.replyToMessageId,
-                                replyToMessage: (f.replyToMessageId != null &&
-                                        f.replySenderId != null)
-                                    ? MessageModel(
-                                        id: f.replyToMessageId!,
-                                        conversationId: f.conversationId,
-                                        senderId: f.replySenderId!,
-                                        content: f.replyContent,
-                                        messageType: 'text',
-                                        createdAt: DateTime.now(),
-                                      )
-                                    : null,
-                                isFailed: true,
-                              );
-                            }).toList();
-
-                            final allMessages = [
-                              ...failedModels,
-                              ...messagesState.messages
-                            ];
-                            allMessages.sort(
-                                (a, b) => b.createdAt.compareTo(a.createdAt));
-
-                            final now = DateTime.now();
-                            final displayedMessages = <MessageModel>[];
-                            for (final m in allMessages) {
-                              if (m.isVanish) {
-                                final duration =
-                                    _getVanishDuration(m.messageType);
-                                final expirationTime = m.createdAt
-                                    .add(Duration(seconds: duration));
-                                if (now.isAfter(expirationTime)) {
-                                  _deleteExpiredMessage(m.id);
-                                  continue;
-                                }
-                              }
-                              displayedMessages.add(m);
-                            }
-
-                            _updateCacheIfNeeded(displayedMessages);
-
-                            Widget listWidget =
-                                NotificationListener<ScrollNotification>(
-                              onNotification: _handleScrollNotification,
-                              child: _buildMessageList(
-                                messagesState,
-                                displayedMessages,
-                                currentUserId,
-                                otherUserName,
-                                pinnedIds,
-                                isGroup,
-                              ),
+            Column(
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      if (isVanishMode) const _VanishBackground(),
+                      messagesAsync.when(
+                        data: (messagesState) {
+                          final failedModels =
+                              messagesState.failedMessages.map((f) {
+                            return MessageModel(
+                              id: f.localId,
+                              conversationId: f.conversationId,
+                              senderId: f.senderId,
+                              content: f.content,
+                              mediaUrls: _decodeMediaUrls(f.mediaUrlsJson),
+                              messageType: f.messageType,
+                              createdAt: DateTime.parse(f.createdAt).toLocal(),
+                              replyToMessageId: f.replyToMessageId,
+                              replyToMessage: (f.replyToMessageId != null &&
+                                      f.replySenderId != null)
+                                  ? MessageModel(
+                                      id: f.replyToMessageId!,
+                                      conversationId: f.conversationId,
+                                      senderId: f.replySenderId!,
+                                      content: f.replyContent,
+                                      messageType: 'text',
+                                      createdAt: DateTime.now(),
+                                    )
+                                  : null,
+                              isFailed: true,
                             );
+                          }).toList();
 
-                            // On Web, BouncingScrollPhysics overscroll doesn't fire,
-                            // so we use a Listener (receives pointer events unconditionally,
-                            // never "stolen" by child scroll widgets) to simulate pull-up vanish.
-                            if (kIsWeb) {
-                              listWidget = Listener(
-                                behavior: HitTestBehavior.translucent,
-                                onPointerDown: (event) {
-                                  if (_isAtBottom) {
-                                    _vanishDragStartDy = event.position.dy;
-                                  }
-                                },
-                                onPointerMove: (event) {
-                                  if (_vanishDragStartDy == null) return;
-                                  final dy = _vanishDragStartDy! -
-                                      event.position
-                                          .dy; // positive = dragging up
-                                  if (dy > 0) {
-                                    setState(() {
-                                      _pullUpDistance = dy;
-                                      if (dy > 300.0 &&
-                                          !_hasCrossedVanishThreshold) {
-                                        _hasCrossedVanishThreshold = true;
-                                        HapticFeedback.mediumImpact();
-                                      } else if (dy <= 300.0 &&
-                                          _hasCrossedVanishThreshold) {
-                                        _hasCrossedVanishThreshold = false;
-                                      }
-                                    });
-                                  } else if (_pullUpDistance > 0) {
-                                    // dragging back down — reset indicator
-                                    setState(() {
-                                      _pullUpDistance = 0.0;
-                                      _hasCrossedVanishThreshold = false;
-                                    });
-                                  }
-                                },
-                                onPointerUp: (event) {
-                                  if (_hasCrossedVanishThreshold) {
-                                    _toggleVanishMode();
-                                  }
-                                  setState(() {
-                                    _pullUpDistance = 0.0;
-                                    _hasCrossedVanishThreshold = false;
-                                    _vanishDragStartDy = null;
-                                  });
-                                },
-                                onPointerCancel: (event) {
-                                  setState(() {
-                                    _pullUpDistance = 0.0;
-                                    _hasCrossedVanishThreshold = false;
-                                    _vanishDragStartDy = null;
-                                  });
-                                },
-                                child: listWidget,
-                              );
+                          final allMessages = [
+                            ...failedModels,
+                            ...messagesState.messages
+                          ];
+                          allMessages.sort(
+                              (a, b) => b.createdAt.compareTo(a.createdAt));
+
+                          final now = DateTime.now();
+                          final displayedMessages = <MessageModel>[];
+                          for (final m in allMessages) {
+                            if (m.isVanish) {
+                              final duration =
+                                  _getVanishDuration(m.messageType);
+                              final expirationTime =
+                                  m.createdAt.add(Duration(seconds: duration));
+                              if (now.isAfter(expirationTime)) {
+                                _deleteExpiredMessage(m.id);
+                                continue;
+                              }
                             }
+                            displayedMessages.add(m);
+                          }
 
-                            return listWidget;
-                          },
-                          loading: () =>
-                              const Center(child: CupertinoActivityIndicator()),
-                          error: (e, _) => Center(child: Text(e.toString())),
-                        ),
-                        if (_pullUpDistance > 5)
-                          Positioned(
-                            bottom: 12,
-                            left: 0,
-                            right: 0,
-                            child: _buildVanishPullIndicator(),
-                          ),
-                        // Nút cuộn xuống đáy cao cấp (Scroll to Bottom button)
+                          _updateCacheIfNeeded(displayedMessages);
+
+                          Widget listWidget =
+                              NotificationListener<ScrollNotification>(
+                            onNotification: _handleScrollNotification,
+                            child: _buildMessageList(
+                              messagesState,
+                              displayedMessages,
+                              currentUserId,
+                              otherUserName,
+                              pinnedIds,
+                              isGroup,
+                            ),
+                          );
+
+                          // On Web, BouncingScrollPhysics overscroll doesn't fire,
+                          // so we use a Listener (receives pointer events unconditionally,
+                          // never "stolen" by child scroll widgets) to simulate pull-up vanish.
+                          if (kIsWeb) {
+                            listWidget = Listener(
+                              behavior: HitTestBehavior.translucent,
+                              onPointerDown: (event) {
+                                if (_isAtBottom) {
+                                  _vanishDragStartDy = event.position.dy;
+                                }
+                              },
+                              onPointerMove: (event) {
+                                if (_vanishDragStartDy == null) return;
+                                final dy = _vanishDragStartDy! -
+                                    event.position.dy; // positive = dragging up
+                                if (dy > 0) {
+                                  setState(() {
+                                    _pullUpDistance = dy;
+                                    if (dy > 300.0 &&
+                                        !_hasCrossedVanishThreshold) {
+                                      _hasCrossedVanishThreshold = true;
+                                      HapticFeedback.mediumImpact();
+                                    } else if (dy <= 300.0 &&
+                                        _hasCrossedVanishThreshold) {
+                                      _hasCrossedVanishThreshold = false;
+                                    }
+                                  });
+                                } else if (_pullUpDistance > 0) {
+                                  // dragging back down — reset indicator
+                                  setState(() {
+                                    _pullUpDistance = 0.0;
+                                    _hasCrossedVanishThreshold = false;
+                                  });
+                                }
+                              },
+                              onPointerUp: (event) {
+                                if (_hasCrossedVanishThreshold) {
+                                  _toggleVanishMode();
+                                }
+                                setState(() {
+                                  _pullUpDistance = 0.0;
+                                  _hasCrossedVanishThreshold = false;
+                                  _vanishDragStartDy = null;
+                                });
+                              },
+                              onPointerCancel: (event) {
+                                setState(() {
+                                  _pullUpDistance = 0.0;
+                                  _hasCrossedVanishThreshold = false;
+                                  _vanishDragStartDy = null;
+                                });
+                              },
+                              child: listWidget,
+                            );
+                          }
+
+                          return listWidget;
+                        },
+                        loading: () =>
+                            const Center(child: CupertinoActivityIndicator()),
+                        error: (e, _) => Center(child: Text(e.toString())),
+                      ),
+                      if (_pullUpDistance > 5)
                         Positioned(
                           bottom: 12,
-                          right: 12,
-                          child: AnimatedScale(
-                            scale: _showScrollToBottomBtn ? 1.0 : 0.0,
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeOutBack,
-                            child: AnimatedOpacity(
-                              opacity: _showScrollToBottomBtn ? 1.0 : 0.0,
-                              duration: const Duration(milliseconds: 200),
-                              child: ElasticScrollToBottomButton(
-                                onTap: () => _scrollToBottom(),
-                                themeColor: chatThemeColor,
-                              ),
+                          left: 0,
+                          right: 0,
+                          child: _buildVanishPullIndicator(),
+                        ),
+                      // Nút cuộn xuống đáy cao cấp (Scroll to Bottom button)
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: AnimatedScale(
+                          scale: _showScrollToBottomBtn ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutBack,
+                          child: AnimatedOpacity(
+                            opacity: _showScrollToBottomBtn ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: ElasticScrollToBottomButton(
+                              onTap: () => _scrollToBottom(),
+                              themeColor: chatThemeColor,
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  _buildInput(theme, hasWallpaper, isBlocked, isBlockedBy),
-                ],
-              ),
-            ),
-            if (isPinnedOverlayActive)
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => setState(() => _isPinnedBannerExpanded = false),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    color: Colors.black.withValues(alpha: 0.38),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+                _buildInput(theme, hasWallpaper, isBlocked, isBlockedBy),
+              ],
+            ),
             if (pinnedMessages.isNotEmpty)
               Positioned(
                 top: 0,
@@ -1640,11 +1621,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   otherUserName: otherUserName,
                   hasWallpaper: hasWallpaper,
                   canManagePins: canManagePins,
-                  isExpanded: isPinnedOverlayActive,
-                  onExpandedChanged: (expanded) {
-                    if (expanded) _focusNode.unfocus();
-                    setState(() => _isPinnedBannerExpanded = expanded);
-                  },
                   onJumpToMessage: (pin) => _jumpToPinnedMessage(pin),
                   onUnpinMessage: (messageId) async {
                     try {
@@ -2073,6 +2049,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   // ── Input Bar ─────────────────────────────────────────────────────────────────
 
   void _updateActiveMention(TextEditingValue value) {
+    final permissions =
+        ref.read(groupPermissionsProvider(widget.conversationId));
+    // When member tagging is disabled, "@" behaves exactly like a regular
+    // character: no parser state and no suggestion popup.
+    if (permissions?.canMentionAll != true) {
+      if (_activeMention != null) {
+        setState(() => _activeMention = null);
+      }
+      return;
+    }
     final next = ChatMentionMatch.fromValue(value);
     if (next?.start == _activeMention?.start &&
         next?.end == _activeMention?.end &&
@@ -2178,7 +2164,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ? ref.watch(groupPermissionsProvider(widget.conversationId))
         : null;
     final canSendMessages = !isGroup || (permissions?.canSendMessage ?? false);
-    final mentionOptions = isGroup && _activeMention != null
+    final mentionOptions = isGroup &&
+            _activeMention != null &&
+            (permissions?.canMentionAll ?? false)
         ? ChatMentionOption.build(
             members: members,
             currentUserId: currentUserId,
@@ -2278,7 +2266,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       children: [
         if (_replyingToMessage != null) _buildReplyPreview(theme, hasWallpaper),
         if (hasPendingImage) _buildImagePreview(theme, hasWallpaper),
-        if (_activeMention != null && isGroup)
+        if (_activeMention != null &&
+            isGroup &&
+            (permissions?.canMentionAll ?? false))
           ChatMentionSuggestions(
             options: mentionOptions,
             accentColor: chatThemeColor,
@@ -3194,13 +3184,29 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
               : null,
           onDelete: () {
             Navigator.pop(context);
+            final permissions = widget.isGroup
+                ? ref.read(groupPermissionsProvider(message.conversationId))
+                : null;
+            final senderMember = widget.isGroup
+                ? ref
+                    .read(groupMembersProvider(message.conversationId))
+                    .valueOrNull
+                    ?.where((member) => member.userId == message.senderId)
+                    .firstOrNull
+                : null;
+            final canAdminDeleteMemberMessage =
+                message.senderId != widget.currentUserId &&
+                    (permissions?.isAdmin ?? false) &&
+                    (senderMember?.isMember ?? false);
+            final deletePermanently =
+                message.isRecalled || canAdminDeleteMemberMessage;
             showCupertinoDialog(
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
                 title: const Text('Xóa tin nhắn'),
-                content: Text(message.isRecalled
-                    ? 'Tin nhắn đã thu hồi này sẽ bị xóa vĩnh viễn khỏi hệ thống.'
-                    : 'Tin nhắn này sẽ bị xóa vĩnh viễn khỏi cuộc trò chuyện. Bạn có chắc chắn muốn xóa?'),
+                content: Text(deletePermanently
+                    ? 'Tin nhắn này sẽ bị xóa vĩnh viễn khỏi cuộc trò chuyện.'
+                    : 'Tin nhắn này chỉ bị xóa ở phía bạn. Những người khác vẫn nhìn thấy tin nhắn.'),
                 actions: [
                   CupertinoDialogAction(
                     child: const Text('Huỷ'),
@@ -3212,15 +3218,20 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                     onPressed: () async {
                       Navigator.pop(ctx);
                       try {
-                        await ref
-                            .read(
-                                realtimeMessagesProvider(message.conversationId)
-                                    .notifier)
-                            .deleteMessage(message.id);
+                        final notifier = ref.read(
+                            realtimeMessagesProvider(message.conversationId)
+                                .notifier);
+                        if (deletePermanently) {
+                          await notifier.deleteMessage(message.id);
+                        } else {
+                          await notifier.deleteMessageLocally(message.id);
+                        }
                         if (context.mounted) {
                           ScaffoldMessenger.of(context)
                               .showSnackBar(const SnackBar(
-                            content: Text('Đã xóa tin nhắn vĩnh viễn'),
+                            content: Text(deletePermanently
+                                ? 'Đã xóa tin nhắn vĩnh viễn'
+                                : 'Đã xóa tin nhắn phía bạn'),
                             duration: Duration(seconds: 1),
                           ));
                         }

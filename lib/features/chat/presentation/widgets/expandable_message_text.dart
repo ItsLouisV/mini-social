@@ -73,17 +73,21 @@ class ExpandableMessageText extends StatelessWidget {
               ),
               if (isOverflowing || expanded) ...[
                 const SizedBox(height: 4),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onToggle,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Text(
-                      expanded ? 'Thu gọn' : 'Xem thêm',
-                      style: style.copyWith(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        decoration: TextDecoration.none,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onToggle,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        expanded ? 'Thu gọn' : 'Xem thêm',
+                        textAlign: TextAlign.right,
+                        style: style.copyWith(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          decoration: TextDecoration.none,
+                        ),
                       ),
                     ),
                   ),

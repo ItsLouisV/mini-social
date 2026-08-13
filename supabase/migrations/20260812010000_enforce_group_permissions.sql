@@ -377,8 +377,21 @@ begin
       )
   ) into is_participant;
 
-  if target_message.sender_id <> auth.uid()
-     and not (target_message.message_type = 'recalled' and is_participant) then
+  if not (
+    (target_message.message_type = 'recalled' and is_participant)
+    or exists (
+      select 1
+      from public.conversation_members actor
+      join public.conversation_members sender
+        on sender.conversation_id = actor.conversation_id
+       and sender.user_id = target_message.sender_id
+      where actor.conversation_id = target_message.conversation_id
+        and actor.user_id = auth.uid()
+        and actor.role in ('owner', 'admin')
+        and sender.role = 'member'
+        and sender.user_id <> actor.user_id
+    )
+  ) then
     raise exception 'You cannot delete this message';
   end if;
 
@@ -390,3 +403,50 @@ revoke all on function public.recall_chat_message(uuid) from public;
 revoke all on function public.delete_chat_message(uuid) from public;
 grant execute on function public.recall_chat_message(uuid) to authenticated;
 grant execute on function public.delete_chat_message(uuid) to authenticated;
+
+-- Co-admins may revoke an existing ban, while creating bans remains owner-only.
+drop policy if exists "group_bans_update_owner" on public.group_bans;
+drop policy if exists "group_bans_update_admins" on public.group_bans;
+create policy "group_bans_update_admins"
+on public.group_bans for update
+using (public.is_conversation_admin(conversation_id))
+with check (public.is_conversation_admin(conversation_id));
+
+-- Prevent users from changing protected membership fields on their own row.
+-- Owner can moderate anyone below owner; co-admin can moderate members only.
+create or replace function public.guard_conversation_member_protected_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_role text;
+begin
+  if new.is_muted_by_admin is not distinct from old.is_muted_by_admin
+     and new.muted_until is not distinct from old.muted_until then
+    return new;
+  end if;
+
+  select role into actor_role
+  from public.conversation_members
+  where conversation_id = old.conversation_id and user_id = auth.uid();
+
+  if actor_role = 'owner' and old.role <> 'owner' then
+    return new;
+  end if;
+  if actor_role = 'admin'
+     and old.role = 'member'
+     then
+    return new;
+  end if;
+
+  raise exception 'You cannot change protected membership fields';
+end;
+$$;
+
+drop trigger if exists guard_conversation_member_protected_fields
+on public.conversation_members;
+create trigger guard_conversation_member_protected_fields
+before update on public.conversation_members
+for each row execute function public.guard_conversation_member_protected_fields();

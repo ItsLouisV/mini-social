@@ -17,6 +17,8 @@ import '../widgets/post_actions.dart';
 import 'package:flutter/services.dart';
 import '../../../chat/presentation/widgets/message_context_menu_route.dart';
 import '../../../../shared/widgets/report_bottom_sheet.dart';
+import '../../../../shared/widgets/restricted_content_reveal.dart';
+import '../../../social/data/recommendation_repository.dart';
 
 class CommentNode {
   final CommentModel comment;
@@ -52,6 +54,25 @@ List<CommentNode> buildCommentTree(List<CommentModel> comments) {
     }
   }
 
+  int compareModeration(CommentNode a, CommentNode b) {
+    if (a.comment.isRestricted != b.comment.isRestricted) {
+      return a.comment.isRestricted ? 1 : -1;
+    }
+    return a.comment.createdAt.compareTo(b.comment.createdAt);
+  }
+
+  void sortBranch(CommentNode node) {
+    node.children.sort(compareModeration);
+    for (final child in node.children) {
+      sortBranch(child);
+    }
+  }
+
+  roots.sort(compareModeration);
+  for (final root in roots) {
+    sortBranch(root);
+  }
+
   return roots;
 }
 
@@ -63,6 +84,7 @@ List<CommentNode> flattenTree(List<CommentNode> roots) {
       traverse(child);
     }
   }
+
   for (var r in roots) traverse(r);
   return result;
 }
@@ -81,6 +103,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   final _focusNode = FocusNode();
   bool _sending = false;
   CommentModel? _replyingTo;
+  bool _showRestrictedPost = false;
 
   @override
   void dispose() {
@@ -111,6 +134,14 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
       await ref
           .read(postRepositoryProvider)
           .addComment(widget.postId, text, parentId: _replyingTo?.id);
+      final currentUserId = ref.read(currentUserIdProvider);
+      if (currentUserId != null) {
+        ref.read(recommendationRepositoryProvider).trackInteraction(
+              userId: currentUserId,
+              postId: widget.postId,
+              interactionType: 'comment',
+            );
+      }
       _commentController.clear();
       _cancelReply();
       _focusNode.unfocus();
@@ -149,7 +180,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         children: [
           Expanded(
             child: postAsync.when(
-              data: (post) => _buildContent(context, ref, post, commentsAsync, currentUserId),
+              data: (post) => _buildContent(
+                  context, ref, post, commentsAsync, currentUserId),
               loading: () => const Center(child: CupertinoActivityIndicator()),
               error: (e, _) => AppErrorWidget(message: e.toString()),
             ),
@@ -162,6 +194,17 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
   Widget _buildContent(BuildContext context, WidgetRef ref, PostModel post,
       AsyncValue<List<CommentModel>> commentsAsync, String? currentUserId) {
+    if (post.moderationStatus == 'shadow_limited' && !_showRestrictedPost) {
+      return ListView(
+        children: [
+          RestrictedContentReveal(
+            actionLabel: 'Xem bài viết đã bị ẩn',
+            onReveal: () => setState(() => _showRestrictedPost = true),
+          ),
+        ],
+      );
+    }
+
     return ListView(
       children: [
         // Post header
@@ -179,7 +222,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(post.author?.displayName ?? '', style: AppTextStyles.titleSmall),
+                  Text(post.author?.displayName ?? '',
+                      style: AppTextStyles.titleSmall),
                   Text(post.createdAt.timeAgo, style: AppTextStyles.caption),
                 ],
               ),
@@ -190,7 +234,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
         if (post.caption?.isNotEmpty == true)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: ParsedCaptionText(text: post.caption!, style: AppTextStyles.bodyMedium),
+            child: ParsedCaptionText(
+                text: post.caption!, style: AppTextStyles.bodyMedium),
           ),
 
         if (post.media.isNotEmpty)
@@ -216,48 +261,49 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                 ),
               );
             }
-            
+
             final tree = buildCommentTree(comments);
             final flattened = flattenTree(tree);
 
             return Padding(
-              padding: const EdgeInsets.only(bottom: 24), // padding for bottom scrolling
+              padding: const EdgeInsets.only(
+                  bottom: 24), // padding for bottom scrolling
               child: Column(
                 children: flattened
                     .map((node) => _CommentTile(
-                          node: node,
-                          currentUserId: currentUserId,
-                          onReply: () => _setReply(node.comment),
-                          onDelete: () async {
-                            await ref
-                                .read(postRepositoryProvider)
-                                .deleteComment(node.comment.id);
-                            ref.invalidate(commentsProvider(widget.postId));
-                            ref.invalidate(postDetailProvider(widget.postId));
-                            ref.invalidate(feedPostsProvider);
-                          },
-                          onLikeToggle: (wasLiked) async {
-                            try {
-                              final repo = ref.read(postRepositoryProvider);
-                              if (wasLiked) {
-                                await repo.unlikeComment(node.comment.id);
-                              } else {
-                                await repo.likeComment(node.comment.id);
-                              }
-                              ref.invalidate(commentsProvider(widget.postId));
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Lỗi khi thích: $e'),
-                                    backgroundColor: Theme.of(context).colorScheme.error,
-                                  ),
-                                );
-                              }
-                              rethrow;
+                        node: node,
+                        currentUserId: currentUserId,
+                        onReply: () => _setReply(node.comment),
+                        onDelete: () async {
+                          await ref
+                              .read(postRepositoryProvider)
+                              .deleteComment(node.comment.id);
+                          ref.invalidate(commentsProvider(widget.postId));
+                          ref.invalidate(postDetailProvider(widget.postId));
+                          ref.invalidate(feedPostsProvider);
+                        },
+                        onLikeToggle: (wasLiked) async {
+                          try {
+                            final repo = ref.read(postRepositoryProvider);
+                            if (wasLiked) {
+                              await repo.unlikeComment(node.comment.id);
+                            } else {
+                              await repo.likeComment(node.comment.id);
                             }
+                            ref.invalidate(commentsProvider(widget.postId));
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Lỗi khi thích: $e'),
+                                  backgroundColor:
+                                      Theme.of(context).colorScheme.error,
+                                ),
+                              );
+                            }
+                            rethrow;
                           }
-                        ))
+                        }))
                     .toList(),
               ),
             );
@@ -279,7 +325,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(top: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
+        border: Border(
+            top: BorderSide(color: Theme.of(context).dividerColor, width: 0.5)),
       ),
       child: SafeArea(
         top: false,
@@ -289,8 +336,12 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
             if (_replyingTo != null)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.5),
                 child: Row(
                   children: [
                     Expanded(
@@ -304,7 +355,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     ),
                     GestureDetector(
                       onTap: _cancelReply,
-                      child: Icon(CupertinoIcons.xmark_circle_fill, size: 18, color: Theme.of(context).hintColor),
+                      child: Icon(CupertinoIcons.xmark_circle_fill,
+                          size: 18, color: Theme.of(context).hintColor),
                     )
                   ],
                 ),
@@ -326,9 +378,11 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        fillColor: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
                         isDense: true,
                       ),
                       maxLines: null,
@@ -355,7 +409,8 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                                     strokeWidth: 2, color: Colors.white),
                               ),
                             )
-                          : const Icon(CupertinoIcons.paperplane_fill, color: Colors.white, size: 18),
+                          : const Icon(CupertinoIcons.paperplane_fill,
+                              color: Colors.white, size: 18),
                     ),
                   ),
                 ],
@@ -392,6 +447,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
   late int _likesCount;
   bool _isLoading = false;
   final GlobalKey _commentBubbleKey = GlobalKey();
+  bool _showRestrictedContent = false;
 
   @override
   void initState() {
@@ -411,7 +467,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
 
   Future<void> _handleLike() async {
     if (_isLoading) return;
-    
+
     final wasLiked = _isLiked;
     final originalLikesCount = _likesCount;
 
@@ -459,7 +515,8 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
 
   void _showCommentContextMenu(BuildContext context) {
     HapticFeedback.mediumImpact();
-    final renderBox = _commentBubbleKey.currentContext?.findRenderObject() as RenderBox?;
+    final renderBox =
+        _commentBubbleKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
 
     final size = renderBox.size;
@@ -484,14 +541,18 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                   style: AppTextStyles.titleSmall),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Text('•', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                child: Text('•',
+                    style: TextStyle(fontSize: 10, color: Colors.grey)),
               ),
               Text(comment.createdAt.timeAgo,
                   style: AppTextStyles.caption.copyWith(fontSize: 11)),
             ],
           ),
           const SizedBox(height: 4),
-          ParsedCaptionText(text: comment.content, style: AppTextStyles.bodyMedium, enableTranslate: false),
+          ParsedCaptionText(
+              text: comment.content,
+              style: AppTextStyles.bodyMedium,
+              enableTranslate: false),
         ],
       ),
     );
@@ -534,7 +595,23 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
   @override
   Widget build(BuildContext context) {
     final comment = widget.node.comment;
-    
+
+    if (comment.isRestricted && !_showRestrictedContent) {
+      return Padding(
+        padding: EdgeInsets.only(
+          left: 12.0 + ((widget.node.level.clamp(1, 3) - 1) * 40.0),
+          right: 12,
+        ),
+        child: RestrictedContentReveal(
+          margin: const EdgeInsets.only(top: 8),
+          actionLabel: widget.node.level == 1
+              ? 'Xem bình luận đã bị ẩn'
+              : 'Xem câu trả lời đã bị ẩn',
+          onReveal: () => setState(() => _showRestrictedContent = true),
+        ),
+      );
+    }
+
     // Level 1: marginLeft = 0, radius = 18
     // Level 2: marginLeft = 40, radius = 14
     // Level 3: marginLeft = 80, radius = 14
@@ -542,7 +619,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
     final level = widget.node.level > maxLevel ? maxLevel : widget.node.level;
     final indent = (level - 1) * 40.0;
     final avatarRadius = level == 1 ? 18.0 : 14.0;
-    
+
     final canReply = level < maxLevel;
 
     return Padding(
@@ -564,9 +641,11 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                   key: _commentBubbleKey,
                   onLongPress: () => _showCommentContextMenu(context),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Column(
@@ -578,14 +657,19 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                                 style: AppTextStyles.titleSmall),
                             const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 4),
-                              child: Text('•', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                              child: Text('•',
+                                  style: TextStyle(
+                                      fontSize: 10, color: Colors.grey)),
                             ),
                             Text(comment.createdAt.timeAgo,
-                                style: AppTextStyles.caption.copyWith(fontSize: 11)),
+                                style: AppTextStyles.caption
+                                    .copyWith(fontSize: 11)),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        ParsedCaptionText(text: comment.content, style: AppTextStyles.bodyMedium),
+                        ParsedCaptionText(
+                            text: comment.content,
+                            style: AppTextStyles.bodyMedium),
                       ],
                     ),
                   ),
@@ -616,18 +700,22 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
                               '$_likesCount',
                               style: AppTextStyles.caption.copyWith(
                                 fontSize: 12,
-                                fontWeight: _isLiked ? FontWeight.w600 : FontWeight.w500,
-                                color: _isLiked 
-                                    ? Theme.of(context).colorScheme.primary 
+                                fontWeight: _isLiked
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                                color: _isLiked
+                                    ? Theme.of(context).colorScheme.primary
                                     : Theme.of(context).hintColor,
                               ),
                             ),
                             const SizedBox(width: 4),
                             Icon(
-                              _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                              _isLiked
+                                  ? CupertinoIcons.heart_fill
+                                  : CupertinoIcons.heart,
                               size: 16,
-                              color: _isLiked 
-                                  ? Theme.of(context).colorScheme.primary 
+                              color: _isLiked
+                                  ? Theme.of(context).colorScheme.primary
                                   : Theme.of(context).hintColor,
                             ),
                           ],

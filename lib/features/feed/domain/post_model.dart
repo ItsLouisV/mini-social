@@ -84,6 +84,9 @@ class PostModel {
   final String? moderationStatus;
   final bool isAiGenerated;
   final PlaceModel? location;
+  final double? recommendationScore;
+  final String? recommendationSource;
+  final List<String> recommendationReasons;
 
   const PostModel({
     required this.id,
@@ -101,6 +104,9 @@ class PostModel {
     this.moderationStatus,
     this.isAiGenerated = false,
     this.location,
+    this.recommendationScore,
+    this.recommendationSource,
+    this.recommendationReasons = const [],
   });
 
   factory PostModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
@@ -142,6 +148,11 @@ class PostModel {
           json['is_ai_generated'].toString() == 'true' ||
           json['is_ai_generated'].toString() == '1',
       location: PlaceModel.fromPostJson(json),
+      recommendationScore: (json['recommendation_score'] as num?)?.toDouble(),
+      recommendationSource: json['recommendation_source'] as String?,
+      recommendationReasons: (json['recommendation_reasons'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ?? const [],
     );
   }
 
@@ -163,6 +174,9 @@ class PostModel {
         'location_latitude': location?.latitude,
         'location_longitude': location?.longitude,
         'location_provider': location?.provider,
+        'recommendation_score': recommendationScore,
+        'recommendation_source': recommendationSource,
+        'recommendation_reasons': recommendationReasons,
       };
 
   PostModel copyWith({
@@ -189,6 +203,9 @@ class PostModel {
       moderationStatus: moderationStatus,
       isAiGenerated: isAiGenerated ?? this.isAiGenerated,
       location: location ?? this.location,
+      recommendationScore: recommendationScore,
+      recommendationSource: recommendationSource,
+      recommendationReasons: recommendationReasons,
     );
   }
 }

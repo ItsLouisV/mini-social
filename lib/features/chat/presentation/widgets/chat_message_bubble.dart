@@ -567,12 +567,27 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
               : null,
           onDelete: () {
             Navigator.pop(context);
+            final permissions = widget.isGroup
+                ? ref.read(groupPermissionsProvider(message.conversationId))
+                : null;
+            final senderMember = widget.isGroup
+                ? ref
+                    .read(groupMembersProvider(message.conversationId))
+                    .valueOrNull
+                    ?.where((member) => member.userId == message.senderId)
+                    .firstOrNull
+                : null;
+            final deletePermanently = message.isRecalled ||
+                (message.senderId != widget.currentUserId &&
+                    (permissions?.isAdmin ?? false) &&
+                    (senderMember?.isMember ?? false));
             showCupertinoDialog(
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
                 title: const Text('Xóa tin nhắn'),
-                content: const Text(
-                    'Tin nhắn này chỉ bị xóa ở phía bạn, đối phương vẫn sẽ nhìn thấy. Bạn có chắc chắn muốn xóa?'),
+                content: Text(deletePermanently
+                    ? 'Tin nhắn này sẽ bị xóa vĩnh viễn khỏi cuộc trò chuyện.'
+                    : 'Tin nhắn này chỉ bị xóa ở phía bạn. Những người khác vẫn nhìn thấy tin nhắn.'),
                 actions: [
                   CupertinoDialogAction(
                     child: const Text('Huỷ'),
@@ -583,12 +598,18 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                     child: const Text('Xóa'),
                     onPressed: () async {
                       Navigator.pop(ctx);
-                      await ref
-                          .read(realtimeMessagesProvider(message.conversationId)
-                              .notifier)
-                          .deleteMessage(message.id);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Đã xóa tin nhắn vĩnh viễn'),
+                      final notifier = ref.read(
+                          realtimeMessagesProvider(message.conversationId)
+                              .notifier);
+                      if (deletePermanently) {
+                        await notifier.deleteMessage(message.id);
+                      } else {
+                        await notifier.deleteMessageLocally(message.id);
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(deletePermanently
+                            ? 'Đã xóa tin nhắn vĩnh viễn'
+                            : 'Đã xóa tin nhắn phía bạn'),
                         duration: Duration(seconds: 1),
                       ));
                     },

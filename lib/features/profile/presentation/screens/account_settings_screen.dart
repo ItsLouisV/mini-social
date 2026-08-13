@@ -21,6 +21,19 @@ class AccountSettingsScreen extends ConsumerWidget {
     final email =
         ref.watch(supabaseServiceProvider).client.auth.currentUser?.email ??
             '';
+    final user = ref.watch(supabaseServiceProvider).client.auth.currentUser;
+    final providers = user?.appMetadata['providers'];
+    final providerNames = providers is List
+        ? providers.map((provider) => provider.toString()).toSet()
+        : <String>{};
+    providerNames.addAll(
+      user?.identities?.map((identity) => identity.provider) ?? const <String>[],
+    );
+    final hasPasswordLogin = providerNames.contains('email');
+    final linkedProviders = providerNames
+        .where((provider) => provider != 'email')
+        .map(_providerDisplayName)
+        .join(', ');
 
     final groupedBg = theme.scaffoldBackgroundColor;
     final cardBg = theme.colorScheme.surface;
@@ -152,9 +165,19 @@ class AccountSettingsScreen extends ConsumerWidget {
                     _IosRow(
                       icon: CupertinoIcons.lock_fill,
                       iconBg: Colors.orange,
-                      title: 'Đổi mật khẩu',
-                      onTap: () {},
+                      title: hasPasswordLogin ? 'Đổi mật khẩu' : 'Thiết lập mật khẩu',
+                      onTap: () => context.push('/settings/change-password'),
                     ),
+                    if (linkedProviders.isNotEmpty) ...[
+                      _RowDivider(color: theme.dividerColor),
+                      _IosRow(
+                        icon: CupertinoIcons.link,
+                        iconBg: Colors.blue,
+                        title: 'Tài khoản liên kết',
+                        showChevron: false,
+                        trailing: _ValueLabel(text: linkedProviders, color: labelColor),
+                      ),
+                    ],
                     _RowDivider(color: theme.dividerColor),
                     _IosRow(
                       icon: CupertinoIcons.lock_shield_fill,
@@ -205,6 +228,19 @@ class AccountSettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+String _providerDisplayName(String provider) {
+  switch (provider) {
+    case 'google':
+      return 'Google';
+    case 'apple':
+      return 'Apple';
+    case 'facebook':
+      return 'Facebook';
+    default:
+      return provider;
   }
 }
 

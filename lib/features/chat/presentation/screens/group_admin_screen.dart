@@ -21,8 +21,9 @@ class GroupAdminScreen extends ConsumerWidget {
     final isDark = theme.brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF0F0F1A) : const Color(0xFFF6F8FA);
     final cardBgColor = isDark ? const Color(0xFF1E1E2F) : Colors.white;
-    final dividerColor =
-        isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05);
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.05);
 
     final convAsync = ref.watch(conversationsProvider);
     final perms = ref.watch(groupPermissionsProvider(conversationId));
@@ -55,11 +56,13 @@ class GroupAdminScreen extends ConsumerWidget {
         scrolledUnderElevation: 0,
         title: const Text(
           'Quản lý nhóm',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: -0.2),
+          style: TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: -0.2),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: Icon(CupertinoIcons.left_chevron, color: theme.colorScheme.primary),
+          icon: Icon(CupertinoIcons.left_chevron,
+              color: theme.colorScheme.primary),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -87,7 +90,8 @@ class GroupAdminScreen extends ConsumerWidget {
                           .setAdminOnlyMessaging(conversationId, enabled: val);
                       ref.invalidate(conversationsProvider);
                     } catch (e) {
-                      if (context.mounted) ToastService.showError(context, 'Lỗi: $e');
+                      if (context.mounted)
+                        ToastService.showError(context, 'Lỗi: $e');
                     }
                   },
                   cardBgColor: cardBgColor,
@@ -132,8 +136,8 @@ class GroupAdminScreen extends ConsumerWidget {
                   dividerColor: dividerColor,
                   icon: CupertinoIcons.at,
                   gradientColors: [Colors.blue, Colors.cyan],
-                  title: '@all mention',
-                  subtitle: 'Thành viên có thể dùng @all để nhắc cả nhóm',
+                  title: 'Gắn thẻ thành viên',
+                  subtitle: 'Cho phép thành viên dùng @ để gắn thẻ trong nhóm',
                   value: conv.allowMemberMentionAll,
                   permissionKey: 'allow_member_mention_all',
                   showDivider: true,
@@ -162,12 +166,13 @@ class GroupAdminScreen extends ConsumerWidget {
             conversationId: conversationId,
             cardBgColor: cardBgColor,
             dividerColor: dividerColor,
+            canModerate: perms.isAdmin,
             isOwner: perms.isOwner,
           ),
           const SizedBox(height: 24),
 
-          // ── Banned members (owner only) ────────────────────────────────────
-          if (perms.isOwner) ...[
+          // ── Banned members (owner / co-admin) ──────────────────────────────
+          if (perms.isAdmin) ...[
             _buildSectionHeader('THÀNH VIÊN BỊ CẤM'),
             _BannedMembersList(
               conversationId: conversationId,
@@ -195,7 +200,8 @@ class GroupAdminScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCardContainer(Color cardBgColor, {required List<Widget> children}) {
+  Widget _buildCardContainer(Color cardBgColor,
+      {required List<Widget> children}) {
     return Container(
       decoration: BoxDecoration(
         color: cardBgColor,
@@ -235,8 +241,10 @@ class GroupAdminScreen extends ConsumerWidget {
         ),
         child: Icon(icon, color: Colors.white, size: 18),
       ),
-      title: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      title: Text(title,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle,
+          style: const TextStyle(fontSize: 12, color: Colors.grey)),
       trailing: CupertinoSwitch(value: value, onChanged: onChanged),
     );
   }
@@ -257,7 +265,8 @@ class GroupAdminScreen extends ConsumerWidget {
     return Column(
       children: [
         ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -270,8 +279,11 @@ class GroupAdminScreen extends ConsumerWidget {
             ),
             child: Icon(icon, color: Colors.white, size: 18),
           ),
-          title: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-          subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          title: Text(title,
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          subtitle: Text(subtitle,
+              style: const TextStyle(fontSize: 12, color: Colors.grey)),
           trailing: CupertinoSwitch(
             value: value,
             onChanged: (val) async {
@@ -302,12 +314,14 @@ class _MutedMembersList extends ConsumerWidget {
   final String conversationId;
   final Color cardBgColor;
   final Color dividerColor;
+  final bool canModerate;
   final bool isOwner;
 
   const _MutedMembersList({
     required this.conversationId,
     required this.cardBgColor,
     required this.dividerColor,
+    required this.canModerate,
     required this.isOwner,
   });
 
@@ -320,7 +334,8 @@ class _MutedMembersList extends ConsumerWidget {
         [];
 
     if (mutedMembers.isEmpty) {
-      return _emptyCard(cardBgColor, 'Không có thành viên nào đang bị tắt tiếng');
+      return _emptyCard(
+          cardBgColor, 'Không có thành viên nào đang bị tắt tiếng');
     }
 
     return Container(
@@ -342,7 +357,8 @@ class _MutedMembersList extends ConsumerWidget {
           return Column(
             children: [
               ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 leading: AppAvatar(
                   imageUrl: m.profile?.avatarUrl,
                   name: m.profile?.displayName ?? 'Thành viên',
@@ -350,7 +366,8 @@ class _MutedMembersList extends ConsumerWidget {
                 ),
                 title: Text(
                   m.profile?.displayName ?? 'Thành viên',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 subtitle: Text(
                   m.mutedUntil != null
@@ -358,32 +375,39 @@ class _MutedMembersList extends ConsumerWidget {
                       : 'Vĩnh viễn',
                   style: const TextStyle(fontSize: 12, color: Colors.orange),
                 ),
-                trailing: isOwner
+                trailing: canModerate && (isOwner || m.isMember)
                     ? CupertinoButton(
                         padding: EdgeInsets.zero,
                         child: const Text(
                           'Bỏ tắt',
-                          style: TextStyle(color: AppColors.primary, fontSize: 13),
+                          style:
+                              TextStyle(color: AppColors.primary, fontSize: 13),
                         ),
                         onPressed: () async {
                           try {
                             await ref
                                 .read(chatRepositoryProvider)
                                 .unmuteMemberByAdmin(conversationId, m.userId);
-                            ref.invalidate(groupMembersProvider(conversationId));
+                            ref.invalidate(
+                                groupMembersProvider(conversationId));
                             if (context.mounted) {
                               ToastService.showSuccess(context,
                                   'Đã bỏ tắt tiếng ${m.profile?.displayName ?? "thành viên"}');
                             }
                           } catch (e) {
-                            if (context.mounted) ToastService.showError(context, 'Lỗi: $e');
+                            if (context.mounted)
+                              ToastService.showError(context, 'Lỗi: $e');
                           }
                         },
                       )
                     : null,
               ),
               if (idx < mutedMembers.length - 1)
-                Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                Divider(
+                    height: 0.5,
+                    thickness: 0.5,
+                    color: dividerColor,
+                    indent: 56),
             ],
           );
         }).toList(),
@@ -437,7 +461,8 @@ class _BannedMembersList extends ConsumerWidget {
               return Column(
                 children: [
                   ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     leading: AppAvatar(
                       imageUrl: ban.userAvatarUrl,
                       name: ban.userDisplayName ?? 'Người dùng',
@@ -445,7 +470,8 @@ class _BannedMembersList extends ConsumerWidget {
                     ),
                     title: Text(
                       ban.userDisplayName ?? ban.userId,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                     subtitle: Text(
                       'Bị cấm: ${_formatDate(ban.bannedAt)}',
@@ -455,7 +481,8 @@ class _BannedMembersList extends ConsumerWidget {
                       padding: EdgeInsets.zero,
                       child: const Text(
                         'Bỏ cấm',
-                        style: TextStyle(color: AppColors.primary, fontSize: 13),
+                        style:
+                            TextStyle(color: AppColors.primary, fontSize: 13),
                       ),
                       onPressed: () async {
                         try {
@@ -464,18 +491,22 @@ class _BannedMembersList extends ConsumerWidget {
                               .unbanMember(conversationId, ban.userId);
                           ref.invalidate(groupBansProvider(conversationId));
                           if (context.mounted) {
-                            ToastService.showSuccess(
-                                context,
+                            ToastService.showSuccess(context,
                                 'Đã bỏ lệnh cấm cho ${ban.userDisplayName ?? "thành viên"}');
                           }
                         } catch (e) {
-                          if (context.mounted) ToastService.showError(context, 'Lỗi: $e');
+                          if (context.mounted)
+                            ToastService.showError(context, 'Lỗi: $e');
                         }
                       },
                     ),
                   ),
                   if (idx < bans.length - 1)
-                    Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                    Divider(
+                        height: 0.5,
+                        thickness: 0.5,
+                        color: dividerColor,
+                        indent: 56),
                 ],
               );
             }).toList(),

@@ -34,10 +34,12 @@ class ConversationSettingsScreen extends ConsumerStatefulWidget {
   const ConversationSettingsScreen({super.key, required this.conversationId});
 
   @override
-  ConsumerState<ConversationSettingsScreen> createState() => _ConversationSettingsScreenState();
+  ConsumerState<ConversationSettingsScreen> createState() =>
+      _ConversationSettingsScreenState();
 }
 
-class _ConversationSettingsScreenState extends ConsumerState<ConversationSettingsScreen> {
+class _ConversationSettingsScreenState
+    extends ConsumerState<ConversationSettingsScreen> {
   // Centralized themes configuration imported from chat_provider.dart
 
   @override
@@ -51,20 +53,22 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     final muteState = ref.watch(chatMuteProvider);
     final themeState = ref.watch(chatThemeColorProvider);
     final activeThemeId = themeState[widget.conversationId] ?? 'blue';
-    final activeThemeItem = kChatThemes.firstWhere((t) => t.id == activeThemeId, orElse: () => kChatThemes.first);
-
+    final activeThemeItem = kChatThemes.firstWhere((t) => t.id == activeThemeId,
+        orElse: () => kChatThemes.first);
 
     // Fetch shared media images from the conversation history
-    final messagesAsync = ref.watch(realtimeMessagesProvider(widget.conversationId));
-    final mediaMessages = messagesAsync.valueOrNull?.messages
-            .where((m) => m.isImage)
-            .toList() ??
-        [];
+    final messagesAsync =
+        ref.watch(realtimeMessagesProvider(widget.conversationId));
+    final mediaMessages =
+        messagesAsync.valueOrNull?.messages.where((m) => m.isImage).toList() ??
+            [];
 
     // Background color styling for high-end look
     final bgColor = isDark ? const Color(0xFF0F0F1A) : const Color(0xFFF6F8FA);
     final cardBgColor = isDark ? const Color(0xFF1E1E2F) : Colors.white;
-    final dividerColor = isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05);
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.05);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -74,11 +78,13 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
         scrolledUnderElevation: 0,
         title: Text(
           AppTranslations.tr(ref, 'conversation_info'),
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: -0.2),
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: -0.2),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: Icon(CupertinoIcons.left_chevron, color: theme.colorScheme.primary),
+          icon: Icon(CupertinoIcons.left_chevron,
+              color: theme.colorScheme.primary),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -92,17 +98,24 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
           final isGroup = conv.isGroup == true;
           final otherUser = conv.otherUser;
           final otherUserName = otherUser?.displayName ?? 'Người dùng';
-          final chatTitle = isGroup ? (conv.groupName ?? 'Nhóm trò chuyện') : otherUserName;
+          final chatTitle =
+              isGroup ? (conv.groupName ?? 'Nhóm trò chuyện') : otherUserName;
           final otherUserUsername = otherUser?.username ?? '';
-          final avatarUrl = isGroup ? conv.groupAvatarUrl : otherUser?.avatarUrl;
+          final avatarUrl =
+              isGroup ? conv.groupAvatarUrl : otherUser?.avatarUrl;
 
-          final membersAsync = ref.watch(groupMembersProvider(widget.conversationId));
-          final memberCount = membersAsync.valueOrNull?.length ?? (conv.members?.length ?? 0);
+          final membersAsync =
+              ref.watch(groupMembersProvider(widget.conversationId));
+          final memberCount =
+              membersAsync.valueOrNull?.length ?? (conv.members?.length ?? 0);
           // ── Correct admin check: use role from member model, not createdBy ──
-          final myMember = ref.watch(groupMemberMeProvider(widget.conversationId));
-          final isOwner = myMember?.isOwner ?? (conv.groupAdminId == currentUserId);
+          final myMember =
+              ref.watch(groupMemberMeProvider(widget.conversationId));
+          final isOwner =
+              myMember?.isOwner ?? (conv.groupAdminId == currentUserId);
           final isGroupAdmin = myMember?.isAdmin ?? isOwner;
-          final perms = ref.watch(groupPermissionsProvider(widget.conversationId));
+          final perms =
+              ref.watch(groupPermissionsProvider(widget.conversationId));
 
           final isPinned = conv.isPinned(currentUserId);
           final isMuted = muteState[widget.conversationId] ?? false;
@@ -121,13 +134,15 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                       children: [
                         GestureDetector(
                           onTap: isGroup && (perms?.canEditGroupInfo ?? false)
-                              ? () => _pickAndChangeGroupAvatar(context, ref, conv)
+                              ? () =>
+                                  _pickAndChangeGroupAvatar(context, ref, conv)
                               : null,
                           child: Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: activeThemeItem.color.withValues(alpha: 0.4),
+                                color: activeThemeItem.color
+                                    .withValues(alpha: 0.4),
                                 width: 3,
                               ),
                             ),
@@ -143,7 +158,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                             bottom: 2,
                             right: 2,
                             child: GestureDetector(
-                              onTap: () => _pickAndChangeGroupAvatar(context, ref, conv),
+                              onTap: () =>
+                                  _pickAndChangeGroupAvatar(context, ref, conv),
                               child: Container(
                                 padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
@@ -151,10 +167,14 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                                   shape: BoxShape.circle,
                                   border: Border.all(color: bgColor, width: 2),
                                   boxShadow: const [
-                                    BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                                    BoxShadow(
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2)),
                                   ],
                                 ),
-                                child: const Icon(CupertinoIcons.camera_fill, color: Colors.white, size: 14),
+                                child: const Icon(CupertinoIcons.camera_fill,
+                                    color: Colors.white, size: 14),
                               ),
                             ),
                           )
@@ -175,41 +195,61 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          chatTitle,
+                    SizedBox(
+                      width: double.infinity,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(text: chatTitle),
+                              if (isGroup && (perms?.canEditGroupInfo ?? false))
+                                WidgetSpan(
+                                  alignment: PlaceholderAlignment.middle,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 6),
+                                    child: GestureDetector(
+                                      onTap: () => _showRenameGroupDialog(
+                                          context, ref, conv),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary
+                                              .withValues(alpha: 0.12),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          CupertinoIcons.pencil,
+                                          size: 14,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          textAlign: TextAlign.center,
+                          softWrap: true,
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                             letterSpacing: -0.5,
                           ),
                         ),
-                        if (isGroup && (perms?.canEditGroupInfo ?? false)) ...[
-                          const SizedBox(width: 6),
-                          GestureDetector(
-                            onTap: () => _showRenameGroupDialog(context, ref, conv),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.12),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(CupertinoIcons.pencil, size: 14, color: AppColors.primary),
-                            ),
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       isGroup
                           ? 'Nhóm trò chuyện • $memberCount thành viên'
-                          : (otherUserUsername.isNotEmpty ? '@$otherUserUsername' : 'Đang hoạt động'),
+                          : (otherUserUsername.isNotEmpty
+                              ? '@$otherUserUsername'
+                              : 'Đang hoạt động'),
                       style: TextStyle(
                         fontSize: 13,
-                        color: isGroup ? theme.hintColor : const Color(0xFF34C759),
+                        color:
+                            isGroup ? theme.hintColor : const Color(0xFF34C759),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -223,12 +263,16 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildQuickAction(
-                    icon: isMuted ? CupertinoIcons.bell_slash_fill : CupertinoIcons.bell_fill,
+                    icon: isMuted
+                        ? CupertinoIcons.bell_slash_fill
+                        : CupertinoIcons.bell_fill,
                     label: isMuted ? 'Bật tiếng' : 'Tắt tiếng',
                     color: Colors.purple,
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      ref.read(chatMuteProvider.notifier).toggleMute(widget.conversationId);
+                      ref
+                          .read(chatMuteProvider.notifier)
+                          .toggleMute(widget.conversationId);
                     },
                   ),
                   _buildQuickAction(
@@ -272,15 +316,18 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                       children: [
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () => context.push('/chat/${widget.conversationId}/media'),
+                          onTap: () => context
+                              .push('/chat/${widget.conversationId}/media'),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
                                 'Ảnh & Video (${mediaMessages.length})',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14),
                               ),
-                              const Icon(CupertinoIcons.right_chevron, size: 14, color: Colors.grey),
+                              const Icon(CupertinoIcons.right_chevron,
+                                  size: 14, color: Colors.grey),
                             ],
                           ),
                         ),
@@ -291,11 +338,15 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                             alignment: Alignment.center,
                             child: Column(
                               children: [
-                                Icon(CupertinoIcons.photo_on_rectangle, size: 36, color: theme.hintColor.withValues(alpha: 0.4)),
+                                Icon(CupertinoIcons.photo_on_rectangle,
+                                    size: 36,
+                                    color:
+                                        theme.hintColor.withValues(alpha: 0.4)),
                                 const SizedBox(height: 6),
                                 Text(
                                   'Chưa có hình ảnh nào được chia sẻ',
-                                  style: TextStyle(color: theme.hintColor, fontSize: 13),
+                                  style: TextStyle(
+                                      color: theme.hintColor, fontSize: 13),
                                 ),
                               ],
                             ),
@@ -310,7 +361,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                               itemBuilder: (context, idx) {
                                 final msg = mediaMessages[idx];
                                 return GestureDetector(
-                                  onTap: () => _openSharedImage(context, msg.firstMediaUrl!),
+                                  onTap: () => _openSharedImage(
+                                      context, msg.firstMediaUrl!),
                                   child: Container(
                                     margin: const EdgeInsets.only(right: 10),
                                     width: 80,
@@ -326,8 +378,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                                         child: CachedNetworkImage(
                                           imageUrl: msg.firstMediaUrl!,
                                           fit: BoxFit.cover,
-                                          placeholder: (_, __) => const Center(child: CupertinoActivityIndicator(radius: 8)),
-                                          errorWidget: (_, __, ___) => const Icon(CupertinoIcons.photo),
+                                          placeholder: (_, __) => const Center(
+                                              child: CupertinoActivityIndicator(
+                                                  radius: 8)),
+                                          errorWidget: (_, __, ___) =>
+                                              const Icon(CupertinoIcons.photo),
                                         ),
                                       ),
                                     ),
@@ -343,7 +398,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               ),
               if (isGroup) ...[
                 const SizedBox(height: 24),
-                _buildGroupMembersSection(context, ref, conv, currentUserId, cardBgColor, dividerColor, isGroupAdmin, isOwner, perms),
+                _buildGroupMembersSection(context, ref, conv, currentUserId,
+                    cardBgColor, dividerColor, isGroupAdmin, isOwner, perms),
                 const SizedBox(height: 24),
               ],
 
@@ -357,7 +413,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                     icon: CupertinoIcons.photo,
                     gradientColors: [Colors.blue, Colors.indigo],
                     title: 'Hình nền trò chuyện',
-                    subtitle: wallpaperPath.isNotEmpty ? 'Đã kích hoạt ảnh nền tùy chọn' : 'Mặc định',
+                    subtitle: wallpaperPath.isNotEmpty
+                        ? 'Đã kích hoạt ảnh nền tùy chọn'
+                        : 'Mặc định',
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -368,19 +426,27 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                             margin: const EdgeInsets.only(right: 8),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+                              border: Border.all(
+                                  color:
+                                      isDark ? Colors.white24 : Colors.black12),
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(6),
                               child: _buildWallpaperPreview(wallpaperPath),
                             ),
                           ),
-                        const Icon(CupertinoIcons.right_chevron, size: 16, color: Colors.grey),
+                        const Icon(CupertinoIcons.right_chevron,
+                            size: 16, color: Colors.grey),
                       ],
                     ),
-                    onTap: () => context.push('/chat/${widget.conversationId}/wallpaper-history'),
+                    onTap: () => context.push(
+                        '/chat/${widget.conversationId}/wallpaper-history'),
                   ),
-                  Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                  Divider(
+                      height: 0.5,
+                      thickness: 0.5,
+                      color: dividerColor,
+                      indent: 56),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                     child: Column(
@@ -391,11 +457,15 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                           children: [
                             const Text(
                               'Chủ đề cuộc trò chuyện',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600),
                             ),
                             Text(
                               activeThemeItem.name,
-                              style: TextStyle(fontSize: 13, color: activeThemeItem.color, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: activeThemeItem.color,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -411,8 +481,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                               return GestureDetector(
                                 onTap: () {
                                   HapticFeedback.selectionClick();
-                                  ref.read(chatThemeColorProvider.notifier).setTheme(widget.conversationId, item.id);
-                                  ToastService.showSuccess(context, 'Đã cập nhật chủ đề chat ${item.name}');
+                                  ref
+                                      .read(chatThemeColorProvider.notifier)
+                                      .setTheme(widget.conversationId, item.id);
+                                  ToastService.showSuccess(context,
+                                      'Đã cập nhật chủ đề chat ${item.name}');
                                 },
                                 child: Container(
                                   margin: const EdgeInsets.only(right: 12),
@@ -422,18 +495,24 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                                     color: item.color,
                                     shape: BoxShape.circle,
                                     border: isSelected
-                                        ? Border.all(color: isDark ? Colors.white : Colors.black87, width: 3)
+                                        ? Border.all(
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.black87,
+                                            width: 3)
                                         : null,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: item.color.withValues(alpha: 0.3),
+                                        color:
+                                            item.color.withValues(alpha: 0.3),
                                         blurRadius: 4,
                                         offset: const Offset(0, 2),
                                       ),
                                     ],
                                   ),
                                   child: isSelected
-                                      ? const Icon(CupertinoIcons.checkmark, size: 14, color: Colors.white)
+                                      ? const Icon(CupertinoIcons.checkmark,
+                                          size: 14, color: Colors.white)
                                       : null,
                                 ),
                               );
@@ -453,7 +532,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                 cardBgColor,
                 children: [
                   _buildSwitchTile(
-                    icon: isHidden ? CupertinoIcons.eye_slash_fill : CupertinoIcons.eye_fill,
+                    icon: isHidden
+                        ? CupertinoIcons.eye_slash_fill
+                        : CupertinoIcons.eye_fill,
                     gradientColors: const [Colors.blueGrey, Colors.grey],
                     title: 'Ẩn cuộc trò chuyện',
                     value: isHidden,
@@ -461,7 +542,6 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                       _handleToggleHide(context, ref, conv, currentUserId);
                     },
                   ),
-
                 ],
               ),
               const SizedBox(height: 24),
@@ -481,15 +561,23 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                       ref.read(chatRepositoryProvider).togglePin(conv);
                     },
                   ),
-                  Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                  Divider(
+                      height: 0.5,
+                      thickness: 0.5,
+                      color: dividerColor,
+                      indent: 56),
                   _buildSwitchTile(
-                    icon: isMuted ? CupertinoIcons.bell_slash_fill : CupertinoIcons.bell_fill,
+                    icon: isMuted
+                        ? CupertinoIcons.bell_slash_fill
+                        : CupertinoIcons.bell_fill,
                     gradientColors: [Colors.purple, Colors.deepPurple],
                     title: 'Tắt thông báo',
                     value: isMuted,
                     onChanged: (val) {
                       HapticFeedback.lightImpact();
-                      ref.read(chatMuteProvider.notifier).toggleMute(widget.conversationId);
+                      ref
+                          .read(chatMuteProvider.notifier)
+                          .toggleMute(widget.conversationId);
                     },
                   ),
                 ],
@@ -510,11 +598,19 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                           gradientColors: [Colors.indigo, Colors.purple],
                           title: 'Quản lý nhóm',
                           subtitle: 'Quyền, mute, cấm thành viên...',
-                          trailing: const Icon(CupertinoIcons.right_chevron, size: 16, color: Colors.grey),
-                          onTap: () => context.pushNamed('group-management', pathParameters: {'conversationId': widget.conversationId}),
+                          trailing: const Icon(CupertinoIcons.right_chevron,
+                              size: 16, color: Colors.grey),
+                          onTap: () => context.pushNamed('group-management',
+                              pathParameters: {
+                                'conversationId': widget.conversationId
+                              }),
                         ),
                       if (isGroupAdmin)
-                        Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                        Divider(
+                            height: 0.5,
+                            thickness: 0.5,
+                            color: dividerColor,
+                            indent: 56),
                       if (isOwner)
                         _buildListTile(
                           context: context,
@@ -523,7 +619,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                           title: 'Giải tán nhóm trò chuyện',
                           titleColor: Colors.red,
                           trailing: const SizedBox.shrink(),
-                          onTap: () => _confirmDissolveGroup(context, ref, conv),
+                          onTap: () =>
+                              _confirmDissolveGroup(context, ref, conv),
                         )
                       else
                         _buildListTile(
@@ -533,26 +630,39 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                           title: 'Rời khỏi nhóm',
                           titleColor: Colors.redAccent,
                           trailing: const SizedBox.shrink(),
-                          onTap: () => _confirmLeaveGroup(context, ref, conv, isOwner, membersAsync.valueOrNull ?? []),
+                          onTap: () => _confirmLeaveGroup(context, ref, conv,
+                              isOwner, membersAsync.valueOrNull ?? []),
                         ),
                     ],
                   );
                 }
 
-                final isChatBlocked = ref.watch(isChatBlockedProvider(otherUser?.id ?? ''));
+                final isChatBlocked =
+                    ref.watch(isChatBlockedProvider(otherUser?.id ?? ''));
                 return _buildCardContainer(
                   cardBgColor,
                   children: [
                     _buildListTile(
                       context: context,
-                      icon: isChatBlocked ? CupertinoIcons.checkmark_shield_fill : CupertinoIcons.slash_circle,
-                      gradientColors: isChatBlocked ? [Colors.grey, Colors.blueGrey] : [Colors.redAccent, Colors.red],
-                      title: isChatBlocked ? 'Đã chặn tin nhắn từ người này' : 'Chặn tin nhắn từ người này',
+                      icon: isChatBlocked
+                          ? CupertinoIcons.checkmark_shield_fill
+                          : CupertinoIcons.slash_circle,
+                      gradientColors: isChatBlocked
+                          ? [Colors.grey, Colors.blueGrey]
+                          : [Colors.redAccent, Colors.red],
+                      title: isChatBlocked
+                          ? 'Đã chặn tin nhắn từ người này'
+                          : 'Chặn tin nhắn từ người này',
                       titleColor: isChatBlocked ? Colors.grey : Colors.red,
                       trailing: const SizedBox.shrink(),
-                      onTap: () => _confirmChatBlockUser(context, ref, otherUser?.id ?? '', otherUserName, isChatBlocked),
+                      onTap: () => _confirmChatBlockUser(context, ref,
+                          otherUser?.id ?? '', otherUserName, isChatBlocked),
                     ),
-                    Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                    Divider(
+                        height: 0.5,
+                        thickness: 0.5,
+                        color: dividerColor,
+                        indent: 56),
                     _buildListTile(
                       context: context,
                       icon: CupertinoIcons.trash,
@@ -560,7 +670,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                       title: 'Xóa lịch sử trò chuyện',
                       titleColor: Colors.red,
                       trailing: const SizedBox.shrink(),
-                      onTap: () => _confirmDeleteConversation(context, ref, conv),
+                      onTap: () =>
+                          _confirmDeleteConversation(context, ref, conv),
                     ),
                   ],
                 );
@@ -589,7 +700,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     );
   }
 
-  Widget _buildCardContainer(Color cardBgColor, {required List<Widget> children}) {
+  Widget _buildCardContainer(Color cardBgColor,
+      {required List<Widget> children}) {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -626,7 +738,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: isDark ? color.withValues(alpha: 0.18) : color.withValues(alpha: 0.1),
+              color: isDark
+                  ? color.withValues(alpha: 0.18)
+                  : color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 22),
@@ -726,18 +840,18 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
 
   // System wallpaper gradient colours (mirrors wallpaper_history_screen.dart)
   static const _kSysGradients = <String, List<Color>>{
-    'sys:aurora':   [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-    'sys:sunset':   [Color(0xFFFF6B6B), Color(0xFFFFE66D)],
-    'sys:ocean':    [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
+    'sys:aurora': [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+    'sys:sunset': [Color(0xFFFF6B6B), Color(0xFFFFE66D)],
+    'sys:ocean': [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
     'sys:lavender': [Color(0xFF667EEA), Color(0xFF764BA2)],
-    'sys:mint':     [Color(0xFF11998E), Color(0xFF38EF7D)],
-    'sys:rose':     [Color(0xFFFC5C7D), Color(0xFF6A3093)],
-    'sys:peach':    [Color(0xFFFFB347), Color(0xFFFF6B35)],
+    'sys:mint': [Color(0xFF11998E), Color(0xFF38EF7D)],
+    'sys:rose': [Color(0xFFFC5C7D), Color(0xFF6A3093)],
+    'sys:peach': [Color(0xFFFFB347), Color(0xFFFF6B35)],
     'sys:midnight': [Color(0xFF0F0C29), Color(0xFF302B63), Color(0xFF24243E)],
-    'sys:sakura':   [Color(0xFFFFE0EC), Color(0xFFFFC5D9), Color(0xFFFFABC8)],
-    'sys:forest':   [Color(0xFF1B4332), Color(0xFF2D6A4F), Color(0xFF52B788)],
-    'sys:galaxy':   [Color(0xFF200122), Color(0xFF6F0000)],
-    'sys:sky':      [Color(0xFF56CCF2), Color(0xFF2F80ED)],
+    'sys:sakura': [Color(0xFFFFE0EC), Color(0xFFFFC5D9), Color(0xFFFFABC8)],
+    'sys:forest': [Color(0xFF1B4332), Color(0xFF2D6A4F), Color(0xFF52B788)],
+    'sys:galaxy': [Color(0xFF200122), Color(0xFF6F0000)],
+    'sys:sky': [Color(0xFF56CCF2), Color(0xFF2F80ED)],
   };
 
   Widget _buildWallpaperPreview(String path) {
@@ -764,7 +878,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       return Image.network(
         path,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Icon(CupertinoIcons.photo, size: 16),
+        errorBuilder: (_, __, ___) =>
+            const Icon(CupertinoIcons.photo, size: 16),
       );
     } else if (kIsWeb) {
       return const Icon(CupertinoIcons.photo, size: 16);
@@ -772,7 +887,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       return Image.file(
         io.File(path),
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Icon(CupertinoIcons.photo, size: 16),
+        errorBuilder: (_, __, ___) =>
+            const Icon(CupertinoIcons.photo, size: 16),
       );
     }
   }
@@ -781,10 +897,12 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     FullScreenImageViewer.open(context, imageUrl);
   }
 
-  Future<void> _handleToggleHide(BuildContext context, WidgetRef ref, dynamic conv, String currentUserId) async {
+  Future<void> _handleToggleHide(BuildContext context, WidgetRef ref,
+      dynamic conv, String currentUserId) async {
     final isHidden = conv.isHidden(currentUserId);
     if (isHidden) {
-      final success = await PasscodeDialog.show(context, mode: PasscodeMode.verify);
+      final success =
+          await PasscodeDialog.show(context, mode: PasscodeMode.verify);
       if (success == true) {
         ref.read(chatRepositoryProvider).toggleHide(conv);
         // if (context.mounted) {
@@ -798,7 +916,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       if (hiddenCount == 0) {
         await ref.read(hiddenChatProvider.notifier).removePasscode();
         if (!context.mounted) return;
-        final success = await PasscodeDialog.show(context, mode: PasscodeMode.setup);
+        final success =
+            await PasscodeDialog.show(context, mode: PasscodeMode.setup);
         if (success == true) {
           ref.read(chatRepositoryProvider).toggleHide(conv);
           if (context.mounted) {
@@ -815,7 +934,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     }
   }
 
-  void _confirmChatBlockUser(BuildContext context, WidgetRef ref, String targetUserId, String userName, bool isChatBlocked) {
+  void _confirmChatBlockUser(BuildContext context, WidgetRef ref,
+      String targetUserId, String userName, bool isChatBlocked) {
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
@@ -836,13 +956,21 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               Navigator.pop(ctx);
               try {
                 if (isChatBlocked) {
-                  await ref.read(profileRepositoryProvider).chatUnblockUser(targetUserId);
+                  await ref
+                      .read(profileRepositoryProvider)
+                      .chatUnblockUser(targetUserId);
                 } else {
-                  await ref.read(profileRepositoryProvider).chatBlockUser(targetUserId);
+                  await ref
+                      .read(profileRepositoryProvider)
+                      .chatBlockUser(targetUserId);
                 }
                 ref.invalidate(chatBlockedUserIdsProvider);
                 if (context.mounted) {
-                  ToastService.showSuccess(context, isChatBlocked ? 'Đã bỏ chặn $userName' : 'Đã chặn $userName');
+                  ToastService.showSuccess(
+                      context,
+                      isChatBlocked
+                          ? 'Đã bỏ chặn $userName'
+                          : 'Đã chặn $userName');
                 }
               } catch (e) {
                 if (context.mounted) {
@@ -857,12 +985,14 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     );
   }
 
-  void _confirmDeleteConversation(BuildContext context, WidgetRef ref, dynamic conv) {
+  void _confirmDeleteConversation(
+      BuildContext context, WidgetRef ref, dynamic conv) {
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Xoá cuộc trò chuyện?'),
-        content: const Text('Thao tác này sẽ xoá toàn bộ tin nhắn ở cả 2 phía. Bạn có chắc chắn không?'),
+        content: const Text(
+            'Thao tác này sẽ xoá toàn bộ tin nhắn ở cả 2 phía. Bạn có chắc chắn không?'),
         actions: [
           CupertinoDialogAction(
             child: const Text('Huỷ'),
@@ -874,7 +1004,9 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               HapticFeedback.mediumImpact();
               Navigator.pop(ctx);
               context.go('/chat');
-              await ref.read(chatRepositoryProvider).deleteConversation(conv.id);
+              await ref
+                  .read(chatRepositoryProvider)
+                  .deleteConversation(conv.id);
             },
             child: const Text('Xoá'),
           ),
@@ -883,7 +1015,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     );
   }
 
-  void _showRenameGroupDialog(BuildContext context, WidgetRef ref, dynamic conv) {
+  void _showRenameGroupDialog(
+      BuildContext context, WidgetRef ref, dynamic conv) {
     final controller = TextEditingController(text: conv.groupName ?? '');
     showCupertinoDialog(
       context: context,
@@ -895,6 +1028,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
             controller: controller,
             placeholder: 'Nhập tên nhóm mới...',
             autofocus: true,
+            maxLength: 40,
+            inputFormatters: [LengthLimitingTextInputFormatter(40)],
           ),
         ),
         actions: [
@@ -906,9 +1041,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
             isDefaultAction: true,
             onPressed: () async {
               final newName = controller.text.trim();
-              if (newName.isNotEmpty) {
+              if (newName.isNotEmpty && newName.length <= 40) {
                 Navigator.pop(ctx);
-                await ref.read(chatRepositoryProvider).updateGroupName(conv.id, newName);
+                await ref
+                    .read(chatRepositoryProvider)
+                    .updateGroupName(conv.id, newName);
                 ref.invalidate(conversationsProvider);
                 if (context.mounted) {
                   ToastService.showSuccess(context, 'Đã cập nhật tên nhóm mới');
@@ -922,9 +1059,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     );
   }
 
-  Future<void> _pickAndChangeGroupAvatar(BuildContext context, WidgetRef ref, dynamic conv) async {
+  Future<void> _pickAndChangeGroupAvatar(
+      BuildContext context, WidgetRef ref, dynamic conv) async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
 
     ToastService.showInfo(context, 'Đang tải ảnh nhóm mới...');
@@ -966,17 +1105,13 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _openGroupMembers(context, conv.id),
-              child: _buildSectionHeader(
-                remainingMembers > 0
-                    ? 'DANH SÁCH THÀNH VIÊN (+$remainingMembers)'
-                    : 'DANH SÁCH THÀNH VIÊN'
-              ),
+              child: _buildSectionHeader(remainingMembers > 0
+                  ? 'DANH SÁCH THÀNH VIÊN (+$remainingMembers)'
+                  : 'DANH SÁCH THÀNH VIÊN'),
             ),
             Padding(
-              padding: const EdgeInsets.only(right: 8, bottom: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+                padding: const EdgeInsets.only(right: 8, bottom: 8),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
                   if (perms?.canInviteMembers ?? false) ...[
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
@@ -985,7 +1120,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                         padding: EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: [
-                            Icon(CupertinoIcons.person_badge_plus, size: 14, color: AppColors.primary),
+                            Icon(CupertinoIcons.person_badge_plus,
+                                size: 14, color: AppColors.primary),
                             SizedBox(width: 4),
                             Text(
                               'Thêm thành viên',
@@ -1001,7 +1137,6 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                     ),
                     const SizedBox(width: 10),
                   ],
-
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => _openGroupMembers(context, conv.id),
@@ -1014,9 +1149,7 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                       ),
                     ),
                   )
-                ]
-              )
-            ),
+                ])),
           ],
         ),
         _buildCardContainer(
@@ -1045,7 +1178,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                       children: [
                         ListTile(
                           key: itemKey,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
                           leading: AppAvatar(
                             imageUrl: m.profile?.avatarUrl,
                             name: m.profile?.displayName ?? 'Thành viên',
@@ -1055,15 +1189,21 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                             children: [
                               Flexible(
                                 child: Text(
-                                  isMe ? '${m.profile?.displayName ?? "Tôi"} (Tôi)' : (m.profile?.displayName ?? 'Thành viên'),
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                  isMe
+                                      ? '${m.profile?.displayName ?? "Tôi"} (Tôi)'
+                                      : (m.profile?.displayName ??
+                                          'Thành viên'),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(width: 6),
                               if (m.isOwner)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: Colors.amber.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(8),
@@ -1071,14 +1211,20 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text('👑 ', style: TextStyle(fontSize: 10)),
-                                      Text('Trưởng nhóm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber)),
+                                      Text('👑 ',
+                                          style: TextStyle(fontSize: 10)),
+                                      Text('Trưởng nhóm',
+                                          style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.amber)),
                                     ],
                                   ),
                                 )
                               else if (m.isCoAdmin)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: Colors.purple.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(8),
@@ -1086,22 +1232,46 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text('⭐ ', style: TextStyle(fontSize: 10)),
-                                      Text('Phó nhóm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.purple)),
+                                      Text('⭐ ',
+                                          style: TextStyle(fontSize: 10)),
+                                      Text('Phó nhóm',
+                                          style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.purple)),
                                     ],
                                   ),
                                 ),
                             ],
                           ),
                           subtitle: Text(
-                            m.profile?.username != null && m.profile!.username.isNotEmpty ? '@${m.profile!.username}' : 'Thành viên nhóm',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            m.profile?.username != null &&
+                                    m.profile!.username.isNotEmpty
+                                ? '@${m.profile!.username}'
+                                : 'Thành viên nhóm',
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.grey),
                           ),
-                          trailing: const Icon(CupertinoIcons.ellipsis, size: 18, color: Colors.grey),
-                          onTap: () => _showMemberContextMenu(context, ref, conv, m, itemKey, isGroupAdmin, isOwner, isMe, currentUserId, cardBgColor),
+                          trailing: const Icon(CupertinoIcons.ellipsis,
+                              size: 18, color: Colors.grey),
+                          onTap: () => _showMemberContextMenu(
+                              context,
+                              ref,
+                              conv,
+                              m,
+                              itemKey,
+                              isGroupAdmin,
+                              isOwner,
+                              isMe,
+                              currentUserId,
+                              cardBgColor),
                         ),
                         if (idx < previewMembers.length - 1)
-                          Divider(height: 0.5, thickness: 0.5, color: dividerColor, indent: 56),
+                          Divider(
+                              height: 0.5,
+                              thickness: 0.5,
+                              color: dividerColor,
+                              indent: 56),
                       ],
                     );
                   }).toList(),
@@ -1160,15 +1330,18 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       // Không hiện khi bấm chính mình
       // ============================================================
 
-      onMessage: !isMe ? () async {
-        final chatRepo = ref.read(chatRepositoryProvider);
+      onMessage: !isMe
+          ? () async {
+              final chatRepo = ref.read(chatRepositoryProvider);
 
-        final directConv = await chatRepo.getOrCreateConversation(member.userId);
+              final directConv =
+                  await chatRepo.getOrCreateConversation(member.userId);
 
-        if (!context.mounted) return;
+              if (!context.mounted) return;
 
-        context.push('/chat/${directConv.id}');
-      } : null,
+              context.push('/chat/${directConv.id}');
+            }
+          : null,
 
       // ============================================================
       // THĂNG PHÓ NHÓM
@@ -1179,20 +1352,24 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       // -> member thường
       // ============================================================
 
-      onMakeAdmin: isOwner && !isMe && !member.isOwner && !member.isCoAdmin ? () async {
-        try {
-          await ref.read(chatRepositoryProvider).updateMemberRole(conv.id, member.userId, 'admin');
-          ref.invalidate(groupMembersProvider(conv.id));
-          ref.invalidate(conversationsProvider);
+      onMakeAdmin: isOwner && !isMe && !member.isOwner && !member.isCoAdmin
+          ? () async {
+              try {
+                await ref
+                    .read(chatRepositoryProvider)
+                    .updateMemberRole(conv.id, member.userId, 'admin');
+                ref.invalidate(groupMembersProvider(conv.id));
+                ref.invalidate(conversationsProvider);
 
-          if (!context.mounted) return;
-          ToastService.showSuccess(context, 'Đã thăng cấp làm Phó nhóm');
-        } catch (e) {
-          if (!context.mounted) return;
-          ToastService.showError(context, 'Lỗi thay đổi quyền');
-          debugPrint('Lỗi thăng cấp phó nhóm: $e');
-        }
-      } : null,
+                if (!context.mounted) return;
+                ToastService.showSuccess(context, 'Đã thăng cấp làm Phó nhóm');
+              } catch (e) {
+                if (!context.mounted) return;
+                ToastService.showError(context, 'Lỗi thay đổi quyền');
+                debugPrint('Lỗi thăng cấp phó nhóm: $e');
+              }
+            }
+          : null,
 
       // ============================================================
       // GỠ PHÓ NHÓM
@@ -1200,24 +1377,26 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       // Chỉ Owner mới được gỡ
       // ============================================================
 
-      onRemoveAdmin: isOwner && !isMe && !member.isOwner && member.isCoAdmin ? () async {
-        try {
-          await ref
-            .read(chatRepositoryProvider)
-            .updateMemberRole(conv.id, member.userId, 'member');
+      onRemoveAdmin: isOwner && !isMe && !member.isOwner && member.isCoAdmin
+          ? () async {
+              try {
+                await ref
+                    .read(chatRepositoryProvider)
+                    .updateMemberRole(conv.id, member.userId, 'member');
 
-          ref.invalidate(groupMembersProvider(conv.id));
-          ref.invalidate(conversationsProvider);
+                ref.invalidate(groupMembersProvider(conv.id));
+                ref.invalidate(conversationsProvider);
 
-          if (!context.mounted) return;
+                if (!context.mounted) return;
 
-          ToastService.showSuccess(context, 'Đã gỡ quyền Phó nhóm');
-        } catch (e) {
-          if (!context.mounted) return;
-          ToastService.showError(context, 'Lỗi thay đổi quyền');
-          debugPrint('Lỗi gỡ quyền phó nhóm: $e');
-        }
-      } : null,
+                ToastService.showSuccess(context, 'Đã gỡ quyền Phó nhóm');
+              } catch (e) {
+                if (!context.mounted) return;
+                ToastService.showError(context, 'Lỗi thay đổi quyền');
+                debugPrint('Lỗi gỡ quyền phó nhóm: $e');
+              }
+            }
+          : null,
 
       // ============================================================
       // TẮT TIẾNG
@@ -1233,8 +1412,26 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               !member.isOwner &&
               (isOwner || !member.isCoAdmin)
           ? () {
-        _showMuteDurationPicker(context, ref, conv.id, member);
-      } : null,
+              if (member.isEffectivelyMutedByAdmin) {
+                ref
+                    .read(chatRepositoryProvider)
+                    .unmuteMemberByAdmin(conv.id, member.userId)
+                    .then((_) {
+                  ref.invalidate(groupMembersProvider(conv.id));
+                  if (context.mounted) {
+                    ToastService.showSuccess(
+                        context, 'Đã bỏ hạn chế thành viên');
+                  }
+                }).catchError((e) {
+                  if (context.mounted) {
+                    ToastService.showError(context, 'Lỗi bỏ hạn chế: $e');
+                  }
+                });
+              } else {
+                _showMuteDurationPicker(context, ref, conv.id, member);
+              }
+            }
+          : null,
 
       // ============================================================
       // CHUYỂN OWNER
@@ -1242,9 +1439,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       // Chỉ Owner hiện tại
       // ============================================================
 
-      onTransferOwnership: isOwner && !isMe && !member.isOwner ? () async {
-        await _confirmTransferOwnership(context, ref, conv.id, member);
-      } : null,
+      onTransferOwnership: isOwner && !isMe && !member.isOwner
+          ? () async {
+              await _confirmTransferOwnership(context, ref, conv.id, member);
+            }
+          : null,
 
       // ============================================================
       // BAN MEMBER
@@ -1253,9 +1452,11 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       // chỉ Owner được ban
       // ============================================================
 
-      onBanMember: isOwner && !isMe && !member.isOwner ? () async {
-        await _confirmBanMember(context, ref, conv.id, member);
-      } : null,
+      onBanMember: isOwner && !isMe && !member.isOwner
+          ? () async {
+              await _confirmBanMember(context, ref, conv.id, member);
+            }
+          : null,
 
       // ============================================================
       // XÓA KHỎI NHÓM
@@ -1271,25 +1472,27 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
               !member.isOwner &&
               (isOwner || !member.isCoAdmin)
           ? () async {
-        try {
-          await ref
-            .read(chatRepositoryProvider)
-            .removeGroupMember(conv.id, member.userId);
+              try {
+                await ref
+                    .read(chatRepositoryProvider)
+                    .removeGroupMember(conv.id, member.userId);
 
-          ref.invalidate(groupMembersProvider(conv.id));
-          ref.invalidate(conversationsProvider);
+                ref.invalidate(groupMembersProvider(conv.id));
+                ref.invalidate(conversationsProvider);
 
-          if (!context.mounted) return;
+                if (!context.mounted) return;
 
-          ToastService.showSuccess(context, 'Đã xóa thành viên khỏi nhóm');
-        } catch (e) {
-          if (!context.mounted) return;
+                ToastService.showSuccess(
+                    context, 'Đã xóa thành viên khỏi nhóm');
+              } catch (e) {
+                if (!context.mounted) return;
 
-          ToastService.showError(context, 'Lỗi xóa thành viên');
+                ToastService.showError(context, 'Lỗi xóa thành viên');
 
-          debugPrint("Lỗi xóa thành viên: $e");
-        }
-      } : null,
+                debugPrint("Lỗi xóa thành viên: $e");
+              }
+            }
+          : null,
     );
   }
 
@@ -1302,7 +1505,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       isScrollControlled: true,
       useRootNavigator: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _AddMemberModalSheet(conv: conv, currentUserId: currentUserId),
+      builder: (ctx) =>
+          _AddMemberModalSheet(conv: conv, currentUserId: currentUserId),
     );
   }
 
@@ -1313,10 +1517,12 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     );
   }
 
-  void _confirmLeaveGroup(BuildContext context, WidgetRef ref, dynamic conv, bool isOwner, List<ConversationMemberModel> members) {
+  void _confirmLeaveGroup(BuildContext context, WidgetRef ref, dynamic conv,
+      bool isOwner, List<ConversationMemberModel> members) {
     // Owner must transfer ownership first if there are other members
     if (isOwner) {
-      final others = members.where((m) => m.userId != (ref.read(currentUserIdProvider) ?? ''));
+      final others = members
+          .where((m) => m.userId != (ref.read(currentUserIdProvider) ?? ''));
       if (others.isNotEmpty) {
         showCupertinoDialog(
           context: context,
@@ -1340,7 +1546,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Rời khỏi nhóm?'),
-        content: const Text('Bạn có chắc chắn muốn rời khỏi nhóm trò chuyện này không?'),
+        content: const Text(
+            'Bạn có chắc chắn muốn rời khỏi nhóm trò chuyện này không?'),
         actions: [
           CupertinoDialogAction(
             child: const Text('Hủy'),
@@ -1372,12 +1579,14 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
     );
   }
 
-  void _confirmDissolveGroup(BuildContext context, WidgetRef ref, dynamic conv) {
+  void _confirmDissolveGroup(
+      BuildContext context, WidgetRef ref, dynamic conv) {
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Giải tán nhóm trò chuyện?'),
-        content: const Text('Thao tác này sẽ xóa toàn bộ nhóm và tin nhắn đối với tất cả thành viên.'),
+        content: const Text(
+            'Thao tác này sẽ xóa toàn bộ nhóm và tin nhắn đối với tất cả thành viên.'),
         actions: [
           CupertinoDialogAction(
             child: const Text('Hủy'),
@@ -1394,7 +1603,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
                 if (context.mounted) {
                   ref.invalidate(conversationsProvider);
                   context.go('/chat');
-                  ToastService.showSuccess(context, 'Đã giải tán nhóm thành công');
+                  ToastService.showSuccess(
+                      context, 'Đã giải tán nhóm thành công');
                 }
               } catch (e) {
                 if (context.mounted) {
@@ -1434,16 +1644,20 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
           ...durations.map((entry) => CupertinoDialogAction(
                 onPressed: () async {
                   Navigator.pop(ctx);
-                  final until = entry.$2 != null ? DateTime.now().add(entry.$2!) : null;
+                  final until =
+                      entry.$2 != null ? DateTime.now().add(entry.$2!) : null;
                   try {
                     await ref.read(chatRepositoryProvider).muteMemberByAdmin(
-                          conversationId, member.userId, mutedUntil: until);
+                        conversationId, member.userId,
+                        mutedUntil: until);
                     ref.invalidate(groupMembersProvider(conversationId));
                     if (context.mounted) {
-                      ToastService.showSuccess(context, 'Đã tắt tiếng $name (${entry.$1})');
+                      ToastService.showSuccess(
+                          context, 'Đã tắt tiếng $name (${entry.$1})');
                     }
                   } catch (e) {
-                    if (context.mounted) ToastService.showError(context, 'Lỗi: $e');
+                    if (context.mounted)
+                      ToastService.showError(context, 'Lỗi: $e');
                   }
                 },
                 child: Text(entry.$1),
@@ -1469,7 +1683,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: Text('Cấm $name khỏi nhóm?'),
-        content: const Text('Thành viên này sẽ bị xóa và không thể tham gia lại nhóm.'),
+        content: const Text(
+            'Thành viên này sẽ bị xóa và không thể tham gia lại nhóm.'),
         actions: [
           CupertinoDialogAction(
             child: const Text('Hủy'),
@@ -1480,13 +1695,17 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                await ref.read(chatRepositoryProvider).banMember(conversationId, member.userId);
+                await ref
+                    .read(chatRepositoryProvider)
+                    .banMember(conversationId, member.userId);
                 ref.invalidate(groupMembersProvider(conversationId));
                 ref.invalidate(groupBansProvider(conversationId));
                 ref.invalidate(conversationsProvider);
-                if (context.mounted) ToastService.showSuccess(context, 'Đã cấm $name khỏi nhóm');
+                if (context.mounted)
+                  ToastService.showSuccess(context, 'Đã cấm $name khỏi nhóm');
               } catch (e) {
-                if (context.mounted) ToastService.showError(context, 'Lỗi cấm thành viên: $e');
+                if (context.mounted)
+                  ToastService.showError(context, 'Lỗi cấm thành viên: $e');
               }
             },
             child: const Text('Cấm'),
@@ -1508,7 +1727,8 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: Text('Chuyển quyền cho $name?'),
-        content: Text('$name sẽ trở thành Trưởng nhóm mới. Bạn sẽ trở thành Phó nhóm.'),
+        content: Text(
+            '$name sẽ trở thành Trưởng nhóm mới. Bạn sẽ trở thành Phó nhóm.'),
         actions: [
           CupertinoDialogAction(
             child: const Text('Hủy'),
@@ -1519,12 +1739,17 @@ class _ConversationSettingsScreenState extends ConsumerState<ConversationSetting
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                await ref.read(chatRepositoryProvider).transferOwnership(conversationId, member.userId);
+                await ref
+                    .read(chatRepositoryProvider)
+                    .transferOwnership(conversationId, member.userId);
                 ref.invalidate(groupMembersProvider(conversationId));
                 ref.invalidate(conversationsProvider);
-                if (context.mounted) ToastService.showSuccess(context, 'Đã chuyển quyền Owner cho $name');
+                if (context.mounted)
+                  ToastService.showSuccess(
+                      context, 'Đã chuyển quyền Owner cho $name');
               } catch (e) {
-                if (context.mounted) ToastService.showError(context, 'Lỗi chuyển quyền: $e');
+                if (context.mounted)
+                  ToastService.showError(context, 'Lỗi chuyển quyền: $e');
               }
             },
             child: const Text('Xác nhận'),
@@ -1542,7 +1767,8 @@ class _AddMemberModalSheet extends ConsumerStatefulWidget {
   const _AddMemberModalSheet({required this.conv, required this.currentUserId});
 
   @override
-  ConsumerState<_AddMemberModalSheet> createState() => _AddMemberModalSheetState();
+  ConsumerState<_AddMemberModalSheet> createState() =>
+      _AddMemberModalSheetState();
 }
 
 class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
@@ -1563,11 +1789,13 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
     final isDark = theme.brightness == Brightness.dark;
     final friendsAsync = ref.watch(friendsListProvider(widget.currentUserId));
     final membersAsync = ref.watch(groupMembersProvider(widget.conv.id));
-    final existingMemberIds = membersAsync.valueOrNull?.map((m) => m.userId).toSet() ??
-        widget.conv.members?.map((m) => m.userId).toSet() ??
-        <String>{};
+    final existingMemberIds =
+        membersAsync.valueOrNull?.map((m) => m.userId).toSet() ??
+            widget.conv.members?.map((m) => m.userId).toSet() ??
+            <String>{};
 
-    final cardBgColor = isDark ? const Color(0xFF252536) : const Color(0xFFF4F6FB);
+    final cardBgColor =
+        isDark ? const Color(0xFF252536) : const Color(0xFFF4F6FB);
     final canAdd = _selectedFriends.isNotEmpty && !_isAdding;
 
     return Container(
@@ -1590,15 +1818,19 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                       borderRadius: BorderRadius.circular(20),
                       onTap: () => Navigator.pop(context),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.black.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           'Hủy',
                           style: TextStyle(
-                            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+                            color: theme.textTheme.bodyMedium?.color
+                                ?.withValues(alpha: 0.8),
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1628,19 +1860,25 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                           decoration: BoxDecoration(
                             gradient: canAdd
                                 ? const LinearGradient(
-                                    colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
+                                    colors: [
+                                      Color(0xFF007AFF),
+                                      Color(0xFF5856D6)
+                                    ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   )
                                 : null,
                             color: canAdd
                                 ? null
-                                : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.withValues(alpha: 0.15)),
+                                : (isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.grey.withValues(alpha: 0.15)),
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: canAdd
                                 ? [
                                     BoxShadow(
-                                      color: const Color(0xFF007AFF).withValues(alpha: 0.35),
+                                      color: const Color(0xFF007AFF)
+                                          .withValues(alpha: 0.35),
                                       blurRadius: 8,
                                       offset: const Offset(0, 3),
                                     )
@@ -1653,11 +1891,17 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                               borderRadius: BorderRadius.circular(20),
                               onTap: canAdd ? _handleAddMembers : null,
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 18, vertical: 8),
                                 child: Text(
-                                  _selectedFriends.isNotEmpty ? 'Thêm (${_selectedFriends.length})' : 'Thêm',
+                                  _selectedFriends.isNotEmpty
+                                      ? 'Thêm (${_selectedFriends.length})'
+                                      : 'Thêm',
                                   style: TextStyle(
-                                    color: canAdd ? Colors.white : theme.hintColor.withValues(alpha: 0.5),
+                                    color: canAdd
+                                        ? Colors.white
+                                        : theme.hintColor
+                                            .withValues(alpha: 0.5),
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -1669,7 +1913,8 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                 ],
               ),
             ),
-            Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.2)),
+            Divider(
+                height: 1, color: theme.dividerColor.withValues(alpha: 0.2)),
 
             // ── 2. Search Field ───────────────────────────────────────────────
             Padding(
@@ -1679,12 +1924,18 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                 child: CupertinoSearchTextField(
                   controller: _searchController,
                   placeholder: 'Tìm kiếm bạn bè...',
-                  placeholderStyle: TextStyle(color: theme.hintColor, fontSize: 14),
-                  style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontSize: 15),
-                  backgroundColor: isDark ? const Color(0xFF252536) : const Color(0xFFF0F2F6),
+                  placeholderStyle:
+                      TextStyle(color: theme.hintColor, fontSize: 14),
+                  style: TextStyle(
+                      color: theme.textTheme.bodyLarge?.color, fontSize: 15),
+                  backgroundColor: isDark
+                      ? const Color(0xFF252536)
+                      : const Color(0xFFF0F2F6),
                   borderRadius: BorderRadius.circular(16),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                  onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  onChanged: (val) =>
+                      setState(() => _searchQuery = val.trim().toLowerCase()),
                 ),
               ),
             ),
@@ -1733,14 +1984,16 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                             top: 0,
                             right: 0,
                             child: GestureDetector(
-                              onTap: () => setState(() => _selectedFriends.remove(friend)),
+                              onTap: () => setState(
+                                  () => _selectedFriends.remove(friend)),
                               child: Container(
                                 padding: const EdgeInsets.all(2),
                                 decoration: const BoxDecoration(
                                   color: Colors.redAccent,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                child: const Icon(Icons.close,
+                                    size: 12, color: Colors.white),
                               ),
                             ),
                           ),
@@ -1750,7 +2003,8 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                   },
                 ),
               ),
-              Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.15)),
+              Divider(
+                  height: 1, color: theme.dividerColor.withValues(alpha: 0.15)),
             ],
 
             // ── 4. Friends List ───────────────────────────────────────────────
@@ -1762,7 +2016,8 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                     if (_searchQuery.isEmpty) return true;
                     final name = f.displayName.toLowerCase();
                     final username = f.username.toLowerCase();
-                    return name.contains(_searchQuery) || username.contains(_searchQuery);
+                    return name.contains(_searchQuery) ||
+                        username.contains(_searchQuery);
                   }).toList();
 
                   if (availableFriends.isEmpty) {
@@ -1770,11 +2025,16 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(CupertinoIcons.person_3, size: 48, color: theme.hintColor.withValues(alpha: 0.4)),
+                          Icon(CupertinoIcons.person_3,
+                              size: 48,
+                              color: theme.hintColor.withValues(alpha: 0.4)),
                           const SizedBox(height: 12),
                           Text(
-                            _searchQuery.isNotEmpty ? 'Không tìm thấy bạn bè phù hợp' : 'Tất cả bạn bè đã ở trong nhóm',
-                            style: TextStyle(color: theme.hintColor, fontSize: 14),
+                            _searchQuery.isNotEmpty
+                                ? 'Không tìm thấy bạn bè phù hợp'
+                                : 'Tất cả bạn bè đã ở trong nhóm',
+                            style:
+                                TextStyle(color: theme.hintColor, fontSize: 14),
                           ),
                         ],
                       ),
@@ -1782,7 +2042,8 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                   }
 
                   return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     itemCount: availableFriends.length,
                     itemBuilder: (ctx, idx) {
                       final friend = availableFriends[idx];
@@ -1792,26 +2053,35 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.08)
+                              ? AppColors.primary
+                                  .withValues(alpha: isDark ? 0.18 : 0.08)
                               : cardBgColor,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isSelected
                                 ? AppColors.primary
-                                : (isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.03)),
+                                : (isDark
+                                    ? Colors.white.withValues(alpha: 0.04)
+                                    : Colors.black.withValues(alpha: 0.03)),
                             width: isSelected ? 1.5 : 1,
                           ),
                         ),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                          leading: AppAvatar(imageUrl: friend.avatarUrl, name: friend.displayName, radius: 22),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 4),
+                          leading: AppAvatar(
+                              imageUrl: friend.avatarUrl,
+                              name: friend.displayName,
+                              radius: 22),
                           title: Text(
                             friend.displayName,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                           subtitle: Text(
                             '@${friend.username}',
-                            style: TextStyle(fontSize: 12, color: theme.hintColor),
+                            style:
+                                TextStyle(fontSize: 12, color: theme.hintColor),
                           ),
                           trailing: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
@@ -1821,19 +2091,25 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                               shape: BoxShape.circle,
                               gradient: isSelected
                                   ? const LinearGradient(
-                                      colors: [Color(0xFF007AFF), Color(0xFF5856D6)],
+                                      colors: [
+                                        Color(0xFF007AFF),
+                                        Color(0xFF5856D6)
+                                      ],
                                     )
                                   : null,
                               color: isSelected ? null : Colors.transparent,
                               border: Border.all(
                                 color: isSelected
                                     ? Colors.transparent
-                                    : (isDark ? Colors.white38 : Colors.black26),
+                                    : (isDark
+                                        ? Colors.white38
+                                        : Colors.black26),
                                 width: 1.8,
                               ),
                             ),
                             child: isSelected
-                                ? const Icon(Icons.check, size: 15, color: Colors.white)
+                                ? const Icon(Icons.check,
+                                    size: 15, color: Colors.white)
                                 : null,
                           ),
                           onTap: () {
@@ -1850,7 +2126,8 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
                     },
                   );
                 },
-                loading: () => const Center(child: CupertinoActivityIndicator()),
+                loading: () =>
+                    const Center(child: CupertinoActivityIndicator()),
                 error: (err, _) => Center(child: Text('Lỗi: $err')),
               ),
             ),
@@ -1866,12 +2143,15 @@ class _AddMemberModalSheetState extends ConsumerState<_AddMemberModalSheet> {
     setState(() => _isAdding = true);
     try {
       final userIds = _selectedFriends.map((f) => f.id).toList();
-      await ref.read(chatRepositoryProvider).addGroupMembers(widget.conv.id, userIds);
+      await ref
+          .read(chatRepositoryProvider)
+          .addGroupMembers(widget.conv.id, userIds);
       ref.invalidate(conversationsProvider);
       ref.invalidate(groupMembersProvider(widget.conv.id));
       if (mounted) {
         Navigator.pop(context);
-        ToastService.showSuccess(context, 'Đã thêm ${_selectedFriends.length} thành viên mới vào nhóm!');
+        ToastService.showSuccess(context,
+            'Đã thêm ${_selectedFriends.length} thành viên mới vào nhóm!');
       }
     } catch (e) {
       if (mounted) {

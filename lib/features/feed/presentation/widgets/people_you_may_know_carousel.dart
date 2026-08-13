@@ -267,6 +267,9 @@ class _PeopleYouMayKnowCarouselState extends ConsumerState<PeopleYouMayKnowCarou
                                       setState(() {
                                         _dismissedCandidates.add(candidate.id);
                                       });
+                                      ref
+                                          .read(recommendationRepositoryProvider)
+                                          .dismissProfile(candidate.id);
                                     },
                                     child: const Text(
                                       'Gỡ',

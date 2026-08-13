@@ -62,29 +62,46 @@ class ChatMentionOption {
           isBroadcast: true,
         ),
       ],
-      ...members.where((member) => member.userId != currentUserId).map((member) {
-        final displayName = member.profile?.displayName?.trim();
-        final username = member.profile?.username?.trim();
-        final fallback = (displayName?.isNotEmpty ?? false)
-            ? displayName!.replaceAll(RegExp(r'\s+'), '_')
-            : member.userId;
-        final rawToken = (username?.isNotEmpty ?? false) ? username! : fallback;
-        final token = rawToken.startsWith('@') ? rawToken.substring(1) : rawToken;
+      ...members
+          .where((member) => member.userId != currentUserId)
+          .map((member) {
+        final fullName = member.profile?.fullName?.trim();
+        final rawUsername = member.profile?.username.trim() ?? '';
+        final username = rawUsername.startsWith('@')
+            ? rawUsername.substring(1)
+            : rawUsername;
+        final hasFullName = fullName != null && fullName.isNotEmpty;
+        final hasUsername = username.isNotEmpty;
+        // Insert the full name first. Username is the fallback when full name
+        // is absent or invalid; user id is only a final safety fallback.
+        final token = hasFullName
+            ? fullName
+            : hasUsername
+                ? username
+                : member.userId;
 
         return ChatMentionOption(
           token: token,
-          title: displayName?.isNotEmpty == true ? displayName! : token,
-          subtitle: '@$token',
+          title: hasFullName
+              ? fullName
+              : hasUsername
+                  ? username
+                  : member.userId,
+          subtitle: hasUsername ? '@$username' : 'Chưa có username',
           avatarUrl: member.profile?.avatarUrl,
         );
       }),
     ];
 
     if (query.isEmpty) return options.take(8).toList();
-    return options.where((option) {
-      return option.token.toLowerCase().contains(query) ||
-          option.title.toLowerCase().contains(query);
-    }).take(8).toList();
+    return options
+        .where((option) {
+          return option.token.toLowerCase().contains(query) ||
+              option.title.toLowerCase().contains(query) ||
+              option.subtitle.toLowerCase().contains(query);
+        })
+        .take(8)
+        .toList();
   }
 }
 
@@ -163,52 +180,52 @@ class ChatMentionSuggestions extends StatelessWidget {
               itemBuilder: (context, index) {
                 final option = options[index];
                 return ListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-            leading: option.isBroadcast
-                ? Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.14),
-                      shape: BoxShape.circle,
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  leading: option.isBroadcast
+                      ? Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.14),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            CupertinoIcons.person_3_fill,
+                            color: accentColor,
+                            size: 20,
+                          ),
+                        )
+                      : AppAvatar(
+                          imageUrl: option.avatarUrl,
+                          name: option.title,
+                          radius: 19,
+                        ),
+                  title: Text(
+                    option.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: option.title.startsWith('@') ? accentColor : null,
                     ),
-                    child: Icon(
-                      CupertinoIcons.person_3_fill,
-                      color: accentColor,
-                      size: 20,
-                    ),
-                  )
-                : AppAvatar(
-                    imageUrl: option.avatarUrl,
-                    name: option.title,
-                    radius: 19,
                   ),
-            title: Text(
-              option.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: option.title.startsWith('@') ? accentColor : null,
-              ),
-            ),
-            subtitle: Text(
-              option.subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: option.subtitle.startsWith('@')
-                    ? accentColor.withValues(alpha: 0.85)
-                    : theme.hintColor,
-                fontWeight: option.subtitle.startsWith('@')
-                    ? FontWeight.w600
-                    : FontWeight.normal,
-              ),
-            ),
-            onTap: () => onSelected(option),
+                  subtitle: Text(
+                    option.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: option.subtitle.startsWith('@')
+                          ? accentColor.withValues(alpha: 0.85)
+                          : theme.hintColor,
+                      fontWeight: option.subtitle.startsWith('@')
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  onTap: () => onSelected(option),
                 );
               },
             ),

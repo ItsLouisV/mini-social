@@ -17,7 +17,7 @@ if (UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN) {
     });
     ratelimit = new Ratelimit({
       redis,
-      limiter: Ratelimit.slidingWindow(20, "60 s"),
+      limiter: Ratelimit.slidingWindow(5, "60 s"),
       analytics: true,
     });
   } catch (err) {

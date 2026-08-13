@@ -49,7 +49,8 @@ class PostRepository {
         final publicOnly = postsList.where((p) {
           final status = p['moderation_status'] as String? ?? 'pending';
           final privacy = p['privacy'] as String? ?? 'public';
-          return status == 'published' && privacy == 'public';
+          return (status == 'published' || status == 'shadow_limited') &&
+              privacy == 'public';
         });
         return publicOnly.map((e) => PostModel.fromJson(e)).toList();
       }
@@ -61,7 +62,9 @@ class PostRepository {
             .from(SupabaseConstants.followsTable)
             .select('following_id')
             .eq('follower_id', userId);
-        followingIds = (followingData as List).map((x) => x['following_id'] as String).toSet();
+        followingIds = (followingData as List)
+            .map((x) => x['following_id'] as String)
+            .toSet();
       } catch (e) {
         print('Warning: Failed to fetch following: $e');
       }
@@ -90,23 +93,35 @@ class PostRepository {
         final postUserId = postJson['user_id'] as String;
         final status = postJson['moderation_status'] as String? ?? 'pending';
 
-        if (status == 'hidden' || status == 'removed') return false;
+        if (status == 'hidden' ||
+            status == 'removed' ||
+            status == 'under_review') return false;
         if (postUserId == userId) return true;
-        if (status != 'published') return false;
+        if (status != 'published' && status != 'shadow_limited') return false;
 
         final privacy = postJson['privacy'] as String? ?? 'public';
         if (privacy == 'public') return true;
         if (privacy == 'private') return false;
         if (privacy == 'friends' || privacy == 'followers') {
-          return friendIds.contains(postUserId) || followingIds.contains(postUserId);
+          return friendIds.contains(postUserId) ||
+              followingIds.contains(postUserId);
         }
         return true;
-      }).toList();
+      }).toList()
+        ..sort((a, b) {
+          final aRestricted = a['moderation_status'] == 'shadow_limited';
+          final bRestricted = b['moderation_status'] == 'shadow_limited';
+          if (aRestricted != bRestricted) return aRestricted ? 1 : -1;
+          return DateTime.parse(b['created_at'] as String)
+              .compareTo(DateTime.parse(a['created_at'] as String));
+        });
 
       if (from >= filteredPostsList.length) return [];
       final paginatedList = filteredPostsList.sublist(
         from,
-        (to + 1) > filteredPostsList.length ? filteredPostsList.length : (to + 1),
+        (to + 1) > filteredPostsList.length
+            ? filteredPostsList.length
+            : (to + 1),
       );
 
       final postIds = paginatedList.map((e) => e['id']).toList();
@@ -118,7 +133,8 @@ class PostRepository {
             .eq('user_id', userId)
             .inFilter('post_id', postIds);
 
-        likedPostIds = (likedPostsData as List).map((e) => e['post_id'] as String).toSet();
+        likedPostIds =
+            (likedPostsData as List).map((e) => e['post_id'] as String).toSet();
       } catch (e) {
         print('Warning: Failed to fetch post likes: $e');
       }
@@ -135,7 +151,8 @@ class PostRepository {
 
       return resultPosts;
     } catch (e) {
-      debugPrint('⚠️ [PostRepository] Offline fallback for feed: loading from local DB: $e');
+      debugPrint(
+          '⚠️ [PostRepository] Offline fallback for feed: loading from local DB: $e');
       // Offline fallback
       if (_isarService != null) {
         final cached = _isarService!.getPosts(limit: pageSize, offset: from);
@@ -184,32 +201,30 @@ class PostRepository {
 
     final postsStream = _client
         .from(SupabaseConstants.postsTable)
-        .stream(primaryKey: ['id'])
-        .handleError((err) {
-          print('Supabase watchPosts stream error (posts): $err');
-          _service.handleAuthError(err);
-        });
+        .stream(primaryKey: ['id']).handleError((err) {
+      print('Supabase watchPosts stream error (posts): $err');
+      _service.handleAuthError(err);
+    });
     final likesStream = _client
         .from(SupabaseConstants.likesTable)
-        .stream(primaryKey: ['id'])
-        .handleError((err) {
-          print('Supabase watchPosts stream error (likes): $err');
-          _service.handleAuthError(err);
-        });
+        .stream(primaryKey: ['id']).handleError((err) {
+      print('Supabase watchPosts stream error (likes): $err');
+      _service.handleAuthError(err);
+    });
     final commentsStream = _client
         .from(SupabaseConstants.commentsTable)
-        .stream(primaryKey: ['id'])
-        .handleError((err) {
-          print('Supabase watchPosts stream error (comments): $err');
-          _service.handleAuthError(err);
-        });
+        .stream(primaryKey: ['id']).handleError((err) {
+      print('Supabase watchPosts stream error (comments): $err');
+      _service.handleAuthError(err);
+    });
 
-    final combinedStream = StreamGroup.merge([postsStream, likesStream, commentsStream])
-        .asyncMap((_) => getFeedPosts())
-        .handleError((err) {
-          print('Supabase watchPosts combined stream error: $err');
-          _service.handleAuthError(err);
-        });
+    final combinedStream =
+        StreamGroup.merge([postsStream, likesStream, commentsStream])
+            .asyncMap((_) => getFeedPosts())
+            .handleError((err) {
+      print('Supabase watchPosts combined stream error: $err');
+      _service.handleAuthError(err);
+    });
 
     try {
       await for (final posts in combinedStream) {
@@ -279,13 +294,14 @@ class PostRepository {
     for (int i = 0; i < media.length; i++) {
       final item = media[i];
       final mediaId = _uuid.v4();
-      
+
       final extension = item.name.split('.').last.toLowerCase();
-      final isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp'].contains(extension);
+      final isVideo =
+          ['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp'].contains(extension);
       final fileExtension = isVideo ? extension : 'jpg';
       final path = '$userId/$finalPostId/$i.$fileExtension';
       final mediaType = isVideo ? 'video' : 'image';
-      
+
       final url = await _service.uploadFile(
         bucket: SupabaseConstants.postsBucket,
         path: path,
@@ -329,7 +345,9 @@ class PostRepository {
       };
 
       try {
-        await _client.from(SupabaseConstants.postMediaTable).insert(mediaInsertData);
+        await _client
+            .from(SupabaseConstants.postMediaTable)
+            .insert(mediaInsertData);
       } catch (_) {
         await _client.from(SupabaseConstants.postMediaTable).insert({
           'id': mediaId,
@@ -381,7 +399,8 @@ class PostRepository {
         await _client.storage.from(SupabaseConstants.postsBucket).remove(paths);
       }
     } catch (e) {
-      debugPrint('Warning: Could not delete storage files for post $postId: $e');
+      debugPrint(
+          'Warning: Could not delete storage files for post $postId: $e');
     }
 
     // 3. Xóa bản ghi post khỏi Database (post_media sẽ bị cascade delete)
@@ -395,7 +414,7 @@ class PostRepository {
         .select('*, profiles(*), post_media(*)')
         .eq('id', postId)
         .single();
-    
+
     final userId = currentUserId;
     final postUserId = data['user_id'] as String;
     final privacy = data['privacy'] as String? ?? 'public';
@@ -403,7 +422,9 @@ class PostRepository {
     final isOwner = userId != null && postUserId == userId;
 
     // Chặn người khác xem bài chưa được AI xác nhận an toàn (kể cả qua link trực tiếp)
-    if (!isOwner && moderationStatus != 'published') {
+    if (!isOwner &&
+        moderationStatus != 'published' &&
+        moderationStatus != 'shadow_limited') {
       throw Exception('Bài viết này hiện không khả dụng.');
     }
 
@@ -415,7 +436,8 @@ class PostRepository {
         final isFriend = await _isFriend(userId!, postUserId);
         final isFollowing = await _isFollowing(userId, postUserId);
         if (!isFriend && !isFollowing) {
-          throw Exception('Bài viết này chỉ dành cho bạn bè và người theo dõi.');
+          throw Exception(
+              'Bài viết này chỉ dành cho bạn bè và người theo dõi.');
         }
       }
     }
@@ -434,7 +456,7 @@ class PostRepository {
         print('Warning: Failed to fetch single post like status: $e');
       }
     }
-    
+
     return PostModel.fromJson(data, isLiked: isLiked);
   }
 
@@ -495,14 +517,17 @@ class PostRepository {
   // ── Comments ──
   Future<List<CommentModel>> getComments(String postId) async {
     final userId = currentUserId;
-    
+
     final commentsData = await _client
         .from(SupabaseConstants.commentsTable)
         .select('*, profiles(*)')
         .eq('post_id', postId)
         .order('created_at', ascending: true);
 
-    final commentsList = commentsData as List;
+    final commentsList = (commentsData as List).where((comment) {
+      final status = comment['moderation_status'] as String? ?? 'published';
+      return status == 'published' || status == 'shadow_limited';
+    }).toList();
     if (commentsList.isEmpty) return [];
 
     if (userId == null) {
@@ -519,14 +544,17 @@ class PostRepository {
           .eq('user_id', userId)
           .inFilter('comment_id', commentIds);
 
-      likedCommentIds = (likedCommentsData as List).map((e) => e['comment_id'] as String).toSet();
+      likedCommentIds = (likedCommentsData as List)
+          .map((e) => e['comment_id'] as String)
+          .toSet();
     } catch (e) {
       // Gracefully fall back if the comment_likes table or schema does not exist yet
       print('Warning: Failed to fetch comment likes: $e');
     }
 
     return commentsList.map((e) {
-      return CommentModel.fromJson(e, isLiked: likedCommentIds.contains(e['id']));
+      return CommentModel.fromJson(e,
+          isLiked: likedCommentIds.contains(e['id']));
     }).toList();
   }
 
@@ -559,7 +587,8 @@ class PostRepository {
     }
   }
 
-  Future<CommentModel> addComment(String postId, String content, {String? parentId}) async {
+  Future<CommentModel> addComment(String postId, String content,
+      {String? parentId}) async {
     final data = await _client
         .from(SupabaseConstants.commentsTable)
         .insert({
@@ -610,7 +639,8 @@ class PostRepository {
   }
 
   // ── Reports ──
-  Future<void> reportPost({required String postId, required String reason}) async {
+  Future<void> reportPost(
+      {required String postId, required String reason}) async {
     final currentId = currentUserId;
     if (currentId == null) throw Exception('Not authenticated');
 
@@ -630,14 +660,18 @@ class PostRepository {
       validReason = 'misinformation';
     }
 
-    final data = await _client.from('reports').insert({
-      'content_type': 'post',
-      'post_id': postId,
-      'reporter_id': currentId,
-      'reason': validReason,
-      'description': reason,
-      'status': 'pending',
-    }).select('id').single();
+    final data = await _client
+        .from('reports')
+        .insert({
+          'content_type': 'post',
+          'post_id': postId,
+          'reporter_id': currentId,
+          'reason': validReason,
+          'description': reason,
+          'status': 'pending',
+        })
+        .select('id')
+        .single();
 
     final reportId = data['id'] as String;
 
@@ -650,8 +684,7 @@ class PostRepository {
     );
   }
 
-  Future<void> cancelReportPost(String postId) async {
-  }
+  Future<void> cancelReportPost(String postId) async {}
 
   // ── Trash & Edit Operations ──
   Future<void> moveToTrash(String postId) async {
@@ -701,10 +734,16 @@ class PostRepository {
     };
     try {
       updateData['layout_type'] = layoutType;
-      await _client.from(SupabaseConstants.postsTable).update(updateData).eq('id', postId);
+      await _client
+          .from(SupabaseConstants.postsTable)
+          .update(updateData)
+          .eq('id', postId);
     } catch (_) {
       updateData.remove('layout_type');
-      await _client.from(SupabaseConstants.postsTable).update(updateData).eq('id', postId);
+      await _client
+          .from(SupabaseConstants.postsTable)
+          .update(updateData)
+          .eq('id', postId);
     }
 
     // 1. Quản lý media cũ: xóa bản ghi media bị gỡ
@@ -714,12 +753,15 @@ class PostRepository {
             .from(SupabaseConstants.postMediaTable)
             .select('id')
             .eq('post_id', postId);
-        
+
         final remainingIds = remainingExistingMedia.map((m) => m.id).toSet();
         for (final m in (currentDbMedia as List)) {
           final id = m['id'] as String;
           if (!remainingIds.contains(id)) {
-            await _client.from(SupabaseConstants.postMediaTable).delete().eq('id', id);
+            await _client
+                .from(SupabaseConstants.postMediaTable)
+                .delete()
+                .eq('id', id);
           }
         }
       } catch (e) {
@@ -735,7 +777,8 @@ class PostRepository {
         final item = newMedia[i];
         final mediaId = _uuid.v4();
         final extension = item.name.split('.').last.toLowerCase();
-        final isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp'].contains(extension);
+        final isVideo =
+            ['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp'].contains(extension);
         final fileExtension = isVideo ? extension : 'jpg';
         final path = '$userId/$postId/${baseOrderIndex + i}.$fileExtension';
         final mediaType = isVideo ? 'video' : 'image';
@@ -784,6 +827,7 @@ class PostRepository {
   Future<void> updatePostCaption(String postId, String newCaption) async {
     await updatePost(postId: postId, caption: newCaption);
   }
+
   Future<List<PostModel>> getTrashedPosts() async {
     final userId = currentUserId;
     if (userId == null) return [];

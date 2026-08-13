@@ -13,6 +13,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/device_management_screen.dart';
+import '../../features/auth/presentation/screens/change_password_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/chat/providers/chat_provider.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
@@ -182,6 +183,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, __) =>
             const CupertinoPage(child: DeviceManagementScreen()),
+      ),
+      GoRoute(
+        path: '/settings/change-password',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: ChangePasswordScreen()),
       ),
       GoRoute(
         path: '/settings/privacy',

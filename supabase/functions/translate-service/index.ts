@@ -74,7 +74,7 @@ if (UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN) {
 
   ratelimit = new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(30, "60 s"),
+    limiter: Ratelimit.slidingWindow(10, "60 s"),
 
     // Tắt nếu bạn không cần biểu đồ analytics.
     // analytics=true tạo thêm thao tác lưu analytics.

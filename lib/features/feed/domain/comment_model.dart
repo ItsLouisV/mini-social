@@ -10,6 +10,7 @@ class CommentModel {
   final bool isLiked;
   final DateTime createdAt;
   final ProfileModel? author;
+  final String moderationStatus;
 
   const CommentModel({
     required this.id,
@@ -21,9 +22,11 @@ class CommentModel {
     this.isLiked = false,
     required this.createdAt,
     this.author,
+    this.moderationStatus = 'published',
   });
 
-  factory CommentModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
+  factory CommentModel.fromJson(Map<String, dynamic> json,
+      {bool isLiked = false}) {
     return CommentModel(
       id: json['id'] as String,
       postId: json['post_id'] as String,
@@ -37,6 +40,7 @@ class CommentModel {
           ? ProfileModel.fromJson(
               Map<String, dynamic>.from(json['profiles'] as Map))
           : null,
+      moderationStatus: json['moderation_status'] as String? ?? 'published',
     );
   }
 
@@ -50,6 +54,7 @@ class CommentModel {
     bool? isLiked,
     DateTime? createdAt,
     ProfileModel? author,
+    String? moderationStatus,
   }) {
     return CommentModel(
       id: id ?? this.id,
@@ -61,6 +66,9 @@ class CommentModel {
       isLiked: isLiked ?? this.isLiked,
       createdAt: createdAt ?? this.createdAt,
       author: author ?? this.author,
+      moderationStatus: moderationStatus ?? this.moderationStatus,
     );
   }
+
+  bool get isRestricted => moderationStatus == 'shadow_limited';
 }

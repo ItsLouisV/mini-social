@@ -1,4 +1,3 @@
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,14 +22,11 @@ class GroupMembersScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<GroupMembersScreen> createState() =>
-      _GroupMembersScreenState();
+  ConsumerState<GroupMembersScreen> createState() => _GroupMembersScreenState();
 }
 
-class _GroupMembersScreenState
-    extends ConsumerState<GroupMembersScreen> {
-  final TextEditingController _searchController =
-      TextEditingController();
+class _GroupMembersScreenState extends ConsumerState<GroupMembersScreen> {
+  final TextEditingController _searchController = TextEditingController();
 
   String _searchQuery = '';
 
@@ -57,18 +53,15 @@ class _GroupMembersScreenState
     }
 
     sorted.sort((a, b) {
-      final roleCompare =
-          priority(a).compareTo(priority(b));
+      final roleCompare = priority(a).compareTo(priority(b));
 
       if (roleCompare != 0) {
         return roleCompare;
       }
 
-      final nameA =
-          a.profile?.displayName.toLowerCase() ?? '';
+      final nameA = a.profile?.displayName.toLowerCase() ?? '';
 
-      final nameB =
-          b.profile?.displayName.toLowerCase() ?? '';
+      final nameB = b.profile?.displayName.toLowerCase() ?? '';
 
       return nameA.compareTo(nameB);
     });
@@ -83,22 +76,18 @@ class _GroupMembersScreenState
   List<ConversationMemberModel> _filterMembers(
     List<ConversationMemberModel> members,
   ) {
-    final query =
-        _searchQuery.trim().toLowerCase();
+    final query = _searchQuery.trim().toLowerCase();
 
     if (query.isEmpty) {
       return members;
     }
 
     return members.where((member) {
-      final name =
-          member.profile?.displayName.toLowerCase() ?? '';
+      final name = member.profile?.displayName.toLowerCase() ?? '';
 
-      final username =
-          member.profile?.username.toLowerCase() ?? '';
+      final username = member.profile?.username.toLowerCase() ?? '';
 
-      return name.contains(query) ||
-          username.contains(query);
+      return name.contains(query) || username.contains(query);
     }).toList();
   }
 
@@ -161,12 +150,9 @@ class _GroupMembersScreenState
       onMessage: !isMe
           ? () async {
               try {
-                final chatRepo =
-                    ref.read(chatRepositoryProvider);
+                final chatRepo = ref.read(chatRepositoryProvider);
 
-                final directConv =
-                    await chatRepo
-                        .getOrCreateConversation(
+                final directConv = await chatRepo.getOrCreateConversation(
                   member.userId,
                 );
 
@@ -191,15 +177,10 @@ class _GroupMembersScreenState
       // Chỉ Owner -> Member thường
       // ----------------------------------------------------------
 
-      onMakeAdmin: isOwner &&
-              !isMe &&
-              !member.isOwner &&
-              !member.isCoAdmin
+      onMakeAdmin: isOwner && !isMe && !member.isOwner && !member.isCoAdmin
           ? () async {
               try {
-                await ref
-                    .read(chatRepositoryProvider)
-                    .updateMemberRole(
+                await ref.read(chatRepositoryProvider).updateMemberRole(
                       widget.conversationId,
                       member.userId,
                       'admin',
@@ -229,15 +210,10 @@ class _GroupMembersScreenState
       // Chỉ Owner -> Admin
       // ----------------------------------------------------------
 
-      onRemoveAdmin: isOwner &&
-              !isMe &&
-              !member.isOwner &&
-              member.isCoAdmin
+      onRemoveAdmin: isOwner && !isMe && !member.isOwner && member.isCoAdmin
           ? () async {
               try {
-                await ref
-                    .read(chatRepositoryProvider)
-                    .updateMemberRole(
+                await ref.read(chatRepositoryProvider).updateMemberRole(
                       widget.conversationId,
                       member.userId,
                       'member',
@@ -272,9 +248,11 @@ class _GroupMembersScreenState
               !member.isOwner &&
               (isOwner || !member.isCoAdmin)
           ? () {
-              _showMuteDurationPicker(
-                member,
-              );
+              if (member.isEffectivelyMutedByAdmin) {
+                _unmuteMember(member);
+              } else {
+                _showMuteDurationPicker(member);
+              }
             }
           : null,
 
@@ -283,9 +261,7 @@ class _GroupMembersScreenState
       // Chỉ Owner
       // ----------------------------------------------------------
 
-      onTransferOwnership: isOwner &&
-              !isMe &&
-              !member.isOwner
+      onTransferOwnership: isOwner && !isMe && !member.isOwner
           ? () {
               _confirmTransferOwnership(
                 member,
@@ -298,9 +274,7 @@ class _GroupMembersScreenState
       // Chỉ Owner
       // ----------------------------------------------------------
 
-      onBanMember: isOwner &&
-              !isMe &&
-              !member.isOwner
+      onBanMember: isOwner && !isMe && !member.isOwner
           ? () {
               _confirmBanMember(
                 member,
@@ -333,8 +307,7 @@ class _GroupMembersScreenState
   void _confirmRemoveMember(
     ConversationMemberModel member,
   ) {
-    final name =
-        member.profile?.displayName ?? 'Thành viên';
+    final name = member.profile?.displayName ?? 'Thành viên';
 
     showCupertinoDialog(
       context: context,
@@ -353,16 +326,13 @@ class _GroupMembersScreenState
               },
               child: const Text('Hủy'),
             ),
-
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () async {
                 Navigator.pop(dialogContext);
 
                 try {
-                  await ref
-                      .read(chatRepositoryProvider)
-                      .removeGroupMember(
+                  await ref.read(chatRepositoryProvider).removeGroupMember(
                         widget.conversationId,
                         member.userId,
                       );
@@ -396,11 +366,24 @@ class _GroupMembersScreenState
   // MUTE MEMBER
   // ============================================================
 
+  Future<void> _unmuteMember(ConversationMemberModel member) async {
+    try {
+      await ref.read(chatRepositoryProvider).unmuteMemberByAdmin(
+            widget.conversationId,
+            member.userId,
+          );
+      _refreshMembers();
+      if (mounted)
+        ToastService.showSuccess(context, 'Đã bỏ hạn chế thành viên');
+    } catch (e) {
+      if (mounted) ToastService.showError(context, 'Lỗi bỏ hạn chế: $e');
+    }
+  }
+
   void _showMuteDurationPicker(
     ConversationMemberModel member,
   ) {
-    final name =
-        member.profile?.displayName ?? 'Thành viên';
+    final name = member.profile?.displayName ?? 'Thành viên';
 
     final durations = <(String, Duration?)>[
       (
@@ -444,15 +427,13 @@ class _GroupMembersScreenState
                       dialogContext,
                     );
 
-                    final duration =
-                        entry.$2;
+                    final duration = entry.$2;
 
-                    final mutedUntil =
-                        duration == null
-                            ? null
-                            : DateTime.now().add(
-                                duration,
-                              );
+                    final mutedUntil = duration == null
+                        ? null
+                        : DateTime.now().add(
+                            duration,
+                          );
 
                     try {
                       await ref
@@ -462,8 +443,7 @@ class _GroupMembersScreenState
                           .muteMemberByAdmin(
                             widget.conversationId,
                             member.userId,
-                            mutedUntil:
-                                mutedUntil,
+                            mutedUntil: mutedUntil,
                           );
 
                       _refreshMembers();
@@ -489,7 +469,6 @@ class _GroupMembersScreenState
                 );
               },
             ),
-
             CupertinoDialogAction(
               onPressed: () {
                 Navigator.pop(
@@ -513,8 +492,7 @@ class _GroupMembersScreenState
   void _confirmBanMember(
     ConversationMemberModel member,
   ) {
-    final name =
-        member.profile?.displayName ?? 'Thành viên';
+    final name = member.profile?.displayName ?? 'Thành viên';
 
     showCupertinoDialog(
       context: context,
@@ -537,7 +515,6 @@ class _GroupMembersScreenState
                 'Hủy',
               ),
             ),
-
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () async {
@@ -546,9 +523,7 @@ class _GroupMembersScreenState
                 );
 
                 try {
-                  await ref
-                      .read(chatRepositoryProvider)
-                      .banMember(
+                  await ref.read(chatRepositoryProvider).banMember(
                         widget.conversationId,
                         member.userId,
                       );
@@ -593,8 +568,7 @@ class _GroupMembersScreenState
   void _confirmTransferOwnership(
     ConversationMemberModel member,
   ) {
-    final name =
-        member.profile?.displayName ?? 'Thành viên';
+    final name = member.profile?.displayName ?? 'Thành viên';
 
     showCupertinoDialog(
       context: context,
@@ -618,7 +592,6 @@ class _GroupMembersScreenState
                 'Hủy',
               ),
             ),
-
             CupertinoDialogAction(
               isDefaultAction: true,
               onPressed: () async {
@@ -627,9 +600,7 @@ class _GroupMembersScreenState
                 );
 
                 try {
-                  await ref
-                      .read(chatRepositoryProvider)
-                      .transferOwnership(
+                  await ref.read(chatRepositoryProvider).transferOwnership(
                         widget.conversationId,
                         member.userId,
                       );
@@ -679,89 +650,67 @@ class _GroupMembersScreenState
       children: [
         ListTile(
           key: itemKey,
-
-          contentPadding:
-              const EdgeInsets.symmetric(
+          contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 4,
           ),
-
           leading: AppAvatar(
-            imageUrl:
-                member.profile?.avatarUrl,
-            name:
-                member.profile?.displayName ??
-                    'Thành viên',
+            imageUrl: member.profile?.avatarUrl,
+            name: member.profile?.displayName ?? 'Thành viên',
             radius: 22,
           ),
-
           title: Row(
             children: [
               Flexible(
                 child: Text(
                   isMe
                       ? '${member.profile?.displayName ?? "Tôi"} (Tôi)'
-                      : member.profile
-                              ?.displayName ??
-                          'Thành viên',
+                      : member.profile?.displayName ?? 'Thành viên',
                   maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 15,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-
               const SizedBox(width: 6),
-
               if (member.isOwner)
                 _buildOwnerBadge()
               else if (member.isCoAdmin)
                 _buildAdminBadge(),
             ],
           ),
-
           subtitle: Padding(
-            padding:
-                const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.only(top: 2),
             child: Text(
-              member.profile?.username !=
-                          null &&
-                      member.profile!.username
-                          .isNotEmpty
+              member.profile?.username != null &&
+                      member.profile!.username.isNotEmpty
                   ? '@${member.profile!.username}'
                   : 'Thành viên nhóm',
               maxLines: 1,
-              overflow:
-                  TextOverflow.ellipsis,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12,
                 color: Colors.grey,
               ),
             ),
           ),
-
           trailing: const Icon(
             CupertinoIcons.ellipsis,
             size: 19,
             color: Colors.grey,
           ),
-
           onTap: () {
             _showMemberActions(
               member: member,
               itemKey: itemKey,
               isMe: isMe,
               isOwner: isOwner,
-              isGroupAdmin:
-                  isGroupAdmin,
+              isGroupAdmin: isGroupAdmin,
             );
           },
         ),
-
         if (showDivider)
           Divider(
             height: 0.5,
@@ -779,33 +728,27 @@ class _GroupMembersScreenState
 
   Widget _buildOwnerBadge() {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 6,
         vertical: 2,
       ),
       decoration: BoxDecoration(
-        color: Colors.amber
-            .withValues(alpha: 0.18),
-        borderRadius:
-            BorderRadius.circular(8),
+        color: Colors.amber.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: const Row(
-        mainAxisSize:
-            MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             '👑',
-            style:
-                TextStyle(fontSize: 10),
+            style: TextStyle(fontSize: 10),
           ),
           SizedBox(width: 2),
           Text(
             'Trưởng nhóm',
             style: TextStyle(
               fontSize: 10,
-              fontWeight:
-                  FontWeight.bold,
+              fontWeight: FontWeight.bold,
               color: Colors.amber,
             ),
           ),
@@ -820,33 +763,27 @@ class _GroupMembersScreenState
 
   Widget _buildAdminBadge() {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: 6,
         vertical: 2,
       ),
       decoration: BoxDecoration(
-        color: Colors.purple
-            .withValues(alpha: 0.18),
-        borderRadius:
-            BorderRadius.circular(8),
+        color: Colors.purple.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: const Row(
-        mainAxisSize:
-            MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             '⭐',
-            style:
-                TextStyle(fontSize: 10),
+            style: TextStyle(fontSize: 10),
           ),
           SizedBox(width: 2),
           Text(
             'Phó nhóm',
             style: TextStyle(
               fontSize: 10,
-              fontWeight:
-                  FontWeight.bold,
+              fontWeight: FontWeight.bold,
               color: Colors.purple,
             ),
           ),
@@ -863,8 +800,7 @@ class _GroupMembersScreenState
     bool isDark,
   ) {
     return Padding(
-      padding:
-          const EdgeInsets.fromLTRB(
+      padding: const EdgeInsets.fromLTRB(
         16,
         10,
         16,
@@ -873,73 +809,49 @@ class _GroupMembersScreenState
       child: Container(
         height: 38,
         decoration: BoxDecoration(
-          color: isDark
-              ? const Color(0xFF1C1C1E)
-              : const Color(0xFFF2F2F7),
-          borderRadius:
-              BorderRadius.circular(10),
+          color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: CupertinoTextField(
-          controller:
-              _searchController,
-
-          placeholder:
-              'Tìm kiếm thành viên',
-
-          placeholderStyle:
-              const TextStyle(
+          controller: _searchController,
+          placeholder: 'Tìm kiếm thành viên',
+          placeholderStyle: const TextStyle(
             color: Colors.grey,
             fontSize: 14,
           ),
-
           prefix: const Padding(
-            padding:
-                EdgeInsets.only(left: 10),
+            padding: EdgeInsets.only(left: 10),
             child: Icon(
               CupertinoIcons.search,
               size: 18,
               color: Colors.grey,
             ),
           ),
+          suffix: _searchQuery.isNotEmpty
+              ? CupertinoButton(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                  ),
+                  minimumSize: Size.zero,
+                  onPressed: () {
+                    _searchController.clear();
 
-          suffix:
-              _searchQuery.isNotEmpty
-                  ? CupertinoButton(
-                      padding:
-                          const EdgeInsets
-                              .symmetric(
-                        horizontal: 10,
-                      ),
-                      minimumSize:
-                          Size.zero,
-                      onPressed: () {
-                        _searchController
-                            .clear();
-
-                        setState(() {
-                          _searchQuery =
-                              '';
-                        });
-                      },
-                      child: const Icon(
-                        CupertinoIcons
-                            .clear_circled_solid,
-                        size: 17,
-                        color:
-                            Colors.grey,
-                      ),
-                    )
-                  : null,
-
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                  child: const Icon(
+                    CupertinoIcons.clear_circled_solid,
+                    size: 17,
+                    color: Colors.grey,
+                  ),
+                )
+              : null,
           decoration: null,
-
           style: TextStyle(
             fontSize: 14,
-            color: isDark
-                ? Colors.white
-                : Colors.black,
+            color: isDark ? Colors.white : Colors.black,
           ),
-
           onChanged: (value) {
             setState(() {
               _searchQuery = value;
@@ -958,78 +870,63 @@ class _GroupMembersScreenState
   Widget build(
     BuildContext context,
   ) {
-    final theme =
-        Theme.of(context);
+    final theme = Theme.of(context);
 
-    final isDark =
-        theme.brightness ==
-            Brightness.dark;
+    final isDark = theme.brightness == Brightness.dark;
 
-    final backgroundColor =
-        isDark
-            ? Colors.black
-            : const Color(
-                0xFFF2F2F7,
-              );
+    final backgroundColor = isDark
+        ? Colors.black
+        : const Color(
+            0xFFF2F2F7,
+          );
 
-    final cardColor =
-        isDark
-            ? const Color(
-                0xFF1E1E2C,
-              )
-            : Colors.white;
+    final cardColor = isDark
+        ? const Color(
+            0xFF1E1E2C,
+          )
+        : Colors.white;
 
-    final dividerColor =
-        isDark
-            ? Colors.white
-                .withValues(
-                  alpha: 0.08,
-                )
-            : Colors.black
-                .withValues(
-                  alpha: 0.08,
-                );
+    final dividerColor = isDark
+        ? Colors.white.withValues(
+            alpha: 0.08,
+          )
+        : Colors.black.withValues(
+            alpha: 0.08,
+          );
 
     // ============================================================
     // CURRENT USER
     // ============================================================
 
-    final currentUserId =
-        ref.watch(
-              currentUserIdProvider,
-            ) ??
-            '';
+    final currentUserId = ref.watch(
+          currentUserIdProvider,
+        ) ??
+        '';
 
     // Member record của chính user hiện tại.
-    final myMember =
-        ref.watch(
+    final myMember = ref.watch(
       groupMemberMeProvider(
         widget.conversationId,
       ),
     );
 
-    final isOwner =
-        myMember?.isOwner ?? false;
+    final isOwner = myMember?.isOwner ?? false;
 
     // Owner cũng được tính là người có quyền quản trị.
-    final isGroupAdmin =
-        isOwner ||
-        (myMember?.isCoAdmin ?? false);
+    final isGroupAdmin = isOwner || (myMember?.isCoAdmin ?? false);
 
     // ============================================================
     // MEMBERS
     // ============================================================
 
-    final membersAsync =
-        ref.watch(
+    final membersAsync = ref.watch(
       groupMembersProvider(
         widget.conversationId,
       ),
     );
 
     return Scaffold(
-      backgroundColor:
-          backgroundColor,
+      backgroundColor: backgroundColor,
 
       // ==========================================================
       // APP BAR
@@ -1038,13 +935,8 @@ class _GroupMembersScreenState
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-
-        backgroundColor:
-            backgroundColor,
-
-        surfaceTintColor:
-            Colors.transparent,
-
+        backgroundColor: backgroundColor,
+        surfaceTintColor: Colors.transparent,
         leading: IconButton(
           onPressed: () {
             Navigator.of(context).pop();
@@ -1054,57 +946,44 @@ class _GroupMembersScreenState
             size: 24,
           ),
         ),
-
         title: membersAsync.when(
           data: (members) {
             return Column(
-              mainAxisSize:
-                  MainAxisSize.min,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
                   'Thành viên nhóm',
                   style: TextStyle(
                     fontSize: 17,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-
                 Text(
                   '${members.length} thành viên',
-                  style:
-                      const TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
-                    fontWeight:
-                        FontWeight.normal,
+                    fontWeight: FontWeight.normal,
                     color: Colors.grey,
                   ),
                 ),
               ],
             );
           },
-
-          loading: () =>
-              const Text(
+          loading: () => const Text(
             'Thành viên nhóm',
             style: TextStyle(
               fontSize: 17,
-              fontWeight:
-                  FontWeight.w600,
+              fontWeight: FontWeight.w600,
             ),
           ),
-
-          error: (error, stack) =>
-              const Text(
+          error: (error, stack) => const Text(
             'Thành viên nhóm',
             style: TextStyle(
               fontSize: 17,
-              fontWeight:
-                  FontWeight.w600,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
-
         centerTitle: true,
       ),
 
@@ -1129,16 +1008,13 @@ class _GroupMembersScreenState
             // ------------------------------------------------------
 
             Expanded(
-              child:
-                  membersAsync.when(
+              child: membersAsync.when(
                 data: (members) {
-                  final sortedMembers =
-                      _sortMembers(
+                  final sortedMembers = _sortMembers(
                     members,
                   );
 
-                  final filteredMembers =
-                      _filterMembers(
+                  final filteredMembers = _filterMembers(
                     sortedMembers,
                   );
 
@@ -1151,8 +1027,7 @@ class _GroupMembersScreenState
                       child: Text(
                         'Nhóm chưa có thành viên',
                         style: TextStyle(
-                          color:
-                              Colors.grey,
+                          color: Colors.grey,
                         ),
                       ),
                     );
@@ -1162,34 +1037,24 @@ class _GroupMembersScreenState
                   // SEARCH EMPTY
                   // ----------------------------------------------
 
-                  if (filteredMembers
-                      .isEmpty) {
+                  if (filteredMembers.isEmpty) {
                     return const Center(
                       child: Column(
-                        mainAxisSize:
-                            MainAxisSize
-                                .min,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            CupertinoIcons
-                                .person_2_fill,
+                            CupertinoIcons.person_2_fill,
                             size: 42,
-                            color:
-                                Colors.grey,
+                            color: Colors.grey,
                           ),
-
                           SizedBox(
                             height: 10,
                           ),
-
                           Text(
                             'Không tìm thấy thành viên',
-                            style:
-                                TextStyle(
-                              fontSize:
-                                  14,
-                              color:
-                                  Colors.grey,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
                             ),
                           ),
                         ],
@@ -1205,87 +1070,53 @@ class _GroupMembersScreenState
                     onRefresh: () async {
                       ref.invalidate(
                         groupMembersProvider(
-                          widget
-                              .conversationId,
+                          widget.conversationId,
                         ),
                       );
 
                       ref.invalidate(
                         groupMemberMeProvider(
-                          widget
-                              .conversationId,
+                          widget.conversationId,
                         ),
                       );
 
                       await ref.read(
                         groupMembersProvider(
-                          widget
-                              .conversationId,
+                          widget.conversationId,
                         ).future,
                       );
                     },
-
                     child: ListView(
-                      physics:
-                          const AlwaysScrollableScrollPhysics(),
-
-                      padding:
-                          const EdgeInsets
-                              .fromLTRB(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
                         12,
                         0,
                         12,
                         24,
                       ),
-
                       children: [
                         Container(
-                          clipBehavior:
-                              Clip.antiAlias,
-
-                          decoration:
-                              BoxDecoration(
-                            color:
-                                cardColor,
-                            borderRadius:
-                                BorderRadius
-                                    .circular(
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(
                               12,
                             ),
                           ),
-
                           child: Column(
-                            children:
-                                List.generate(
-                              filteredMembers
-                                  .length,
+                            children: List.generate(
+                              filteredMembers.length,
                               (index) {
-                                final member =
-                                    filteredMembers[
-                                        index];
+                                final member = filteredMembers[index];
 
                                 return _buildMemberItem(
-                                  member:
-                                      member,
-
-                                  isMe:
-                                      member.userId ==
-                                          currentUserId,
-
-                                  isOwner:
-                                      isOwner,
-
-                                  isGroupAdmin:
-                                      isGroupAdmin,
-
-                                  dividerColor:
-                                      dividerColor,
-
+                                  member: member,
+                                  isMe: member.userId == currentUserId,
+                                  isOwner: isOwner,
+                                  isGroupAdmin: isGroupAdmin,
+                                  dividerColor: dividerColor,
                                   showDivider:
-                                      index <
-                                          filteredMembers
-                                                  .length -
-                                              1,
+                                      index < filteredMembers.length - 1,
                                 );
                               },
                             ),
@@ -1300,10 +1131,8 @@ class _GroupMembersScreenState
                 // LOADING
                 // ----------------------------------------------
 
-                loading: () =>
-                    const Center(
-                  child:
-                      CupertinoActivityIndicator(),
+                loading: () => const Center(
+                  child: CupertinoActivityIndicator(),
                 ),
 
                 // ----------------------------------------------
@@ -1316,93 +1145,62 @@ class _GroupMembersScreenState
                 ) {
                   return Center(
                     child: Padding(
-                      padding:
-                          const EdgeInsets
-                              .all(24),
+                      padding: const EdgeInsets.all(24),
                       child: Column(
-                        mainAxisSize:
-                            MainAxisSize
-                                .min,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(
-                            CupertinoIcons
-                                .exclamationmark_circle,
+                            CupertinoIcons.exclamationmark_circle,
                             size: 40,
-                            color:
-                                Colors.grey,
+                            color: Colors.grey,
                           ),
-
                           const SizedBox(
                             height: 12,
                           ),
-
                           const Text(
                             'Không thể tải danh sách thành viên',
-                            style:
-                                TextStyle(
-                              fontSize:
-                                  14,
-                              fontWeight:
-                                  FontWeight
-                                      .w600,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-
                           const SizedBox(
                             height: 6,
                           ),
-
                           Text(
                             '$error',
-                            textAlign:
-                                TextAlign
-                                    .center,
-                            style:
-                                const TextStyle(
-                              fontSize:
-                                  12,
-                              color:
-                                  Colors.grey,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
                             ),
                           ),
-
                           const SizedBox(
                             height: 16,
                           ),
-
                           CupertinoButton(
-                            padding:
-                                const EdgeInsets
-                                    .symmetric(
-                              horizontal:
-                                  18,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
                               vertical: 8,
                             ),
-                            color:
-                                AppColors
-                                    .primary,
+                            color: AppColors.primary,
                             onPressed: () {
                               ref.invalidate(
                                 groupMembersProvider(
-                                  widget
-                                      .conversationId,
+                                  widget.conversationId,
                                 ),
                               );
 
                               ref.invalidate(
                                 groupMemberMeProvider(
-                                  widget
-                                      .conversationId,
+                                  widget.conversationId,
                                 ),
                               );
                             },
-                            child:
-                                const Text(
+                            child: const Text(
                               'Thử lại',
-                              style:
-                                  TextStyle(
-                                fontSize:
-                                    13,
+                              style: TextStyle(
+                                fontSize: 13,
                               ),
                             ),
                           ),

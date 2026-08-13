@@ -17,8 +17,6 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
   final String otherUserName;
   final bool hasWallpaper;
   final bool canManagePins;
-  final bool isExpanded;
-  final ValueChanged<bool> onExpandedChanged;
   final Function(PinnedMessageModel) onJumpToMessage;
   final Function(String messageId) onUnpinMessage;
 
@@ -30,8 +28,6 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
     required this.otherUserName,
     this.hasWallpaper = false,
     this.canManagePins = true,
-    this.isExpanded = false,
-    required this.onExpandedChanged,
     required this.onJumpToMessage,
     required this.onUnpinMessage,
   });
@@ -41,6 +37,8 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
 }
 
 class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
+  bool _isExpanded = false;
+
   Widget? _buildMediaPreview(MessageModel msg, Color accentColor,
       {double size = 36}) {
     // Image
@@ -171,9 +169,8 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
     // Keep the surface translucent so the conversation remains perceptible
     // underneath, like a sheet of liquid glass.
     final bannerBgColor = isDark
-        ? const Color(0xFF171722)
-            .withValues(alpha: widget.isExpanded ? 0.78 : 0.62)
-        : Colors.white.withValues(alpha: widget.isExpanded ? 0.82 : 0.68);
+        ? const Color(0xFF171722).withValues(alpha: _isExpanded ? 0.78 : 0.62)
+        : Colors.white.withValues(alpha: _isExpanded ? 0.82 : 0.68);
 
     final borderColor = isDark
         ? Colors.white.withValues(alpha: 0.12)
@@ -218,13 +215,14 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                     onTap: () {
                       HapticFeedback.selectionClick();
                       if (widget.pinnedList.length > 1) {
-                        widget.onExpandedChanged(!widget.isExpanded);
+                        setState(() => _isExpanded = !_isExpanded);
                       } else {
                         widget.onJumpToMessage(latestPin);
                       }
                     },
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       child: Row(
                         children: [
                           // Glowing Pin Icon Badge
@@ -280,7 +278,8 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                             horizontal: 6, vertical: 1),
                                         decoration: BoxDecoration(
                                           color: accentColor,
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
                                         ),
                                         child: Text(
                                           '${widget.pinnedList.length}',
@@ -306,7 +305,8 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,
                                           color: isDark
-                                              ? Colors.white.withValues(alpha: 0.95)
+                                              ? Colors.white
+                                                  .withValues(alpha: 0.95)
                                               : Colors.black87,
                                         ),
                                       ),
@@ -337,7 +337,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                           // Action Button (Expand toggle or Unpin button)
                           if (widget.pinnedList.length > 1)
                             AnimatedRotation(
-                              turns: widget.isExpanded ? 0.5 : 0.0,
+                              turns: _isExpanded ? 0.5 : 0.0,
                               duration: const Duration(milliseconds: 250),
                               curve: Curves.easeInOutCubic,
                               child: Container(
@@ -351,7 +351,8 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                 child: Icon(
                                   CupertinoIcons.chevron_down,
                                   size: 14,
-                                  color: isDark ? Colors.white70 : Colors.black54,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black54,
                                 ),
                               ),
                             )
@@ -375,7 +376,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                   ),
 
                   // Expanded List of all Pinned Messages (Smooth animated expand)
-                  if (widget.isExpanded && widget.pinnedList.length > 1)
+                  if (_isExpanded && widget.pinnedList.length > 1)
                     Container(
                       constraints: const BoxConstraints(maxHeight: 220),
                       decoration: BoxDecoration(
@@ -410,11 +411,12 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
 
                           // final pinHasThumb = msg.isImage && pinMedia != null && pinMedia.isNotEmpty;
 
-                          final pinMediaPreview = _buildMediaPreview(msg, accentColor, size: 28);
+                          final pinMediaPreview =
+                              _buildMediaPreview(msg, accentColor, size: 28);
 
                           return InkWell(
                             onTap: () {
-                              widget.onExpandedChanged(false);
+                              setState(() => _isExpanded = false);
                               widget.onJumpToMessage(pin);
                             },
                             child: Padding(
@@ -426,7 +428,8 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                     width: 24,
                                     height: 24,
                                     decoration: BoxDecoration(
-                                      color: accentColor.withValues(alpha: 0.12),
+                                      color:
+                                          accentColor.withValues(alpha: 0.12),
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
@@ -442,7 +445,9 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                       style: TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w500,
-                                        color: isDark ? Colors.white : Colors.black87,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,

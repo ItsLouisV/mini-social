@@ -490,8 +490,12 @@ class ChatRepository {
 
   /// Đổi tên nhóm trò chuyện
   Future<void> updateGroupName(String conversationId, String newName) async {
+    final normalizedName = newName.trim();
+    if (normalizedName.isEmpty || normalizedName.length > 40) {
+      throw ArgumentError('Tên nhóm phải có từ 1 đến 40 ký tự');
+    }
     await _client.from(SupabaseConstants.conversationsTable).update({
-      'name': newName,
+      'name': normalizedName,
     }).eq('id', conversationId);
   }
 

@@ -1,4 +1,3 @@
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,13 +21,10 @@ class GroupMemberActions {
     required BuildContext context,
     required ConversationMemberModel member,
     required GlobalKey itemKey,
-
     required bool isCurrentUser,
     required bool currentUserIsOwner,
     required bool currentUserIsAdmin,
-
     required VoidCallback onViewProfile,
-
     VoidCallback? onMessage,
     VoidCallback? onMakeAdmin,
     VoidCallback? onRemoveAdmin,
@@ -143,6 +139,7 @@ class GroupMemberActions {
         menuContentWidget: Builder(
           builder: (menuContext) => _GroupMemberActionMenu(
             isCurrentUser: isCurrentUser,
+            isMutedByAdmin: member.isEffectivelyMutedByAdmin,
             canMessage: onMessage != null,
             canMakeAdmin: onMakeAdmin != null,
             canRemoveAdmin: onRemoveAdmin != null,
@@ -260,6 +257,7 @@ class _GridActionData {
 
 class _GroupMemberActionMenu extends StatelessWidget {
   final bool isCurrentUser;
+  final bool isMutedByAdmin;
 
   final bool canMessage;
   final bool canMakeAdmin;
@@ -273,6 +271,7 @@ class _GroupMemberActionMenu extends StatelessWidget {
 
   const _GroupMemberActionMenu({
     required this.isCurrentUser,
+    required this.isMutedByAdmin,
     required this.canMessage,
     required this.canMakeAdmin,
     required this.canRemoveAdmin,
@@ -280,14 +279,12 @@ class _GroupMemberActionMenu extends StatelessWidget {
     required this.canMuteMember,
     required this.canBanMember,
     required this.canRemoveMember,
-
     required this.onActionSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final backgroundColor = isDark ? const Color(0xFF1E1E2C) : Colors.white;
 
@@ -382,13 +379,15 @@ class _GroupMemberActionMenu extends StatelessWidget {
       // ----------------------------------------------------------
 
       if (!isCurrentUser && canMuteMember)
-        const _GridActionData(
+        _GridActionData(
           icon: Icon(
-            CupertinoIcons.speaker_slash_fill,
+            isMutedByAdmin
+                ? CupertinoIcons.speaker_2_fill
+                : CupertinoIcons.speaker_slash_fill,
             size: 20,
-            color: Colors.orange,
+            color: isMutedByAdmin ? Colors.green : Colors.orange,
           ),
-          label: 'Hạn chế',
+          label: isMutedByAdmin ? 'Bỏ hạn chế' : 'Hạn chế',
           action: _GroupMemberAction.mute,
         ),
 
@@ -537,8 +536,7 @@ class _ActionListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final foregroundColor = isDark ? Colors.white70 : Colors.black54;
     final labelColor = isDark ? Colors.white : Colors.black87;

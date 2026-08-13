@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
+
 import '../../../core/services/supabase_service.dart';
 import '../../feed/domain/post_model.dart';
-import '../../profile/domain/profile_model.dart';
 
 class PymkCandidate {
   final String id;
@@ -14,6 +15,8 @@ class PymkCandidate {
   final List<String> interests;
   final int mutualFriendsCount;
   final int sharedInterestsCount;
+  final double score;
+  final List<String> reasonCodes;
 
   const PymkCandidate({
     required this.id,
@@ -24,351 +27,132 @@ class PymkCandidate {
     this.interests = const [],
     this.mutualFriendsCount = 0,
     this.sharedInterestsCount = 0,
+    this.score = 0,
+    this.reasonCodes = const [],
   });
 
-  factory PymkCandidate.fromJson(Map<String, dynamic> json) {
-    return PymkCandidate(
-      id: json['id'] as String,
-      username: json['username'] as String? ?? '',
-      fullName: json['full_name'] as String? ?? json['username'] as String? ?? '',
-      avatarUrl: json['avatar_url'] as String?,
-      bio: json['bio'] as String?,
-      interests: (json['interests'] as List?)?.map((e) => e.toString()).toList() ?? [],
-      mutualFriendsCount: json['mutual_friends_count'] as int? ?? 0,
-      sharedInterestsCount: json['shared_interests_count'] as int? ?? 0,
-    );
-  }
+  factory PymkCandidate.fromJson(Map<String, dynamic> json) => PymkCandidate(
+        id: json['id'] as String,
+        username: json['username'] as String? ?? '',
+        fullName:
+            json['full_name'] as String? ?? json['username'] as String? ?? '',
+        avatarUrl: json['avatar_url'] as String?,
+        bio: json['bio'] as String?,
+        interests:
+            (json['interests'] as List?)?.map((e) => e.toString()).toList() ??
+                const [],
+        mutualFriendsCount:
+            (json['mutual_friends_count'] as num?)?.toInt() ?? 0,
+        sharedInterestsCount:
+            (json['shared_interests_count'] as num?)?.toInt() ?? 0,
+        score: (json['score'] as num?)?.toDouble() ?? 0,
+        reasonCodes: (json['reason_codes'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const [],
+      );
 }
 
 class RecommendationRepository {
-  final SupabaseService _service;
-
   RecommendationRepository(this._service);
 
+  final SupabaseService _service;
+  static const _uuid = Uuid();
   SupabaseClient get _client => _service.client;
 
-  /// Lấy danh sách bài viết đề xuất xếp hạng cá nhân hóa
   Future<List<PostModel>> getRecommendedFeed({
     required String userId,
     int limit = 20,
     int offset = 0,
   }) async {
+    if (_service.currentUserId != userId || userId.isEmpty) return [];
     try {
-      final res = await _client.functions.invoke(
+      final response = await _client.functions.invoke(
         'recommendation-engine',
-        queryParameters: {
-          'action': 'feed',
-          'userId': userId,
-          'limit': '$limit',
-          'offset': '$offset',
-        },
+        queryParameters: {'action': 'feed', 'limit': '${limit.clamp(1, 50)}'},
       );
-
-      if (res.data != null && res.data['posts'] != null) {
-        final List list = res.data['posts'] as List;
-        if (list.isNotEmpty) {
-          final postIds = list.map((item) => (item['id'] ?? item['postId'] ?? item['post_id']).toString()).toList();
-          
-          Map<String, Map<String, dynamic>> extraMap = {};
-          try {
-            final extraRes = await _client.from('posts').select('id, is_ai_generated, moderation_status').inFilter('id', postIds);
-            extraMap = {for (var e in (extraRes as List)) e['id'] as String: Map<String, dynamic>.from(e as Map)};
-          } catch (e) {
-            debugPrint('Warning fetching extra post flags: $e');
-          }
-
-          final filteredEdge = list.map((item) {
-            final map = Map<String, dynamic>.from(item as Map);
-            final pid = (map['id'] ?? map['post_id'] ?? '').toString();
-            final extra = extraMap[pid];
-
-            final authorMap = map['user'] != null
-                ? Map<String, dynamic>.from(map['user'] as Map)
-                : null;
-            
-            final mediaList = (map['media'] as List?)
-                    ?.map((m) => PostMedia.fromJson(Map<String, dynamic>.from(m as Map)))
-                    .toList() ??
-                [];
-
-            final createdAtRaw = map['createdAt'] ?? map['created_at'];
-            final createdAt = createdAtRaw != null
-                ? DateTime.parse(createdAtRaw.toString())
-                : DateTime.now();
-
-            final isAi = extra != null && extra['is_ai_generated'] != null
-                ? (extra['is_ai_generated'] as bool? ?? false)
-                : (map['is_ai_generated'] == true || map['isAiGenerated'] == true);
-
-            final modStatus = extra != null && extra['moderation_status'] != null
-                ? extra['moderation_status'] as String?
-                : (map['moderationStatus'] ?? map['moderation_status']) as String?;
-
-            return PostModel(
-              id: pid,
-              userId: (map['userId'] ?? map['user_id'] ?? '') as String,
-              caption: map['caption'] as String?,
-              media: mediaList,
-              likesCount: (map['likesCount'] ?? map['likes_count'] ?? 0) as int,
-              commentsCount: (map['commentsCount'] ?? map['comments_count'] ?? 0) as int,
-              createdAt: createdAt,
-              author: authorMap != null ? ProfileModel.fromJson(authorMap) : null,
-              isLiked: (map['isLiked'] ?? map['is_liked'] ?? false) as bool,
-              privacy: (map['privacy'] ?? 'public') as String,
-              moderationStatus: modStatus,
-              isAiGenerated: isAi,
-            );
-          }).where((post) {
-            final status = post.moderationStatus ?? 'published';
-            if (status == 'hidden' || status == 'removed') {
-              if (post.userId != userId) return false;
-            }
-            if (post.userId != userId && status != 'published') {
-              return false;
-            }
-            return true;
-          }).toList();
-          final filteredPosts = filteredEdge;
-
-          // Sắp xếp: bài của bạn bè/followers lên đầu, bài chính chủ đứng sau
-          final List<PostModel> friendAndFollowerPostsEdge = [];
-          final List<PostModel> ownPostsEdge = [];
-
-          for (final post in filteredPosts) {
-            if (post.userId == userId) {
-              ownPostsEdge.add(post);
-            } else {
-              friendAndFollowerPostsEdge.add(post);
-            }
-          }
-
-          final mergedList = [...friendAndFollowerPostsEdge, ...ownPostsEdge];
-          return _applyAuthorDiversityInterleaver(mergedList, userId);
-        }
-      }
-    } catch (e) {
-      debugPrint('Edge function recommendation error, using RPC fallback: $e');
-    }
-
-    // Direct RPC Fallback
-    try {
-      final List rpcRes = await _client.rpc('get_recommended_feed', params: {
-        'p_user_id': userId,
-        'p_limit': limit,
-        'p_offset': offset,
-      });
-
-      if (rpcRes.isEmpty) return [];
-
-      final postIds = rpcRes.map((r) => r['post_id'] as String).toList();
-      final authorIds = rpcRes.map((r) => r['user_id'] as String).toSet().toList();
-
-      final authorsRes = await _client.from('profiles').select().inFilter('id', authorIds);
-      final authorMap = {for (var a in authorsRes) a['id'] as String: ProfileModel.fromJson(a)};
-
-      final mediaRes = await _client.from('post_media').select().inFilter('post_id', postIds).order('order_index');
-      final mediaMap = <String, List<PostMedia>>{};
-      for (var m in mediaRes) {
-        final pid = m['post_id'] as String;
-        mediaMap.putIfAbsent(pid, () => []).add(PostMedia.fromJson(m));
-      }
-
-      final likesRes = await _client.from('likes').select('post_id').eq('user_id', userId).inFilter('post_id', postIds);
-      final likedSet = {for (var l in likesRes) l['post_id'] as String};
-
-      Map<String, Map<String, dynamic>> extraMap = {};
-      try {
-        final extraRes = await _client.from('posts').select('id, is_ai_generated, moderation_status').inFilter('id', postIds);
-        extraMap = {for (var e in (extraRes as List)) e['id'] as String: Map<String, dynamic>.from(e as Map)};
-      } catch (e) {
-        debugPrint('Warning fetching extra post flags in RPC fallback: $e');
-      }
-
-      final filteredPostsRpc = rpcRes.map((r) {
-        final pid = r['post_id'] as String;
-        final uid = r['user_id'] as String;
-        final extra = extraMap[pid];
-
-        final isAi = extra != null && extra['is_ai_generated'] != null
-            ? (extra['is_ai_generated'] as bool? ?? false)
-            : (r['is_ai_generated'] == true);
-
-        final modStatus = extra != null && extra['moderation_status'] != null
-            ? extra['moderation_status'] as String?
-            : r['moderation_status'] as String?;
-
-        return PostModel(
-          id: pid,
-          userId: uid,
-          caption: r['caption'] as String?,
-          media: mediaMap[pid] ?? [],
-          likesCount: r['likes_count'] as int? ?? 0,
-          commentsCount: r['comments_count'] as int? ?? 0,
-          createdAt: DateTime.parse(r['created_at'] as String),
-          author: authorMap[uid],
-          isLiked: likedSet.contains(pid),
-          privacy: r['privacy'] as String? ?? 'public',
-          moderationStatus: modStatus,
-          isAiGenerated: isAi,
-        );
-      }).where((post) {
-        final status = post.moderationStatus ?? 'published';
-        if (status == 'hidden' || status == 'removed') {
-          if (post.userId != userId) return false;
-        }
-        if (post.userId != userId && status != 'published') {
-          return false;
-        }
-        return true;
-      }).toList();
-
-      final List<PostModel> friendAndFollowerPosts = [];
-      final List<PostModel> ownPosts = [];
-
-      for (final post in filteredPostsRpc) {
-        if (post.userId == userId) {
-          ownPosts.add(post);
-        } else {
-          friendAndFollowerPosts.add(post);
-        }
-      }
-
-      final mergedList = [...friendAndFollowerPosts, ...ownPosts];
-      return _applyAuthorDiversityInterleaver(mergedList, userId);
-    } catch (e) {
-      debugPrint('RPC recommendation error: $e');
+      final raw = response.data is Map ? response.data['posts'] : null;
+      if (raw is! List) return [];
+      return raw
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .where((item) {
+            final status = item['moderation_status'] ?? 'published';
+            return status == 'published' || status == 'shadow_limited';
+          })
+          .map((item) =>
+              PostModel.fromJson(item, isLiked: item['is_liked'] == true))
+          .toList(growable: false);
+    } catch (error) {
+      debugPrint('Recommendation feed unavailable: $error');
       return [];
     }
   }
 
-  /// Lấy danh sách gợi ý người quen (People You May Know)
   Future<List<PymkCandidate>> getPeopleYouMayKnow({
     required String userId,
     int limit = 10,
   }) async {
+    if (_service.currentUserId != userId || userId.isEmpty) return [];
     try {
-      final res = await _client.functions.invoke(
+      final response = await _client.functions.invoke(
         'recommendation-engine',
-        queryParameters: {
-          'action': 'pymk',
-          'userId': userId,
-          'limit': '$limit',
-        },
+        queryParameters: {'action': 'pymk', 'limit': '${limit.clamp(1, 30)}'},
       );
-
-      if (res.data != null && res.data['candidates'] != null) {
-        final List list = res.data['candidates'] as List;
-        final candidates = list.map((item) => PymkCandidate.fromJson(Map<String, dynamic>.from(item as Map))).toList();
-        if (candidates.isNotEmpty) return candidates;
-      }
-    } catch (e) {
-      debugPrint('Edge function PYMK error, using RPC fallback: $e');
-    }
-
-    try {
-      final List rpcRes = await _client.rpc('get_people_you_may_know', params: {
-        'p_user_id': userId,
-        'p_limit': limit,
-      });
-
-      final candidates = rpcRes.map((item) => PymkCandidate.fromJson(Map<String, dynamic>.from(item as Map))).toList();
-      if (candidates.isNotEmpty) return candidates;
-    } catch (e) {
-      debugPrint('RPC PYMK error: $e');
-    }
-
-    // Direct profiles fallback so PYMK carousel is always populated
-    try {
-      final profilesRes = await _client
-          .from('profiles')
-          .select()
-          .neq('id', userId)
-          .limit(limit);
-
-      return (profilesRes as List).map((p) => PymkCandidate(
-        id: p['id'] as String,
-        username: p['username'] as String? ?? '',
-        fullName: p['full_name'] as String? ?? p['username'] as String? ?? '',
-        avatarUrl: p['avatar_url'] as String?,
-        bio: p['bio'] as String?,
-        interests: (p['interests'] as List?)?.map((e) => e.toString()).toList() ?? [],
-        mutualFriendsCount: 0,
-        sharedInterestsCount: 0,
-      )).toList();
-    } catch (e) {
-      debugPrint('Direct profiles fallback error: $e');
+      final raw = response.data is Map ? response.data['candidates'] : null;
+      if (raw is! List) return [];
+      return raw
+          .map((item) =>
+              PymkCandidate.fromJson(Map<String, dynamic>.from(item as Map)))
+          .toList(growable: false);
+    } catch (error) {
+      debugPrint('People recommendations unavailable: $error');
       return [];
     }
   }
 
-  /// Gửi tracking tương tác ẩn (Dwell time / Image clicks)
   Future<void> trackInteraction({
     required String userId,
     required String postId,
     required String interactionType,
     int durationMs = 0,
+    double? visibleRatio,
+    int? position,
+    String? source,
   }) async {
+    if (_service.currentUserId != userId || userId.isEmpty) return;
     try {
       await _client.functions.invoke(
         'recommendation-engine',
         queryParameters: {'action': 'track'},
         body: {
-          'userId': userId,
+          'eventId': _uuid.v4(),
           'postId': postId,
           'interactionType': interactionType,
-          'durationMs': durationMs,
+          'durationMs': durationMs.clamp(0, 600000),
+          if (visibleRatio != null) 'visibleRatio': visibleRatio.clamp(0, 1),
+          if (position != null) 'position': position,
+          if (source != null) 'source': source,
         },
       );
-    } catch (e) {
-      // Fallback direct DB insert
-      try {
-        await _client.from('user_interactions').insert({
-          'user_id': userId,
-          'post_id': postId,
-          'interaction_type': interactionType,
-          'duration_ms': durationMs,
-        });
-      } catch (_) {}
+    } catch (error) {
+      debugPrint('Recommendation tracking unavailable: $error');
     }
   }
 
-  /// Thuật toán Author Diversity Interleaver (Bộ lọc đa dạng tác giả)
-  /// Ngăn không cho xuất hiện quá 2 bài viết liên tiếp của cùng 1 người trên Feed
-  List<PostModel> _applyAuthorDiversityInterleaver(List<PostModel> posts, String currentUserId) {
-    if (posts.length <= 2) return posts;
-
-    final result = <PostModel>[];
-    final remaining = List<PostModel>.from(posts);
-
-    while (remaining.isNotEmpty) {
-      int candidateIndex = -1;
-
-      for (int i = 0; i < remaining.length; i++) {
-        final candidate = remaining[i];
-        if (result.length >= 2) {
-          final last1 = result[result.length - 1].userId;
-          final last2 = result[result.length - 2].userId;
-          if (candidate.userId == last1 && candidate.userId == last2) {
-            continue; // Bỏ qua bài viết nếu 2 bài liền trước đã thuộc về cùng 1 tác giả
-          }
-        }
-        candidateIndex = i;
-        break;
-      }
-
-      if (candidateIndex == -1) {
-        candidateIndex = 0; // Fallback lấy bài kế tiếp nếu không còn lựa chọn
-      }
-
-      result.add(remaining.removeAt(candidateIndex));
+  Future<void> dismissProfile(String profileId) async {
+    try {
+      await _client.functions.invoke(
+        'recommendation-engine',
+        queryParameters: {'action': 'dismiss-profile'},
+        body: {'profileId': profileId},
+      );
+    } catch (error) {
+      debugPrint('Dismiss profile recommendation unavailable: $error');
     }
-
-    return result;
   }
 }
 
-final recommendationRepositoryProvider = Provider<RecommendationRepository>((ref) {
-  final supabaseService = ref.watch(supabaseServiceProvider);
-  return RecommendationRepository(supabaseService);
+final recommendationRepositoryProvider =
+    Provider<RecommendationRepository>((ref) {
+  return RecommendationRepository(ref.watch(supabaseServiceProvider));
 });
-
