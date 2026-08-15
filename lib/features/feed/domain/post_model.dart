@@ -31,8 +31,9 @@ class PostMedia {
   factory PostMedia.fromJson(Map<String, dynamic> json) {
     final w = (json['width'] as num?)?.toInt();
     final h = (json['height'] as num?)?.toInt();
-    final ar = (json['aspect_ratio'] ?? json['aspectRatio'] as num?)?.toDouble() ??
-        (w != null && h != null && h > 0 ? w / h : null);
+    final ar =
+        (json['aspect_ratio'] ?? json['aspectRatio'] as num?)?.toDouble() ??
+            (w != null && h != null && h > 0 ? w / h : null);
 
     return PostMedia(
       id: (json['id'] ?? '') as String,
@@ -49,7 +50,8 @@ class PostMedia {
       width: w,
       height: h,
       aspectRatio: ar,
-      thumbnailUrl: json['thumbnail_url'] as String? ?? json['thumbnailUrl'] as String?,
+      thumbnailUrl:
+          json['thumbnail_url'] as String? ?? json['thumbnailUrl'] as String?,
     );
   }
 
@@ -76,6 +78,7 @@ class PostModel {
   final int likesCount;
   final int commentsCount;
   final DateTime createdAt;
+  final DateTime? deletedAt;
   final ProfileModel? author;
   final bool isLiked;
   final String privacy;
@@ -96,6 +99,7 @@ class PostModel {
     this.likesCount = 0,
     this.commentsCount = 0,
     required this.createdAt,
+    this.deletedAt,
     this.author,
     this.isLiked = false,
     this.privacy = 'public',
@@ -109,12 +113,14 @@ class PostModel {
     this.recommendationReasons = const [],
   });
 
-  factory PostModel.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
+  factory PostModel.fromJson(Map<String, dynamic> json,
+      {bool isLiked = false}) {
     String? rawCaption = json['caption'] as String?;
     String extractedLayout = json['layout_type'] as String? ?? 'grid';
 
     if (rawCaption != null && rawCaption.contains('[layout:')) {
-      final regExp = RegExp(r'\[layout:(dashboard|columns|panel-left|panel-top|grid|vertical|hero|horizontal)\]');
+      final regExp = RegExp(
+          r'\[layout:(dashboard|columns|panel-left|panel-top|grid|vertical|hero|horizontal)\]');
       final match = regExp.firstMatch(rawCaption);
       if (match != null) {
         extractedLayout = match.group(1) ?? extractedLayout;
@@ -134,6 +140,9 @@ class PostModel {
       likesCount: json['likes_count'] as int? ?? 0,
       commentsCount: json['comments_count'] as int? ?? 0,
       createdAt: DateTime.parse(json['created_at'] as String),
+      deletedAt: json['deleted_at'] == null
+          ? null
+          : DateTime.tryParse(json['deleted_at'].toString()),
       author: json['profiles'] != null
           ? ProfileModel.fromJson(
               Map<String, dynamic>.from(json['profiles'] as Map))
@@ -141,8 +150,11 @@ class PostModel {
       isLiked: isLiked,
       privacy: json['privacy'] as String? ?? 'public',
       layoutType: extractedLayout,
-      aiModerationScore: (json['ai_moderation_score'] ?? json['moderation_score'] as num?)?.toInt(),
-      moderationStatus: (json['moderation_status'] ?? json['moderationStatus']) as String?,
+      aiModerationScore:
+          (json['ai_moderation_score'] ?? json['moderation_score'] as num?)
+              ?.toInt(),
+      moderationStatus:
+          (json['moderation_status'] ?? json['moderationStatus']) as String?,
       isAiGenerated: json['is_ai_generated'] == true ||
           json['isAiGenerated'] == true ||
           json['is_ai_generated'].toString() == 'true' ||
@@ -152,7 +164,8 @@ class PostModel {
       recommendationSource: json['recommendation_source'] as String?,
       recommendationReasons: (json['recommendation_reasons'] as List?)
               ?.map((e) => e.toString())
-              .toList() ?? const [],
+              .toList() ??
+          const [],
     );
   }
 
@@ -163,6 +176,7 @@ class PostModel {
         'likes_count': likesCount,
         'comments_count': commentsCount,
         'created_at': createdAt.toIso8601String(),
+        'deleted_at': deletedAt?.toIso8601String(),
         'privacy': privacy,
         'layout_type': layoutType,
         'ai_moderation_score': aiModerationScore,
@@ -195,6 +209,7 @@ class PostModel {
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
       createdAt: createdAt,
+      deletedAt: deletedAt,
       author: author,
       isLiked: isLiked ?? this.isLiked,
       privacy: privacy,

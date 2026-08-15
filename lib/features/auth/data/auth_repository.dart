@@ -93,6 +93,33 @@ class AuthRepository {
     );
   }
 
+  Future<AuthMFAListFactorsResponse> listMfaFactors() =>
+      _client.auth.mfa.listFactors();
+
+  Future<AuthMFAEnrollResponse> enrollTotp() => _client.auth.mfa.enroll(
+        factorType: FactorType.totp,
+        issuer: 'Viora',
+        friendlyName: 'Ứng dụng xác thực',
+      );
+
+  Future<void> verifyMfa(
+      {required String factorId, required String code}) async {
+    await _client.auth.mfa.challengeAndVerify(
+      factorId: factorId,
+      code: code,
+    );
+  }
+
+  Future<void> removeMfaFactor(String factorId) async {
+    await _client.auth.mfa.unenroll(factorId);
+  }
+
+  bool get requiresMfaVerification {
+    final level = _client.auth.mfa.getAuthenticatorAssuranceLevel();
+    return level.currentLevel == AuthenticatorAssuranceLevels.aal1 &&
+        level.nextLevel == AuthenticatorAssuranceLevels.aal2;
+  }
+
   /// Kích hoạt luồng đăng nhập bằng Google (Web-based OAuth)
   Future<bool> signInWithGoogle() async {
     return await _client.auth.signInWithOAuth(

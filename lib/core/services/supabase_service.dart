@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/image_compressor.dart';
@@ -21,14 +22,15 @@ class SupabaseService {
   /// Nếu thất bại, đăng xuất và hiển thị thông báo hết hạn.
   Future<bool> handleAuthError(dynamic error) async {
     final errorStr = error.toString();
-    final isExplicitTokenError = (error is AuthException && (
-          error.message.contains('Invalid Refresh Token') ||
-          error.message.contains('refresh_token_not_found') ||
-          error.statusCode == '401'
-        )) ||
+    final isExplicitTokenError = (error is AuthException &&
+            (error.message.contains('Invalid Refresh Token') ||
+                error.message.contains('refresh_token_not_found') ||
+                error.statusCode == '401')) ||
         errorStr.contains('InvalidJWTToken') ||
         errorStr.contains('JWT expired') ||
-        errorStr.contains('jwt_expired');
+        errorStr.contains('jwt_expired') ||
+        errorStr.contains('status: 401') ||
+        errorStr.contains('UNAUTHENTICATED');
 
     if (!isExplicitTokenError) return false;
 
@@ -49,10 +51,11 @@ class SupabaseService {
     _refreshCompleter = Completer<bool>();
 
     try {
-      print('Detected expired JWT token. Attempting to refresh session...');
+      debugPrint(
+          'Detected expired JWT token. Attempting to refresh session...');
       final response = await client.auth.refreshSession();
       if (response.session != null) {
-        print('Successfully refreshed session.');
+        debugPrint('Successfully refreshed session.');
         try {
           client.realtime.setAuth(response.session!.accessToken);
         } catch (_) {}
@@ -61,7 +64,7 @@ class SupabaseService {
         return true;
       }
     } catch (e) {
-      print('Error refreshing session: $e');
+      debugPrint('Error refreshing session: $e');
       final sessionAfterErr = client.auth.currentSession;
       if (sessionAfterErr != null && !sessionAfterErr.isExpired) {
         try {
@@ -75,7 +78,33 @@ class SupabaseService {
 
     _refreshCompleter!.complete(false);
     _refreshCompleter = null;
+    // Refresh token cũng không còn hợp lệ: xóa phiên cục bộ để router đưa người
+    // dùng về đăng nhập, tránh giữ JWT chết và retry vô hạn ở Realtime/Functions.
+    try {
+      await client.auth.signOut(scope: SignOutScope.local);
+    } catch (_) {}
     return false;
+  }
+
+  /// Handles Realtime channel failures without treating quota/network errors
+  /// as authentication failures. A null channel error still refreshes the
+  /// socket auth token when the local session has expired.
+  Future<bool> handleRealtimeError(dynamic error) async {
+    final message = error?.toString() ?? '';
+    if (message.contains('ChannelRateLimitReached') ||
+        message.contains('Too many channels')) {
+      return false;
+    }
+
+    final session = client.auth.currentSession;
+    if (session == null) return false;
+    if (session.isExpired) return handleAuthError('JWT expired');
+
+    try {
+      client.realtime.setAuth(session.accessToken);
+    } catch (_) {}
+    if (error == null) return true;
+    return handleAuthError(error);
   }
 
   /// Helper để tải tệp lên Storage và lấy URL công khai

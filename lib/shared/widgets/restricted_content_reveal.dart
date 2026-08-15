@@ -38,22 +38,29 @@ class RestrictedContentReveal extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onReveal,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      actionLabel,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Text(
                   restrictedContentNotice,
-                  style: theme.textTheme.bodySmall,
-                ),
-                const SizedBox(height: 6),
-                TextButton.icon(
-                  onPressed: onReveal,
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(0, 32),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
-                  icon: const Icon(CupertinoIcons.eye, size: 17),
-                  label: Text(actionLabel),
                 ),
               ],
             ),

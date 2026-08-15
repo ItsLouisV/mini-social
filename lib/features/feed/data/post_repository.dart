@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
-import 'package:async/async.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -199,39 +199,58 @@ class PostRepository {
       rethrow;
     }
 
-    final postsStream = _client
-        .from(SupabaseConstants.postsTable)
-        .stream(primaryKey: ['id']).handleError((err) {
-      print('Supabase watchPosts stream error (posts): $err');
-      _service.handleAuthError(err);
-    });
-    final likesStream = _client
-        .from(SupabaseConstants.likesTable)
-        .stream(primaryKey: ['id']).handleError((err) {
-      print('Supabase watchPosts stream error (likes): $err');
-      _service.handleAuthError(err);
-    });
-    final commentsStream = _client
-        .from(SupabaseConstants.commentsTable)
-        .stream(primaryKey: ['id']).handleError((err) {
-      print('Supabase watchPosts stream error (comments): $err');
-      _service.handleAuthError(err);
-    });
+    final changes = StreamController<void>();
+    Timer? debounce;
+    void notifyChange(PostgresChangePayload _) {
+      debounce?.cancel();
+      debounce = Timer(const Duration(milliseconds: 350), () {
+        if (!changes.isClosed) changes.add(null);
+      });
+    }
 
-    final combinedStream =
-        StreamGroup.merge([postsStream, likesStream, commentsStream])
-            .asyncMap((_) => getFeedPosts())
-            .handleError((err) {
-      print('Supabase watchPosts combined stream error: $err');
-      _service.handleAuthError(err);
+    // One channel can carry multiple Postgres subscriptions. This replaces
+    // the three `.stream()` channels previously used for posts, likes and
+    // comments and also coalesces burst events into a single feed refresh.
+    final channel = _client
+        .channel('feed:posts')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: SupabaseConstants.postsTable,
+          callback: notifyChange,
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: SupabaseConstants.likesTable,
+          callback: notifyChange,
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: SupabaseConstants.commentsTable,
+          callback: notifyChange,
+        );
+
+    channel.subscribe((status, [error]) {
+      if (status == RealtimeSubscribeStatus.channelError) {
+        if (error != null) debugPrint('Supabase feed Realtime error: $error');
+        unawaited(_service.handleRealtimeError(error));
+      }
     });
 
     try {
-      await for (final posts in combinedStream) {
-        yield posts;
+      await for (final _ in changes.stream) {
+        try {
+          yield await getFeedPosts();
+        } catch (error) {
+          debugPrint('Unable to refresh feed after Realtime event: $error');
+        }
       }
-    } catch (e) {
-      print('Supabase watchPosts main stream error: $e');
+    } finally {
+      debounce?.cancel();
+      await changes.close();
+      await _client.removeChannel(channel);
     }
   }
 
@@ -567,23 +586,48 @@ class PostRepository {
       rethrow;
     }
 
-    final commentsStream = _client
-        .from(SupabaseConstants.commentsTable)
-        .stream(primaryKey: ['id'])
-        .eq('post_id', postId)
-        .order('created_at', ascending: true)
-        .asyncMap((_) => getComments(postId))
-        .handleError((err) {
-          print('Supabase watchComments stream error: $err');
-          _service.handleAuthError(err);
+    final changes = StreamController<void>();
+    Timer? debounce;
+    final channel = _client.channel('post-comments:$postId');
+
+    channel
+        .onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: SupabaseConstants.commentsTable,
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'post_id',
+        value: postId,
+      ),
+      callback: (_) {
+        debounce?.cancel();
+        debounce = Timer(const Duration(milliseconds: 250), () {
+          if (!changes.isClosed) changes.add(null);
         });
+      },
+    )
+        .subscribe((status, [error]) {
+      if (status == RealtimeSubscribeStatus.channelError) {
+        if (error != null) {
+          debugPrint('Supabase comments Realtime error: $error');
+        }
+        unawaited(_service.handleRealtimeError(error));
+      }
+    });
 
     try {
-      await for (final comments in commentsStream) {
-        yield comments;
+      await for (final _ in changes.stream) {
+        try {
+          yield await getComments(postId);
+        } catch (error) {
+          debugPrint('Unable to refresh comments after Realtime event: $error');
+        }
       }
-    } catch (e) {
-      print('Supabase watchComments main stream error: $e');
+    } finally {
+      debounce?.cancel();
+      await changes.close();
+      await _client.removeChannel(channel);
     }
   }
 

@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
@@ -32,7 +31,8 @@ class HiddenConversationsScreen extends ConsumerWidget {
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
-          child: Icon(CupertinoIcons.chevron_back, color: theme.colorScheme.primary),
+          child: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary),
         ),
         title: Text(
           'Đoạn chat bị ẩn',
@@ -72,7 +72,7 @@ class HiddenConversationsScreen extends ConsumerWidget {
             );
           }
 
-          return SlidableAutoCloseBehavior(
+          return IOSSlidableAutoCloseBehavior(
             child: ListView.separated(
               padding: const EdgeInsets.only(top: 8),
               itemCount: filteredConvs.length,
@@ -122,7 +122,8 @@ class _HiddenConversationTile extends ConsumerStatefulWidget {
 }
 
 class _HiddenConversationTileState
-  extends ConsumerState<_HiddenConversationTile> with SingleTickerProviderStateMixin {
+    extends ConsumerState<_HiddenConversationTile>
+    with SingleTickerProviderStateMixin {
   static const double _actionWidth = 72.0;
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
@@ -162,9 +163,8 @@ class _HiddenConversationTileState
 
     final normalColor = Theme.of(context).scaffoldBackgroundColor;
 
-    final pressedColor = isDark
-        ? const Color(0xFF2C2C2E)
-        : const Color(0xFFE5E5EA);
+    final pressedColor =
+        isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA);
 
     _colorAnimation = ColorTween(
       begin: normalColor,
@@ -222,11 +222,9 @@ class _HiddenConversationTileState
     // Cần cả khoảng trống xung quanh action để swipe nhìn thoáng.
     const actionSlotWidth = 72.0;
 
-    final requiredWidth =
-        actionSlotWidth * actionCount;
+    final requiredWidth = actionSlotWidth * actionCount;
 
-    return (requiredWidth / availableWidth)
-        .clamp(0.0, 1.0);
+    return (requiredWidth / availableWidth).clamp(0.0, 1.0);
   }
 
   @override
@@ -274,7 +272,9 @@ class _HiddenConversationTileState
                     onPressed: () {
                       HapticFeedback.mediumImpact();
                       Navigator.pop(ctx);
-                      ref.read(chatRepositoryProvider).deleteConversation(widget.conv.id);
+                      ref
+                          .read(chatRepositoryProvider)
+                          .deleteConversation(widget.conv.id);
                     },
                     child: const Text('Xoá'),
                   ),
@@ -284,7 +284,6 @@ class _HiddenConversationTileState
           },
         ),
       ],
-
       child: GestureDetector(
         onTapDown: _handleTapDown,
         onTapUp: _handleTapUp,
@@ -295,10 +294,12 @@ class _HiddenConversationTileState
           builder: (context, child) {
             return Transform(
               alignment: Alignment.center,
-              transform: Matrix4.diagonal3Values(_squashAnimation.value, _scaleAnimation.value, 1.0),
+              transform: Matrix4.diagonal3Values(
+                  _squashAnimation.value, _scaleAnimation.value, 1.0),
               child: Container(
                 color: _colorAnimation.value,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: child,
               ),
             );
@@ -342,7 +343,8 @@ class _HiddenConversationTileState
                       widget.conv.otherUser?.displayName ?? 'Người dùng',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight:
+                            hasUnread ? FontWeight.w600 : FontWeight.w500,
                         color: titleColor,
                         letterSpacing: -0.2,
                       ),
@@ -352,7 +354,8 @@ class _HiddenConversationTileState
                     const SizedBox(height: 3),
                     Text(
                       (widget.conv.lastMessage != null)
-                          ? (widget.conv.lastMessageSenderId == widget.currentUserId
+                          ? (widget.conv.lastMessageSenderId ==
+                                  widget.currentUserId
                               ? 'Bạn: ${widget.conv.lastMessage}'
                               : widget.conv.lastMessage!)
                           : 'Chưa có tin nhắn',
@@ -362,7 +365,8 @@ class _HiddenConversationTileState
                         color: hasUnread
                             ? (isDark ? Colors.white : Colors.black)
                             : hintColor,
-                        fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                        fontWeight:
+                            hasUnread ? FontWeight.w500 : FontWeight.w400,
                         fontSize: 14,
                       ),
                     ),
@@ -399,5 +403,3 @@ class _HiddenConversationTileState
     );
   }
 }
-
-

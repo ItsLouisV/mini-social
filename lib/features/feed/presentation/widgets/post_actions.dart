@@ -31,8 +31,11 @@ class PostActions extends ConsumerWidget {
     }
     if (likesCount < 0) likesCount = 0;
 
-    final commentsAsync = ref.watch(commentsProvider(post.id));
-    final commentCount = commentsAsync.value?.length ?? post.commentsCount;
+    // The feed already receives the server-maintained comments_count. Opening
+    // one Realtime comments channel per visible card quickly exhausts the
+    // project's channel quota, so full comment Realtime is reserved for the
+    // post detail screen.
+    final commentCount = post.commentsCount;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -84,7 +87,7 @@ class PostActions extends ConsumerWidget {
             ],
           ),
         ),
-        
+
         // Divider
         Divider(
           height: 1,
@@ -104,13 +107,17 @@ class PostActions extends ConsumerWidget {
                   onTap: () {
                     final uid = ref.read(currentUserIdProvider) ?? '';
                     if (uid.isNotEmpty && !isLiked) {
-                      ref.read(recommendationRepositoryProvider).trackInteraction(
-                        userId: uid,
-                        postId: post.id,
-                        interactionType: 'like',
-                      );
+                      ref
+                          .read(recommendationRepositoryProvider)
+                          .trackInteraction(
+                            userId: uid,
+                            postId: post.id,
+                            interactionType: 'like',
+                          );
                     }
-                    ref.read(likeNotifierProvider(post.id).notifier).toggle(isLiked);
+                    ref
+                        .read(likeNotifierProvider(post.id).notifier)
+                        .toggle(isLiked);
                   },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -118,7 +125,9 @@ class PostActions extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          isLiked ? CupertinoIcons.hand_thumbsup_fill : CupertinoIcons.hand_thumbsup,
+                          isLiked
+                              ? CupertinoIcons.hand_thumbsup_fill
+                              : CupertinoIcons.hand_thumbsup,
                           size: 20,
                           color: isLiked ? Colors.blue : theme.hintColor,
                         ),
@@ -172,13 +181,16 @@ class PostActions extends ConsumerWidget {
                   onTap: () {
                     final uid = ref.read(currentUserIdProvider) ?? '';
                     if (uid.isNotEmpty) {
-                      ref.read(recommendationRepositoryProvider).trackInteraction(
-                        userId: uid,
-                        postId: post.id,
-                        interactionType: 'share',
-                      );
+                      ref
+                          .read(recommendationRepositoryProvider)
+                          .trackInteraction(
+                            userId: uid,
+                            postId: post.id,
+                            interactionType: 'share',
+                          );
                     }
-                    ToastService.showInfo(context, 'Đã sao chép liên kết chia sẻ bài viết!');
+                    ToastService.showInfo(
+                        context, 'Đã sao chép liên kết chia sẻ bài viết!');
                   },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),

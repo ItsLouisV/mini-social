@@ -19,15 +19,15 @@ class AccountSettingsScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final email =
-        ref.watch(supabaseServiceProvider).client.auth.currentUser?.email ??
-            '';
+        ref.watch(supabaseServiceProvider).client.auth.currentUser?.email ?? '';
     final user = ref.watch(supabaseServiceProvider).client.auth.currentUser;
     final providers = user?.appMetadata['providers'];
     final providerNames = providers is List
         ? providers.map((provider) => provider.toString()).toSet()
         : <String>{};
     providerNames.addAll(
-      user?.identities?.map((identity) => identity.provider) ?? const <String>[],
+      user?.identities?.map((identity) => identity.provider) ??
+          const <String>[],
     );
     final hasPasswordLogin = providerNames.contains('email');
     final linkedProviders = providerNames
@@ -100,22 +100,19 @@ class AccountSettingsScreen extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(
                       email,
-                      style:
-                          TextStyle(fontSize: 14, color: labelColor),
+                      style: TextStyle(fontSize: 14, color: labelColor),
                     ),
                     const SizedBox(height: 28),
                   ],
                 ),
                 loading: () => const SizedBox(
                     height: 180,
-                    child:
-                        Center(child: CupertinoActivityIndicator())),
+                    child: Center(child: CupertinoActivityIndicator())),
                 error: (_, __) => const SizedBox(height: 60),
               ),
 
               // ── Thông tin cá nhân ────────────────────────────────
-              _SectionLabel(
-                  label: 'THÔNG TIN CÁ NHÂN', color: labelColor),
+              _SectionLabel(label: 'THÔNG TIN CÁ NHÂN', color: labelColor),
               _SectionCard(
                 bg: cardBg,
                 child: Column(
@@ -145,8 +142,7 @@ class AccountSettingsScreen extends ConsumerWidget {
               ),
 
               // ── Đăng nhập & Bảo mật ─────────────────────────────
-              _SectionLabel(
-                  label: 'ĐĂNG NHẬP & BẢO MẬT', color: labelColor),
+              _SectionLabel(label: 'ĐĂNG NHẬP & BẢO MẬT', color: labelColor),
               _SectionCard(
                 bg: cardBg,
                 child: Column(
@@ -165,7 +161,9 @@ class AccountSettingsScreen extends ConsumerWidget {
                     _IosRow(
                       icon: CupertinoIcons.lock_fill,
                       iconBg: Colors.orange,
-                      title: hasPasswordLogin ? 'Đổi mật khẩu' : 'Thiết lập mật khẩu',
+                      title: hasPasswordLogin
+                          ? 'Đổi mật khẩu'
+                          : 'Thiết lập mật khẩu',
                       onTap: () => context.push('/settings/change-password'),
                     ),
                     if (linkedProviders.isNotEmpty) ...[
@@ -175,7 +173,8 @@ class AccountSettingsScreen extends ConsumerWidget {
                         iconBg: Colors.blue,
                         title: 'Tài khoản liên kết',
                         showChevron: false,
-                        trailing: _ValueLabel(text: linkedProviders, color: labelColor),
+                        trailing: _ValueLabel(
+                            text: linkedProviders, color: labelColor),
                       ),
                     ],
                     _RowDivider(color: theme.dividerColor),
@@ -183,15 +182,14 @@ class AccountSettingsScreen extends ConsumerWidget {
                       icon: CupertinoIcons.lock_shield_fill,
                       iconBg: Colors.green,
                       title: 'Xác thực 2 bước',
-                      onTap: () {},
+                      onTap: () => context.push('/settings/two-factor'),
                     ),
                   ],
                 ),
               ),
 
               // ── Dữ liệu & Bộ nhớ ────────────────────────────────
-              _SectionLabel(
-                  label: 'DỮ LIỆU & BỘ NHỚ', color: labelColor),
+              _SectionLabel(label: 'DỮ LIỆU & BỘ NHỚ', color: labelColor),
               _SectionCard(
                 bg: cardBg,
                 child: Column(
@@ -288,8 +286,8 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         margin: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(12)),
+        decoration:
+            BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
         clipBehavior: Clip.antiAlias,
         child: child,
       );
@@ -335,16 +333,14 @@ class _IosRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           child: Row(
             children: [
               Container(
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius: BorderRadius.circular(7)),
+                    color: iconBg, borderRadius: BorderRadius.circular(7)),
                 child: Icon(icon, color: Colors.white, size: 17),
               ),
               const SizedBox(width: 14),

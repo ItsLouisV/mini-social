@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart' show Color, Colors;
@@ -332,8 +333,17 @@ class ChatMessagesNotifier
     final failed = local?.getFailedMessages(arg) ?? [];
 
     ref.onDispose(() {
-      _channel?.unsubscribe();
-      _reactionChannel?.unsubscribe();
+      final client = ref.read(supabaseServiceProvider).client;
+      final messagesChannel = _channel;
+      final reactionsChannel = _reactionChannel;
+      _channel = null;
+      _reactionChannel = null;
+      if (messagesChannel != null) {
+        unawaited(client.removeChannel(messagesChannel));
+      }
+      if (reactionsChannel != null) {
+        unawaited(client.removeChannel(reactionsChannel));
+      }
     });
 
     return ChatMessagesState(
@@ -395,10 +405,17 @@ class ChatMessagesNotifier
     ChatSyncService? sync,
   ) {
     try {
-      _channel = ref
-          .read(supabaseServiceProvider)
-          .client
-          .channel('messages:$conversationId');
+      final client = ref.read(supabaseServiceProvider).client;
+      final previousMessages = _channel;
+      final previousReactions = _reactionChannel;
+      if (previousMessages != null) {
+        unawaited(client.removeChannel(previousMessages));
+      }
+      if (previousReactions != null) {
+        unawaited(client.removeChannel(previousReactions));
+      }
+
+      _channel = client.channel('messages:$conversationId');
 
       _channel!
           .onPostgresChanges(
@@ -482,9 +499,7 @@ class ChatMessagesNotifier
       });
 
       // Subscribe reaction changes cho conversation này
-      _reactionChannel = ref
-          .read(supabaseServiceProvider)
-          .client
+      _reactionChannel = client
           .channel('reactions:$conversationId')
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
@@ -852,19 +867,30 @@ final unreadMessagesCountProvider =
 class PinnedMessagesNotifier
     extends AutoDisposeFamilyAsyncNotifier<List<PinnedMessageModel>, String> {
   RealtimeChannel? _channel;
+  int _subscriptionVersion = 0;
 
   @override
   Future<List<PinnedMessageModel>> build(String arg) async {
+    final buildVersion = ++_subscriptionVersion;
     final repo = ref.watch(chatRepositoryProvider);
+    final client = ref.read(supabaseServiceProvider).client;
+
+    // build() can run again while the family provider is still alive. Remove
+    // the previous channel first so rebuilds never leak Realtime channels.
+    final previousChannel = _channel;
+    _channel = null;
+    if (previousChannel != null) {
+      await client.removeChannel(previousChannel);
+    }
+
     final pinned = await repo.getPinnedMessages(arg);
+    if (buildVersion != _subscriptionVersion) return pinned;
 
     try {
-      _channel = ref
-          .read(supabaseServiceProvider)
-          .client
-          .channel('pinned_messages:$arg');
+      final channel = client.channel('pinned_messages:$arg');
+      _channel = channel;
 
-      _channel!
+      channel
           .onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
@@ -883,18 +909,22 @@ class PinnedMessagesNotifier
       )
           .subscribe((status, [error]) {
         if (status == RealtimeSubscribeStatus.channelError) {
-          print('Supabase Realtime pinned messages channel error: $error');
           if (error != null) {
-            ref.read(supabaseServiceProvider).handleAuthError(error);
+            debugPrint(
+                'Supabase Realtime pinned messages channel error: $error');
           }
+          unawaited(
+              ref.read(supabaseServiceProvider).handleRealtimeError(error));
         }
+      });
+
+      ref.onDispose(() {
+        if (identical(_channel, channel)) _channel = null;
+        unawaited(client.removeChannel(channel));
       });
     } catch (e) {
       print('Error subscribing to realtime pinned messages: $e');
     }
-
-    ref.onDispose(() => _channel?.unsubscribe());
-
     return pinned;
   }
 }

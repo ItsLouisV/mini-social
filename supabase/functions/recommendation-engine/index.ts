@@ -113,7 +113,12 @@ serve(async (req: Request): Promise<Response> => {
       return json({ success: true });
     }
 
-    if (req.method !== "GET") return json({ error: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, 405);
+    // Supabase Flutter `functions.invoke` gửi POST theo mặc định, kể cả khi chỉ
+    // truyền queryParameters. Feed/PYMK là read-only nhưng chấp nhận cả GET và
+    // POST để hợp đồng HTTP tương thích với SDK.
+    if (req.method !== "GET" && req.method !== "POST") {
+      return json({ error: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, 405);
+    }
 
     if (action === "pymk") {
       const limit = integer(url.searchParams.get("limit"), 10, 1, 30);

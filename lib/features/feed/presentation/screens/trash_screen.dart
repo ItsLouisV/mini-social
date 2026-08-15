@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -5,287 +7,345 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/localization/app_translations.dart';
-import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
 
-class TrashScreen extends ConsumerWidget {
+class TrashScreen extends ConsumerStatefulWidget {
   const TrashScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final trashedAsync = ref.watch(trashedPostsProvider);
+  ConsumerState<TrashScreen> createState() => _TrashScreenState();
+}
 
-    final groupedBg = theme.scaffoldBackgroundColor;
+class _TrashScreenState extends ConsumerState<TrashScreen> {
+  static const _retentionPeriod = Duration(days: 30);
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final posts = ref.watch(trashedPostsProvider);
     return CupertinoPageScaffold(
-      backgroundColor: groupedBg,
+      backgroundColor: theme.scaffoldBackgroundColor,
       navigationBar: CupertinoNavigationBar(
         transitionBetweenRoutes: false,
-        backgroundColor: groupedBg.withValues(alpha: 0.92),
+        backgroundColor: theme.scaffoldBackgroundColor.withValues(alpha: .94),
         border: Border(
-          bottom: BorderSide(
-            color: theme.dividerColor.withValues(alpha: 0.3),
-            width: 0.5,
-          ),
-        ),
+            bottom: BorderSide(
+                color: theme.dividerColor.withValues(alpha: .35), width: .5)),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(CupertinoIcons.chevron_back,
-                  color: theme.colorScheme.primary, size: 18),
-              const SizedBox(width: 4),
-              Text(
-                'Quay lại',
-                style: TextStyle(
-                  color: theme.colorScheme.primary,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
+          child: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary),
         ),
-        middle: Text(
-          AppTranslations.tr(ref, 'trash'),
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+        middle: Text(AppTranslations.tr(ref, 'trash'),
+            style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
       child: Material(
         type: MaterialType.transparency,
         child: SafeArea(
-          child: trashedAsync.when(
-            data: (posts) {
-              if (posts.isEmpty) {
-                return EmptyStateWidget(
-                  icon: CupertinoIcons.trash,
-                  title: AppTranslations.tr(ref, 'empty_trash'),
-                  subtitle: AppTranslations.tr(ref, 'trash_notice'),
-                );
-              }
-
-              return Column(
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    color: Colors.amber.withValues(alpha: isDark ? 0.15 : 0.1),
-                    child: Row(
-                      children: [
-                        const Icon(CupertinoIcons.info, size: 16, color: Colors.amber),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            AppTranslations.tr(ref, 'trash_notice'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      itemCount: posts.length,
-                      itemBuilder: (context, index) {
-                        final post = posts[index];
-                        return _buildTrashedPostTile(context, ref, post);
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
+          child: posts.when(
             loading: () => const Center(child: CupertinoActivityIndicator()),
-            error: (e, _) => AppErrorWidget(
-              message: e.toString(),
+            error: (error, _) => AppErrorWidget(
+              message: error.toString(),
               onRetry: () => ref.invalidate(trashedPostsProvider),
             ),
+            data: (items) => RefreshIndicator.adaptive(
+              onRefresh: () => ref.refresh(trashedPostsProvider.future),
+              child: items.isEmpty ? _empty(theme) : _content(theme, items),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTrashedPostTile(BuildContext context, WidgetRef ref, PostModel post) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    // Đếm ngược 30 ngày
-    int daysLeft = 30;
-    if (post.createdAt != null) {
-      final diff = DateTime.now().difference(post.createdAt).inDays;
-      daysLeft = (30 - diff).clamp(1, 30);
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.dividerColor.withValues(alpha: isDark ? 0.08 : 0.15),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _empty(ThemeData theme) => ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(28, 100, 28, 32),
         children: [
-          // Header: Avatar, Name, Days left
-          Row(
-            children: [
-              AppAvatar(
-                imageUrl: post.author?.avatarUrl,
-                name: post.author?.displayName,
-                radius: 18,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  post.author?.displayName ?? 'Bài viết của bạn',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Xóa sau $daysLeft ngày',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.red,
-                  ),
-                ),
-              ),
-            ],
+          Container(
+            width: 84,
+            height: 84,
+            margin: const EdgeInsets.only(bottom: 22),
+            decoration: BoxDecoration(
+                color:
+                    theme.colorScheme.primaryContainer.withValues(alpha: .55),
+                shape: BoxShape.circle),
+            child: Icon(CupertinoIcons.trash,
+                size: 38, color: theme.colorScheme.primary),
           ),
+          Text(AppTranslations.tr(ref, 'empty_trash'),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
-
-          // Caption Text preview
-          if (post.caption?.isNotEmpty == true) ...[
-            Text(
-              post.caption!,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                color: theme.textTheme.bodyMedium?.color,
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-
-          // Media Thumbnail preview
-          if (post.media.isNotEmpty) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 120,
-                width: double.infinity,
-                child: CachedNetworkImage(
-                  imageUrl: post.media.first.url,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          const Divider(height: 16),
-
-          // Actions: Khôi phục / Xóa vĩnh viễn
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              OutlinedButton.icon(
-                icon: const Icon(CupertinoIcons.arrow_counterclockwise, size: 14),
-                label: Text(AppTranslations.tr(ref, 'restore'), style: const TextStyle(fontSize: 12)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  minimumSize: Size.zero,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                onPressed: () async {
-                  try {
-                    await ref.read(postRepositoryProvider).restoreFromTrash(post.id);
-                    ref.read(postLocalStatesProvider.notifier).undo(post.id);
-                    ref.invalidate(trashedPostsProvider);
-                    ref.invalidate(feedPostsProvider);
-                    if (context.mounted) {
-                      ToastService.showSuccess(context, 'Đã khôi phục bài viết!');
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ToastService.showError(context, 'Lỗi khôi phục: $e');
-                    }
-                  }
-                },
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                icon: const Icon(CupertinoIcons.trash, size: 14, color: Colors.white),
-                label: Text(AppTranslations.tr(ref, 'delete_permanently'), style: const TextStyle(fontSize: 12, color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  minimumSize: Size.zero,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                onPressed: () {
-                  _confirmPermanentDelete(context, ref, post.id);
-                },
-              ),
-            ],
+          Text(
+            'Những bài viết bạn xóa sẽ xuất hiện ở đây trong 30 ngày trước khi bị xóa vĩnh viễn.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+                height: 1.45, color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
+      );
+
+  Widget _content(ThemeData theme, List<PostModel> posts) => ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        itemCount: posts.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (_, index) => _postCard(theme, posts[index]),
+      );
+
+  Widget _postCard(ThemeData theme, PostModel post) {
+    final colors = theme.colorScheme;
+    final deadline = post.deletedAt?.add(_retentionPeriod);
+    final remaining = deadline?.difference(DateTime.now());
+    final urgent = remaining != null && remaining <= const Duration(days: 3);
+    final progress = remaining == null
+        ? 0.0
+        : (remaining.inSeconds / _retentionPeriod.inSeconds).clamp(0.0, 1.0);
+    final hasCaption = post.caption?.trim().isNotEmpty == true;
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: .55)),
+        boxShadow: [
+          BoxShadow(
+              color: colors.shadow.withValues(
+                  alpha: theme.brightness == Brightness.dark ? .16 : .06),
+              blurRadius: 18,
+              offset: const Offset(0, 6))
+        ],
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (post.media.isNotEmpty) _thumbnail(theme, post),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 15, 16, 10),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                  child: Text(
+                hasCaption
+                    ? post.caption!.trim()
+                    : 'Bài viết không có nội dung',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.3,
+                    color: hasCaption
+                        ? colors.onSurface
+                        : colors.onSurfaceVariant),
+              )),
+              const SizedBox(width: 12),
+              _countdownBadge(theme, remaining, urgent),
+            ]),
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 5,
+                backgroundColor: colors.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation(
+                    urgent ? colors.error : colors.primary),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(children: [
+              Icon(CupertinoIcons.clock,
+                  size: 15, color: colors.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Expanded(
+                  child: Text(
+                deadline == null
+                    ? 'Chưa xác định được thời hạn xóa'
+                    : 'Xóa vĩnh viễn lúc ${_formatDateTime(deadline.toLocal())}',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: colors.onSurfaceVariant),
+              )),
+            ]),
+          ]),
+        ),
+        Divider(height: 1, color: colors.outlineVariant.withValues(alpha: .5)),
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(children: [
+            Expanded(
+                child: TextButton.icon(
+              onPressed: () => _restore(post.id),
+              icon: const Icon(CupertinoIcons.arrow_counterclockwise, size: 18),
+              label: Text(AppTranslations.tr(ref, 'restore')),
+              style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14))),
+            )),
+            const SizedBox(width: 8),
+            Expanded(
+                child: FilledButton.icon(
+              onPressed: () => _confirmDelete(post.id),
+              icon: const Icon(CupertinoIcons.delete, size: 18),
+              label: const Text('Xóa ngay'),
+              style: FilledButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: const Color(0xFFDC2626),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+            )),
+          ]),
+        ),
+      ]),
     );
   }
 
-  void _confirmPermanentDelete(BuildContext context, WidgetRef ref, String postId) {
-    showCupertinoDialog(
+  Widget _thumbnail(ThemeData theme, PostModel post) => Stack(children: [
+        AspectRatio(
+          aspectRatio: 2.15,
+          child: CachedNetworkImage(
+            imageUrl: post.media.first.thumbnailUrl ?? post.media.first.url,
+            fit: BoxFit.cover,
+            placeholder: (_, __) => Container(
+                color: theme.colorScheme.surfaceContainerHighest,
+                alignment: Alignment.center,
+                child: const CupertinoActivityIndicator()),
+            errorWidget: (_, __, ___) => Container(
+                color: theme.colorScheme.surfaceContainerHighest,
+                alignment: Alignment.center,
+                child: Icon(CupertinoIcons.photo,
+                    color: theme.colorScheme.onSurfaceVariant)),
+          ),
+        ),
+        if (post.media.length > 1)
+          Positioned(
+            right: 12,
+            top: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: .62),
+                  borderRadius: BorderRadius.circular(20)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(CupertinoIcons.photo_on_rectangle,
+                    color: Colors.white, size: 13),
+                const SizedBox(width: 4),
+                Text('${post.media.length}',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+              ]),
+            ),
+          ),
+      ]);
+
+  Widget _countdownBadge(ThemeData theme, Duration? remaining, bool urgent) {
+    final color = urgent ? theme.colorScheme.error : theme.colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: .1),
+          borderRadius: BorderRadius.circular(20)),
+      child: Text(_formatRemaining(remaining),
+          style: theme.textTheme.labelMedium
+              ?.copyWith(color: color, fontWeight: FontWeight.w800)),
+    );
+  }
+
+  String _formatRemaining(Duration? remaining) {
+    if (remaining == null) return 'Không rõ hạn';
+    if (remaining <= Duration.zero) return 'Đã hết hạn';
+    if (remaining < const Duration(hours: 1)) {
+      return 'Còn ${remaining.inMinutes.clamp(1, 59)} phút';
+    }
+    if (remaining < const Duration(days: 1)) {
+      return 'Còn ${remaining.inHours} giờ';
+    }
+    return 'Còn ${(remaining.inSeconds / Duration.secondsPerDay).ceil()} ngày';
+  }
+
+  String _formatDateTime(DateTime value) {
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(value.hour)}:${two(value.minute)}, ${two(value.day)}/${two(value.month)}/${value.year}';
+  }
+
+  Future<void> _restore(String postId) async {
+    try {
+      await ref.read(postRepositoryProvider).restoreFromTrash(postId);
+      ref.read(postLocalStatesProvider.notifier).undo(postId);
+      ref.invalidate(trashedPostsProvider);
+      ref.invalidate(feedPostsProvider);
+      if (mounted) {
+        ToastService.showSuccess(context, 'Đã khôi phục bài viết.');
+      }
+    } catch (error) {
+      if (mounted) {
+        ToastService.showError(context, 'Không thể khôi phục: $error');
+      }
+    }
+  }
+
+  void _confirmDelete(String postId) {
+    showCupertinoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Xóa vĩnh viễn?'),
-        content: const Text('Bài viết này sẽ bị xóa hoàn toàn và không thể khôi phục lại nữa.'),
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('Xóa vĩnh viễn bài viết?'),
+        content: const Text(
+            'Ảnh, nội dung và dữ liệu liên quan sẽ bị xóa ngay. Bạn không thể hoàn tác thao tác này.'),
         actions: [
           CupertinoDialogAction(
-            onPressed: () => ctx.pop(),
-            child: const Text('Hủy'),
+            onPressed: () => dialogContext.pop(),
+            child: const Text('Giữ lại'),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () async {
-              ctx.pop();
-              try {
-                await ref.read(postRepositoryProvider).deletePost(postId);
-                ref.invalidate(trashedPostsProvider);
-                ref.invalidate(feedPostsProvider);
-                if (context.mounted) {
-                  ToastService.showSuccess(context, 'Đã xóa vĩnh viễn bài viết.');
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ToastService.showError(context, 'Lỗi xóa vĩnh viễn: $e');
-                }
-              }
+              dialogContext.pop();
+              await _deletePermanently(postId);
             },
             child: const Text('Xóa vĩnh viễn'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _deletePermanently(String postId) async {
+    try {
+      await ref.read(postRepositoryProvider).deletePost(postId);
+      ref.invalidate(trashedPostsProvider);
+      ref.invalidate(feedPostsProvider);
+      if (mounted) {
+        ToastService.showSuccess(context, 'Đã xóa vĩnh viễn bài viết.');
+      }
+    } catch (error) {
+      if (mounted) {
+        ToastService.showError(context, 'Không thể xóa bài viết: $error');
+      }
+    }
   }
 }

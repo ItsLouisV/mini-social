@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// Downloads remote media and opens the platform save/share sheet.

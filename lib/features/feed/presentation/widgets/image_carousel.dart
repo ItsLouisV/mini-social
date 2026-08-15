@@ -212,7 +212,9 @@ class _ImageCarouselState extends State<ImageCarousel> {
                   child: _buildMediaItem(
                     context,
                     i,
-                    overlayText: (i == 3 && remainingCount > 0) ? '+$remainingCount' : null,
+                    overlayText: (i == 3 && remainingCount > 0)
+                        ? '+$remainingCount'
+                        : null,
                   ),
                 ),
               ),
@@ -225,7 +227,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
 
   // ── 3. BẢN VẼ 3: Panel Left (`layout-panel-left`) ──
   // - Bên trái: 1 ảnh/video lớn (Hero) (~60% chiều rộng)
-  // - Bên phải: 
+  // - Bên phải:
   //   + 3 ảnh: 2 ảnh nhỏ xếp dọc
   //   + 4 ảnh: 3 ảnh nhỏ xếp dọc (không +)
   //   + > 4 ảnh: 3 ảnh nhỏ xếp dọc (ảnh thứ 3 có + số ảnh còn lại)
@@ -257,7 +259,9 @@ class _ImageCarouselState extends State<ImageCarousel> {
                     child: _buildMediaItem(
                       context,
                       i,
-                      overlayText: (i == 3 && remainingCount > 0) ? '+$remainingCount' : null,
+                      overlayText: (i == 3 && remainingCount > 0)
+                          ? '+$remainingCount'
+                          : null,
                     ),
                   ),
                 ],
@@ -302,7 +306,9 @@ class _ImageCarouselState extends State<ImageCarousel> {
                     child: _buildMediaItem(
                       context,
                       i,
-                      overlayText: (i == 3 && remainingCount > 0) ? '+$remainingCount' : null,
+                      overlayText: (i == 3 && remainingCount > 0)
+                          ? '+$remainingCount'
+                          : null,
                     ),
                   ),
                 ],
@@ -326,7 +332,8 @@ class _ImageCarouselState extends State<ImageCarousel> {
     final imagesOnly = widget.media.where((m) => m.type == 'image').toList();
     final imageIndex = imagesOnly.indexOf(item);
 
-    final isNetwork = item.url.startsWith('http://') || item.url.startsWith('https://');
+    final isNetwork =
+        item.url.startsWith('http://') || item.url.startsWith('https://');
 
     Widget mediaWidget;
     if (isVideo) {
@@ -336,16 +343,24 @@ class _ImageCarouselState extends State<ImageCarousel> {
         mediaWidget = Container(
           color: Colors.black87,
           child: const Center(
-            child: Icon(CupertinoIcons.play_circle_fill, size: 44, color: Colors.white),
+            child: Icon(CupertinoIcons.play_circle_fill,
+                size: 44, color: Colors.white),
           ),
         );
       }
     } else {
       Widget imageWidget;
       if (isNetwork) {
+        final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+        final logicalWidth = MediaQuery.sizeOf(context).width;
+        final decodeWidth =
+            (logicalWidth * devicePixelRatio).round().clamp(360, 1440).toInt();
         imageWidget = CachedNetworkImage(
           imageUrl: item.url,
           fit: BoxFit.cover,
+          memCacheWidth: decodeWidth,
+          maxWidthDiskCache: 1440,
+          useOldImageOnUrlChange: true,
           fadeInDuration: const Duration(milliseconds: 200),
           fadeOutDuration: const Duration(milliseconds: 200),
           placeholder: (_, __) => Container(
@@ -429,29 +444,34 @@ class _ImageCarouselState extends State<ImageCarousel> {
         }
         if (isVideo) return;
         if (imageIndex != -1) {
-                final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-                final postId = widget.media.isNotEmpty ? widget.media.first.postId : null;
-                 if (currentUserId != null && postId != null && postId.isNotEmpty && postId != 'preview') {
-                   // Gọi bất đồng bộ không chặn UI, nhưng log lỗi nếu có
-                   Supabase.instance.client.from('user_interactions').insert({
-                     'user_id': currentUserId,
-                     'post_id': postId,
-                     'interaction_type': 'image_click',
-                     'duration_ms': 0,
-                   }).then((_) {
-                     debugPrint('Successfully logged image_click to user_interactions');
-                   }).catchError((e) {
-                     debugPrint('Error inserting image_click: $e');
-                   });
-                 }
-                GalleryScreen.open(
-                  context,
-                  imageUrls: imagesOnly.map((m) => m.url).toList(),
-                  initialIndex: imageIndex,
-                  heroScope: widget.heroScope,
-                );
-              }
-            },
+          final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+          final postId =
+              widget.media.isNotEmpty ? widget.media.first.postId : null;
+          if (currentUserId != null &&
+              postId != null &&
+              postId.isNotEmpty &&
+              postId != 'preview') {
+            // Gọi bất đồng bộ không chặn UI, nhưng log lỗi nếu có
+            Supabase.instance.client.from('user_interactions').insert({
+              'user_id': currentUserId,
+              'post_id': postId,
+              'interaction_type': 'image_click',
+              'duration_ms': 0,
+            }).then((_) {
+              debugPrint(
+                  'Successfully logged image_click to user_interactions');
+            }).catchError((e) {
+              debugPrint('Error inserting image_click: $e');
+            });
+          }
+          GalleryScreen.open(
+            context,
+            imageUrls: imagesOnly.map((m) => m.url).toList(),
+            initialIndex: imageIndex,
+            heroScope: widget.heroScope,
+          );
+        }
+      },
       child: mediaWidget,
     );
   }

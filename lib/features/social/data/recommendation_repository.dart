@@ -60,6 +60,25 @@ class RecommendationRepository {
   static const _uuid = Uuid();
   SupabaseClient get _client => _service.client;
 
+  Future<FunctionResponse> _invoke({
+    required Map<String, String> queryParameters,
+    Map<String, dynamic>? body,
+  }) async {
+    Future<FunctionResponse> request() => _client.functions.invoke(
+          'recommendation-engine',
+          queryParameters: queryParameters,
+          body: body,
+        );
+
+    try {
+      return await request();
+    } catch (error) {
+      final refreshed = await _service.handleAuthError(error);
+      if (!refreshed) rethrow;
+      return request();
+    }
+  }
+
   Future<List<PostModel>> getRecommendedFeed({
     required String userId,
     int limit = 20,
@@ -67,8 +86,7 @@ class RecommendationRepository {
   }) async {
     if (_service.currentUserId != userId || userId.isEmpty) return [];
     try {
-      final response = await _client.functions.invoke(
-        'recommendation-engine',
+      final response = await _invoke(
         queryParameters: {'action': 'feed', 'limit': '${limit.clamp(1, 50)}'},
       );
       final raw = response.data is Map ? response.data['posts'] : null;
@@ -94,8 +112,7 @@ class RecommendationRepository {
   }) async {
     if (_service.currentUserId != userId || userId.isEmpty) return [];
     try {
-      final response = await _client.functions.invoke(
-        'recommendation-engine',
+      final response = await _invoke(
         queryParameters: {'action': 'pymk', 'limit': '${limit.clamp(1, 30)}'},
       );
       final raw = response.data is Map ? response.data['candidates'] : null;
@@ -121,8 +138,7 @@ class RecommendationRepository {
   }) async {
     if (_service.currentUserId != userId || userId.isEmpty) return;
     try {
-      await _client.functions.invoke(
-        'recommendation-engine',
+      await _invoke(
         queryParameters: {'action': 'track'},
         body: {
           'eventId': _uuid.v4(),
@@ -141,8 +157,7 @@ class RecommendationRepository {
 
   Future<void> dismissProfile(String profileId) async {
     try {
-      await _client.functions.invoke(
-        'recommendation-engine',
+      await _invoke(
         queryParameters: {'action': 'dismiss-profile'},
         body: {'profileId': profileId},
       );

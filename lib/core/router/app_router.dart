@@ -14,6 +14,8 @@ import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/device_management_screen.dart';
 import '../../features/auth/presentation/screens/change_password_screen.dart';
+import '../../features/auth/presentation/screens/mfa_verification_screen.dart';
+import '../../features/auth/presentation/screens/two_factor_auth_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/chat/providers/chat_provider.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
@@ -85,10 +87,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isAuthRoute = state.matchedLocation.startsWith('/login') ||
           state.matchedLocation.startsWith('/register') ||
           state.matchedLocation.startsWith('/forgot-password');
+      final isMfaRoute = state.matchedLocation == '/mfa-verify';
 
       if (isSplashRoute) return null;
 
-      if (!isLoggedIn && !isAuthRoute) return '/login';
+      if (!isLoggedIn && (!isAuthRoute || isMfaRoute)) return '/login';
+      if (isLoggedIn) {
+        final level =
+            Supabase.instance.client.auth.mfa.getAuthenticatorAssuranceLevel();
+        final requiresMfa =
+            level.currentLevel == AuthenticatorAssuranceLevels.aal1 &&
+                level.nextLevel == AuthenticatorAssuranceLevels.aal2;
+        if (requiresMfa && !isMfaRoute) return '/mfa-verify';
+        if (!requiresMfa && isMfaRoute) return '/feed';
+      }
       if (isLoggedIn && isAuthRoute) return '/feed';
       return null;
     },
@@ -145,6 +157,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/mfa-verify',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: MfaVerificationScreen()),
+      ),
+      GoRoute(
         path: '/forgot-password',
         pageBuilder: (_, __) =>
             const CupertinoPage(child: ForgotPasswordScreen()),
@@ -189,6 +207,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, __) =>
             const CupertinoPage(child: ChangePasswordScreen()),
+      ),
+      GoRoute(
+        path: '/settings/two-factor',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: TwoFactorAuthScreen()),
       ),
       GoRoute(
         path: '/settings/privacy',

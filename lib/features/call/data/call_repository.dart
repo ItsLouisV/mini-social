@@ -132,10 +132,11 @@ class CallRepository {
     try {
       channel.subscribe((status, [error]) async {
         if (status == RealtimeSubscribeStatus.channelError) {
-          debugPrint('Supabase Realtime incoming calls channel error: $error');
           if (error != null) {
-            await _service.handleAuthError(error);
+            debugPrint(
+                'Supabase Realtime incoming calls channel error: $error');
           }
+          await _service.handleRealtimeError(error);
         }
         if (status != RealtimeSubscribeStatus.subscribed) return;
 
@@ -212,10 +213,10 @@ class CallRepository {
       )
           .subscribe((status, [error]) async {
         if (status == RealtimeSubscribeStatus.channelError) {
-          debugPrint('Supabase Realtime watch call channel error: $error');
           if (error != null) {
-            await _service.handleAuthError(error);
+            debugPrint('Supabase Realtime watch call channel error: $error');
           }
+          await _service.handleRealtimeError(error);
         }
         if (status == RealtimeSubscribeStatus.subscribed) {
           try {

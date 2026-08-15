@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../../core/localization/app_translations.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
@@ -72,7 +71,8 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
               size: 22,
               color: theme.iconTheme.color,
             ),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             offset: const Offset(0, 42),
             onSelected: (value) async {
               switch (value) {
@@ -92,19 +92,26 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                   context.push('/my-qr');
                   break;
                 case 'hidden_chats':
-                  final convs = ref.read(conversationsProvider).valueOrNull ?? [];
+                  final convs =
+                      ref.read(conversationsProvider).valueOrNull ?? [];
                   final currentUserId = ref.read(currentUserIdProvider);
-                  final hiddenCount = currentUserId == null ? 0 : convs.where((c) => c.isHidden(currentUserId)).length;
+                  final hiddenCount = currentUserId == null
+                      ? 0
+                      : convs.where((c) => c.isHidden(currentUserId)).length;
 
                   if (hiddenCount == 0) {
-                    await ref.read(hiddenChatProvider.notifier).removePasscode();
+                    await ref
+                        .read(hiddenChatProvider.notifier)
+                        .removePasscode();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Chưa có cuộc trò chuyện nào bị ẩn')),
+                        const SnackBar(
+                            content: Text('Chưa có cuộc trò chuyện nào bị ẩn')),
                       );
                     }
                   } else {
-                    final success = await PasscodeDialog.show(context, mode: PasscodeMode.verify);
+                    final success = await PasscodeDialog.show(context,
+                        mode: PasscodeMode.verify);
                     if (success == true && context.mounted) {
                       context.push('/chat/hidden');
                     }
@@ -123,10 +130,13 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                         color: const Color(0xFF5856D6).withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(CupertinoIcons.person_3_fill, color: Color(0xFF5856D6), size: 16),
+                      child: const Icon(CupertinoIcons.person_3_fill,
+                          color: Color(0xFF5856D6), size: 16),
                     ),
                     const SizedBox(width: 12),
-                    const Text('Tạo nhóm mới', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const Text('Tạo nhóm mới',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14)),
                   ],
                 ),
               ),
@@ -140,10 +150,13 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                         color: const Color(0xFF34C759).withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(CupertinoIcons.chat_bubble_fill, color: Color(0xFF34C759), size: 16),
+                      child: const Icon(CupertinoIcons.chat_bubble_fill,
+                          color: Color(0xFF34C759), size: 16),
                     ),
                     const SizedBox(width: 12),
-                    const Text('Tin nhắn mới', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const Text('Tin nhắn mới',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14)),
                   ],
                 ),
               ),
@@ -157,10 +170,13 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                         color: const Color(0xFFFF9F0A).withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(CupertinoIcons.person_badge_plus, color: Color(0xFFFF9F0A), size: 16),
+                      child: const Icon(CupertinoIcons.person_badge_plus,
+                          color: Color(0xFFFF9F0A), size: 16),
                     ),
                     const SizedBox(width: 12),
-                    const Text('Thêm bạn mới', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const Text('Thêm bạn mới',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14)),
                   ],
                 ),
               ),
@@ -174,10 +190,13 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                         color: Colors.grey.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(CupertinoIcons.eye_slash_fill, color: Colors.grey, size: 16),
+                      child: const Icon(CupertinoIcons.eye_slash_fill,
+                          color: Colors.grey, size: 16),
                     ),
                     const SizedBox(width: 12),
-                    const Text('Cuộc trò chuyện ẩn', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const Text('Cuộc trò chuyện ẩn',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14)),
                   ],
                 ),
               ),
@@ -224,16 +243,20 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                 Container(
                   width: double.infinity,
                   color: Colors.amber.withValues(alpha: 0.15),
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(CupertinoIcons.wifi_slash, color: Colors.amber, size: 16),
+                      const Icon(CupertinoIcons.wifi_slash,
+                          color: Colors.amber, size: 16),
                       const SizedBox(width: 8),
                       Text(
                         'Đang ngoại tuyến.',
                         style: TextStyle(
-                          color: theme.brightness == Brightness.dark ? Colors.amber[200] : Colors.amber[800],
+                          color: theme.brightness == Brightness.dark
+                              ? Colors.amber[200]
+                              : Colors.amber[800],
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -247,14 +270,12 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                 child: CupertinoSearchTextField(
                   controller: _searchController,
                   placeholder: AppTranslations.tr(ref, 'search'),
-                  style:
-                      TextStyle(color: theme.textTheme.bodyLarge?.color),
+                  style: TextStyle(color: theme.textTheme.bodyLarge?.color),
                   placeholderStyle: TextStyle(color: theme.hintColor),
                   backgroundColor: theme.brightness == Brightness.dark
                       ? const Color(0xFF2C2C2E)
                       : const Color(0xFF767680).withValues(alpha: 0.12),
-                  onChanged: (val) =>
-                      setState(() => _searchQuery = val.trim()),
+                  onChanged: (val) => setState(() => _searchQuery = val.trim()),
                 ),
               ),
 
@@ -272,7 +293,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                               : 'Thử tìm kiếm với tên hiển thị khác',
                         ),
                       )
-                    : SlidableAutoCloseBehavior(
+                    : IOSSlidableAutoCloseBehavior(
                         child: ListView.separated(
                           itemCount: filteredConvs.length,
                           separatorBuilder: (context, index) => Padding(
@@ -280,20 +301,22 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                             child: Divider(
                               height: 0.5,
                               thickness: 0.5,
-                              color:
-                                  theme.dividerColor.withValues(alpha: 0.25),
+                              color: theme.dividerColor.withValues(alpha: 0.25),
                             ),
                           ),
                           itemBuilder: (context, index) {
                             final conv = filteredConvs[index];
-                            final isHidden = currentUserId != null && conv.isHidden(currentUserId);
+                            final isHidden = currentUserId != null &&
+                                conv.isHidden(currentUserId);
                             return _ConversationTile(
                               conv: conv,
                               currentUserId: currentUserId,
                               isSearching: _searchQuery.isNotEmpty,
                               onTap: () async {
                                 if (isHidden) {
-                                  final success = await PasscodeDialog.show(context, mode: PasscodeMode.verify);
+                                  final success = await PasscodeDialog.show(
+                                      context,
+                                      mode: PasscodeMode.verify);
                                   if (success == true && context.mounted) {
                                     context.push('/chat/${conv.id}');
                                   }
@@ -343,11 +366,9 @@ class _ConversationTile extends ConsumerWidget {
     // Cần cả khoảng trống xung quanh action để swipe nhìn thoáng.
     const actionSlotWidth = 72.0;
 
-    final requiredWidth =
-        actionSlotWidth * actionCount;
+    final requiredWidth = actionSlotWidth * actionCount;
 
-    return (requiredWidth / screenWidth)
-        .clamp(0.0, 1.0);
+    return (requiredWidth / screenWidth).clamp(0.0, 1.0);
   }
 
   @override
@@ -355,7 +376,8 @@ class _ConversationTile extends ConsumerWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final hasUnread = (currentUserId != null) && (conv.getUnreadCount(currentUserId!) > 0);
+    final hasUnread =
+        (currentUserId != null) && (conv.getUnreadCount(currentUserId!) > 0);
     final isHidden = (currentUserId != null) && conv.isHidden(currentUserId!);
     final titleColor = theme.textTheme.titleMedium?.color;
     final hintColor = theme.hintColor;
@@ -454,7 +476,9 @@ class _ConversationTile extends ConsumerWidget {
                     onPressed: () {
                       HapticFeedback.mediumImpact();
                       Navigator.pop(ctx);
-                      ref.read(chatRepositoryProvider).deleteConversation(conv.id);
+                      ref
+                          .read(chatRepositoryProvider)
+                          .deleteConversation(conv.id);
                     },
                     child: Text(AppTranslations.tr(ref, 'delete_chat')),
                   ),
@@ -469,8 +493,10 @@ class _ConversationTile extends ConsumerWidget {
       // MAIN CONTENT
       // ==========================================================
       child: Material(
-        color: conv.isPinned(currentUserId ?? '') 
-            ? (isDark ? Colors.white.withValues(alpha: 0.03) : theme.scaffoldBackgroundColor) 
+        color: conv.isPinned(currentUserId ?? '')
+            ? (isDark
+                ? Colors.white.withValues(alpha: 0.03)
+                : theme.scaffoldBackgroundColor)
             : Colors.transparent,
         child: InkWell(
           onTap: onTap,
@@ -496,11 +522,15 @@ class _ConversationTile extends ConsumerWidget {
                         )
                       : null,
                 ),
-  
+
                 // Avatar
                 AppAvatar(
-                  imageUrl: conv.isGroup ? conv.groupAvatarUrl : conv.otherUser?.avatarUrl,
-                  name: conv.isGroup ? (conv.groupName ?? 'Group') : conv.otherUser?.displayName,
+                  imageUrl: conv.isGroup
+                      ? conv.groupAvatarUrl
+                      : conv.otherUser?.avatarUrl,
+                  name: conv.isGroup
+                      ? (conv.groupName ?? 'Group')
+                      : conv.otherUser?.displayName,
                   radius: 25,
                 ),
                 const SizedBox(width: 12),
@@ -517,10 +547,13 @@ class _ConversationTile extends ConsumerWidget {
                             child: Text(
                               conv.isGroup
                                   ? (conv.groupName ?? 'Nhóm trò chuyện')
-                                  : (conv.otherUser?.displayName ?? 'Người dùng'),
+                                  : (conv.otherUser?.displayName ??
+                                      'Người dùng'),
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
+                                fontWeight: hasUnread
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
                                 color: titleColor,
                                 letterSpacing: -0.2,
                               ),
@@ -555,7 +588,9 @@ class _ConversationTile extends ConsumerWidget {
                         Text(
                           conv.isGroup
                               ? '${conv.members?.length ?? 0} thành viên'
-                              : (conv.otherUser?.username != null ? '@${conv.otherUser!.username}' : ''),
+                              : (conv.otherUser?.username != null
+                                  ? '@${conv.otherUser!.username}'
+                                  : ''),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -573,7 +608,8 @@ class _ConversationTile extends ConsumerWidget {
                             color: hasUnread
                                 ? (isDark ? Colors.white : Colors.black)
                                 : hintColor,
-                            fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                            fontWeight:
+                                hasUnread ? FontWeight.w500 : FontWeight.w400,
                             fontSize: 14,
                           ),
                         ),
@@ -591,9 +627,11 @@ class _ConversationTile extends ConsumerWidget {
                       Text(
                         conv.lastMessageAt?.chatTimestamp ?? '',
                         style: TextStyle(
-                          color: hasUnread ? const Color(0xFF007AFF) : hintColor,
+                          color:
+                              hasUnread ? const Color(0xFF007AFF) : hintColor,
                           fontSize: 12,
-                          fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                          fontWeight:
+                              hasUnread ? FontWeight.w500 : FontWeight.w400,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -613,5 +651,3 @@ class _ConversationTile extends ConsumerWidget {
     );
   }
 }
-
-

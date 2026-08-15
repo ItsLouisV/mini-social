@@ -28,22 +28,28 @@ final feedPostsProvider = StreamProvider<List<PostModel>>((ref) async* {
   final currentUserId = ref.watch(supabaseServiceProvider).currentUserId;
   final repo = ref.watch(postRepositoryProvider);
 
-  try {
-    final cached = await repo.getFeedPosts(page: 0);
-    if (cached.isNotEmpty) {
-      yield cached;
-    }
-  } catch (_) {}
-
   if (currentUserId != null && currentUserId.isNotEmpty) {
     try {
-      final recommended = await ref.watch(recommendationRepositoryProvider).getRecommendedFeed(userId: currentUserId);
+      final recommended = await ref
+          .watch(recommendationRepositoryProvider)
+          .getRecommendedFeed(userId: currentUserId);
       if (recommended.isNotEmpty) {
         yield recommended;
         return;
       }
     } catch (_) {}
   }
+
+  // Chỉ dùng feed thường khi recommendation không còn đủ candidate. Không phát
+  // danh sách này trước recommendation vì hai danh sách khác thứ tự/kích thước
+  // sẽ khiến Sliver tái sử dụng widget sai vị trí và làm giao diện nhấp nháy.
+  try {
+    final fallback = await repo.getFeedPosts(page: 0);
+    if (fallback.isNotEmpty) {
+      yield fallback;
+    }
+  } catch (_) {}
+
   yield* repo.watchPosts().handleError((err) {
     debugPrint('ℹ️ Feed posts stream info: $err');
   });
@@ -51,16 +57,19 @@ final feedPostsProvider = StreamProvider<List<PostModel>>((ref) async* {
 
 // Single post
 final postDetailProvider =
-    StreamProvider.family<PostModel, String>((ref, postId) {
+    StreamProvider.autoDispose.family<PostModel, String>((ref, postId) {
   return ref.watch(postRepositoryProvider).watchPost(postId).handleError((err) {
     debugPrint('ℹ️ Post detail stream info: $err');
   });
 });
 
 // Comments provider
-final commentsProvider =
-    StreamProvider.family<List<CommentModel>, String>((ref, postId) {
-  return ref.watch(postRepositoryProvider).watchComments(postId).handleError((err) {
+final commentsProvider = StreamProvider.autoDispose
+    .family<List<CommentModel>, String>((ref, postId) {
+  return ref
+      .watch(postRepositoryProvider)
+      .watchComments(postId)
+      .handleError((err) {
     debugPrint('ℹ️ Comments stream info: $err');
   });
 });
@@ -70,8 +79,7 @@ class LikeNotifier extends StateNotifier<AsyncValue<bool?>> {
   final PostRepository _repo;
   final String _postId;
 
-  LikeNotifier(this._repo, this._postId)
-      : super(const AsyncData(null));
+  LikeNotifier(this._repo, this._postId) : super(const AsyncData(null));
 
   Future<void> toggle(bool currentIsLiked) async {
     // Optimistic update
@@ -108,7 +116,8 @@ enum PostLocalStatus {
   dismissed,
 }
 
-class PostLocalStatesNotifier extends StateNotifier<Map<String, PostLocalStatus>> {
+class PostLocalStatesNotifier
+    extends StateNotifier<Map<String, PostLocalStatus>> {
   PostLocalStatesNotifier() : super({});
 
   void hidePost(String postId) {
@@ -142,8 +151,8 @@ class PostLocalStatesNotifier extends StateNotifier<Map<String, PostLocalStatus>
   }
 }
 
-final postLocalStatesProvider =
-    StateNotifierProvider<PostLocalStatesNotifier, Map<String, PostLocalStatus>>((ref) {
+final postLocalStatesProvider = StateNotifierProvider<PostLocalStatesNotifier,
+    Map<String, PostLocalStatus>>((ref) {
   return PostLocalStatesNotifier();
 });
 
@@ -153,15 +162,21 @@ final trashedPostsProvider = FutureProvider<List<PostModel>>((ref) async {
 });
 
 /// Provider danh sách người quen gợi ý (People You May Know)
-final pymkProvider = FutureProvider.family<List<PymkCandidate>, String>((ref, userId) async {
+final pymkProvider =
+    FutureProvider.family<List<PymkCandidate>, String>((ref, userId) async {
   if (userId.isEmpty) return [];
-  return ref.watch(recommendationRepositoryProvider).getPeopleYouMayKnow(userId: userId);
+  return ref
+      .watch(recommendationRepositoryProvider)
+      .getPeopleYouMayKnow(userId: userId);
 });
 
 /// Provider bài viết đề xuất xếp hạng cá nhân hóa
-final recommendedFeedProvider = FutureProvider.family<List<PostModel>, String>((ref, userId) async {
+final recommendedFeedProvider =
+    FutureProvider.family<List<PostModel>, String>((ref, userId) async {
   if (userId.isEmpty) return [];
-  return ref.watch(recommendationRepositoryProvider).getRecommendedFeed(userId: userId);
+  return ref
+      .watch(recommendationRepositoryProvider)
+      .getRecommendedFeed(userId: userId);
 });
 
 // ── Shell UI State (Header visibility & TabBar compact mode) ──
@@ -206,4 +221,3 @@ final shellUiStateProvider =
     StateNotifierProvider<ShellUiStateNotifier, ShellUiState>((ref) {
   return ShellUiStateNotifier();
 });
-

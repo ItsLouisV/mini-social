@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 
+import '../../../../core/utils/media_save_service.dart';
+
 class GalleryScreen extends StatefulWidget {
   final List<String> imageUrls;
   final int initialIndex;
@@ -18,7 +20,10 @@ class GalleryScreen extends StatefulWidget {
   });
 
   /// Mở Gallery với hiệu ứng FadeTransition nền trong suốt mượt mà
-  static void open(BuildContext context, {required List<String> imageUrls, required String heroScope, int initialIndex = 0}) {
+  static void open(BuildContext context,
+      {required List<String> imageUrls,
+      required String heroScope,
+      int initialIndex = 0}) {
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder(
         opaque: false,
@@ -40,7 +45,8 @@ class GalleryScreen extends StatefulWidget {
   State<GalleryScreen> createState() => _GalleryScreenState();
 }
 
-class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateMixin {
+class _GalleryScreenState extends State<GalleryScreen>
+    with TickerProviderStateMixin {
   late int currentIndex;
   late PageController _pageController;
 
@@ -77,7 +83,8 @@ class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateM
     _dismissAnimationController.addListener(_applyDismissAnimation);
 
     _scaleStateController = PhotoViewScaleStateController();
-    _scaleStateSubscription = _scaleStateController.outputScaleStateStream.listen(_handleScaleStateChanged);
+    _scaleStateSubscription = _scaleStateController.outputScaleStateStream
+        .listen(_handleScaleStateChanged);
   }
 
   void _handleScaleStateChanged(PhotoViewScaleState state) {
@@ -133,7 +140,11 @@ class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateM
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
-    if (event.pointer != _activePointerId || !_pointerDownInsideImage || _isZoomed) return;
+    if (event.pointer != _activePointerId ||
+        !_pointerDownInsideImage ||
+        _isZoomed) {
+      return;
+    }
 
     final delta = event.position - _dragStartPoint;
 
@@ -173,7 +184,8 @@ class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateM
     // Khoảng cách kéo dọc đủ lớn (> 100px) -> tiến hành đóng
     if (finalOffset.dy.abs() > 100) {
       _lastDragOffset = finalOffset;
-      _lastDragScale = (1.0 - (finalOffset.dy.abs() / (size.height * 2.5))).clamp(0.75, 1.0);
+      _lastDragScale =
+          (1.0 - (finalOffset.dy.abs() / (size.height * 2.5))).clamp(0.75, 1.0);
       Navigator.pop(context);
     } else {
       // Đưa ảnh về tâm mượt mà với hiệu ứng lò xo
@@ -186,6 +198,70 @@ class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateM
       ));
       _dismissAnimationController.forward(from: 0.0);
     }
+  }
+
+  Future<void> _saveCurrentImage() async {
+    final imageUrl = widget.imageUrls[currentIndex];
+    try {
+      await MediaSaveService.saveUrls(
+        [imageUrl],
+        fallbackBaseName: 'viora_image_${currentIndex + 1}',
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể lưu ảnh: $error')),
+        );
+      }
+    }
+  }
+
+  void _showImageActions() {
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        return SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(CupertinoIcons.arrow_down_to_line),
+                  title: const Text('Lưu ảnh'),
+                  subtitle: const Text('Lưu ảnh đang xem vào thiết bị'),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _saveCurrentImage();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -202,8 +278,10 @@ class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateM
           valueListenable: _dragOffset,
           builder: (context, dragOffset, child) {
             final dragDistance = dragOffset.dy.abs();
-            final opacity = (1.0 - (dragDistance / (size.height * 0.55))).clamp(0.0, 1.0);
-            final scale = (1.0 - (dragDistance / (size.height * 2.5))).clamp(0.75, 1.0);
+            final opacity =
+                (1.0 - (dragDistance / (size.height * 0.55))).clamp(0.0, 1.0);
+            final scale =
+                (1.0 - (dragDistance / (size.height * 2.5))).clamp(0.75, 1.0);
 
             return Container(
               color: Colors.black.withValues(alpha: opacity),
@@ -218,33 +296,46 @@ class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateM
                         scrollPhysics: const BouncingScrollPhysics(),
                         builder: (BuildContext context, int index) {
                           return PhotoViewGalleryPageOptions(
-                            imageProvider: CachedNetworkImageProvider(widget.imageUrls[index]),
+                            imageProvider: CachedNetworkImageProvider(
+                                widget.imageUrls[index]),
                             initialScale: PhotoViewComputedScale.contained,
                             minScale: PhotoViewComputedScale.contained * 0.8,
                             maxScale: PhotoViewComputedScale.covered * 2,
                             heroAttributes: PhotoViewHeroAttributes(
-                              tag: '${widget.heroScope}_${widget.imageUrls[index]}',
-                              flightShuttleBuilder: (flightContext, animation, flightDirection, fromHeroContext, toHeroContext) {
-                                final Hero fromHero = fromHeroContext.widget as Hero;
-                                final Hero toHero = toHeroContext.widget as Hero;
+                              tag:
+                                  '${widget.heroScope}_${widget.imageUrls[index]}',
+                              flightShuttleBuilder: (flightContext,
+                                  animation,
+                                  flightDirection,
+                                  fromHeroContext,
+                                  toHeroContext) {
+                                final Hero fromHero =
+                                    fromHeroContext.widget as Hero;
+                                final Hero toHero =
+                                    toHeroContext.widget as Hero;
 
-                                final thumbnailChild = flightDirection == HeroFlightDirection.push
-                                    ? fromHero.child
-                                    : toHero.child;
-                                final fullscreenChild = flightDirection == HeroFlightDirection.push
-                                    ? toHero.child
-                                    : fromHero.child;
+                                final thumbnailChild =
+                                    flightDirection == HeroFlightDirection.push
+                                        ? fromHero.child
+                                        : toHero.child;
+                                final fullscreenChild =
+                                    flightDirection == HeroFlightDirection.push
+                                        ? toHero.child
+                                        : fromHero.child;
 
                                 return AnimatedBuilder(
                                   animation: animation,
                                   builder: (context, child) {
                                     final t = animation.value;
 
-                                    final offset = (flightDirection == HeroFlightDirection.pop)
-                                        ? Offset.lerp(Offset.zero, _lastDragOffset, t)!
+                                    final offset = (flightDirection ==
+                                            HeroFlightDirection.pop)
+                                        ? Offset.lerp(
+                                            Offset.zero, _lastDragOffset, t)!
                                         : Offset.zero;
 
-                                    final scaleVal = (flightDirection == HeroFlightDirection.pop)
+                                    final scaleVal = (flightDirection ==
+                                            HeroFlightDirection.pop)
                                         ? 1.0 + (_lastDragScale - 1.0) * t
                                         : 1.0;
 
@@ -256,7 +347,8 @@ class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateM
                                           fit: StackFit.passthrough,
                                           children: [
                                             Opacity(
-                                              opacity: (1.0 - t).clamp(0.0, 1.0),
+                                              opacity:
+                                                  (1.0 - t).clamp(0.0, 1.0),
                                               child: thumbnailChild,
                                             ),
                                             Opacity(
@@ -299,8 +391,36 @@ class _GalleryScreenState extends State<GalleryScreen> with TickerProviderStateM
                           opacity: isDragging ? 0.0 : 1.0,
                           duration: const Duration(milliseconds: 200),
                           child: IconButton(
-                            icon: const Icon(CupertinoIcons.xmark_circle_fill, color: Colors.white, size: 30),
+                            icon: const Icon(CupertinoIcons.xmark_circle_fill,
+                                color: Colors.white, size: 30),
                             onPressed: () => Navigator.pop(context),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Menu thao tác của ảnh đang xem.
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top + 10,
+                    right: 20,
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: _isDragging,
+                      builder: (context, isDragging, _) {
+                        return AnimatedOpacity(
+                          opacity: isDragging ? 0.0 : 1.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: IgnorePointer(
+                            ignoring: isDragging,
+                            child: IconButton(
+                              tooltip: 'Tùy chọn ảnh',
+                              icon: const Icon(
+                                CupertinoIcons.ellipsis_circle_fill,
+                                color: Colors.white,
+                                size: 30,
+                              ),
+                              onPressed: _showImageActions,
+                            ),
                           ),
                         );
                       },

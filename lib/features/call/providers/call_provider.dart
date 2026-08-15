@@ -30,7 +30,7 @@ final incomingCallProvider = StreamProvider<CallModel?>((ref) {
 
 /// Theo dõi trạng thái của 1 cuộc gọi cụ thể
 final callStateProvider =
-    StreamProvider.family<CallModel, String>((ref, callId) {
+    StreamProvider.autoDispose.family<CallModel, String>((ref, callId) {
   final repo = ref.watch(callRepositoryProvider);
   return repo.watchCall(callId);
 });

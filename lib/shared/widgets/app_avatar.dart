@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../core/extensions/string_extension.dart';
 
 class AppAvatar extends StatelessWidget {
+  static const int _sharedDecodeSize = 256;
+
   final String? imageUrl;
   final String? name;
   final double radius;
@@ -23,16 +25,31 @@ class AppAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget avatar;
+    final logicalSize = radius * 2;
 
     if (imageUrl != null && imageUrl!.isNotEmpty) {
-      avatar = CachedNetworkImage(
-        imageUrl: imageUrl!,
-        imageBuilder: (context, imageProvider) => CircleAvatar(
-          radius: radius,
-          backgroundImage: imageProvider,
+      avatar = SizedBox.square(
+        dimension: logicalSize,
+        child: CachedNetworkImage(
+          imageUrl: imageUrl!,
+          // Mọi kích thước AppAvatar dùng chung một biến thể cache. Nếu tính
+          // theo radius, cùng URL ở danh sách chat (r=25) và app bar (r=19)
+          // sẽ bị decode lại khi chuyển màn hình và gây chớp placeholder.
+          memCacheWidth: _sharedDecodeSize,
+          memCacheHeight: _sharedDecodeSize,
+          maxWidthDiskCache: _sharedDecodeSize,
+          maxHeightDiskCache: _sharedDecodeSize,
+          useOldImageOnUrlChange: true,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          placeholderFadeInDuration: Duration.zero,
+          imageBuilder: (context, imageProvider) => CircleAvatar(
+            radius: radius,
+            backgroundImage: imageProvider,
+          ),
+          placeholder: (context, url) => _buildPlaceholder(context),
+          errorWidget: (context, url, error) => _buildInitials(context),
         ),
-        placeholder: (context, url) => _buildPlaceholder(context),
-        errorWidget: (context, url, error) => _buildInitials(context),
       );
     } else {
       avatar = _buildInitials(context);
@@ -65,11 +82,7 @@ class AppAvatar extends StatelessWidget {
     return CircleAvatar(
       radius: radius,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: SizedBox(
-        width: radius,
-        height: radius,
-        child: const CupertinoActivityIndicator(),
-      ),
+      child: const CupertinoActivityIndicator(),
     );
   }
 
@@ -77,7 +90,8 @@ class AppAvatar extends StatelessWidget {
     final initials = name?.initials ?? '?';
     return CircleAvatar(
       radius: radius,
-      backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+      backgroundColor:
+          Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
       child: Text(
         initials,
         style: TextStyle(

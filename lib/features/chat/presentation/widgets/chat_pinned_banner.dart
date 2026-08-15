@@ -17,6 +17,8 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
   final String otherUserName;
   final bool hasWallpaper;
   final bool canManagePins;
+  final bool isExpanded;
+  final ValueChanged<bool> onExpandedChanged;
   final Function(PinnedMessageModel) onJumpToMessage;
   final Function(String messageId) onUnpinMessage;
 
@@ -28,6 +30,8 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
     required this.otherUserName,
     this.hasWallpaper = false,
     this.canManagePins = true,
+    this.isExpanded = false,
+    required this.onExpandedChanged,
     required this.onJumpToMessage,
     required this.onUnpinMessage,
   });
@@ -37,8 +41,6 @@ class ChatPinnedBanner extends ConsumerStatefulWidget {
 }
 
 class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
-  bool _isExpanded = false;
-
   Widget? _buildMediaPreview(MessageModel msg, Color accentColor,
       {double size = 36}) {
     // Image
@@ -125,6 +127,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
     final latestMsg = latestPin.message;
 
     if (latestMsg == null) return const SizedBox.shrink();
+    final isExpanded = widget.isExpanded && widget.pinnedList.length > 1;
 
     final themeState = ref.watch(chatThemeColorProvider);
     final themeName = themeState[widget.conversationId] ?? 'blue';
@@ -169,8 +172,8 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
     // Keep the surface translucent so the conversation remains perceptible
     // underneath, like a sheet of liquid glass.
     final bannerBgColor = isDark
-        ? const Color(0xFF171722).withValues(alpha: _isExpanded ? 0.78 : 0.62)
-        : Colors.white.withValues(alpha: _isExpanded ? 0.82 : 0.68);
+        ? const Color(0xFF171722).withValues(alpha: isExpanded ? 0.52 : 0.42)
+        : Colors.white.withValues(alpha: isExpanded ? 0.56 : 0.46);
 
     final borderColor = isDark
         ? Colors.white.withValues(alpha: 0.12)
@@ -183,7 +186,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOutCubic,
@@ -215,7 +218,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                     onTap: () {
                       HapticFeedback.selectionClick();
                       if (widget.pinnedList.length > 1) {
-                        setState(() => _isExpanded = !_isExpanded);
+                        widget.onExpandedChanged(!isExpanded);
                       } else {
                         widget.onJumpToMessage(latestPin);
                       }
@@ -337,7 +340,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                           // Action Button (Expand toggle or Unpin button)
                           if (widget.pinnedList.length > 1)
                             AnimatedRotation(
-                              turns: _isExpanded ? 0.5 : 0.0,
+                              turns: isExpanded ? 0.5 : 0.0,
                               duration: const Duration(milliseconds: 250),
                               curve: Curves.easeInOutCubic,
                               child: Container(
@@ -376,7 +379,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                   ),
 
                   // Expanded List of all Pinned Messages (Smooth animated expand)
-                  if (_isExpanded && widget.pinnedList.length > 1)
+                  if (isExpanded)
                     Container(
                       constraints: const BoxConstraints(maxHeight: 220),
                       decoration: BoxDecoration(
@@ -416,7 +419,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
 
                           return InkWell(
                             onTap: () {
-                              setState(() => _isExpanded = false);
+                              widget.onExpandedChanged(false);
                               widget.onJumpToMessage(pin);
                             },
                             child: Padding(

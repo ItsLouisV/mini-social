@@ -18,7 +18,6 @@ import '../widgets/post_card.dart';
 import '../../../../shared/widgets/skeletons/feed_skeleton_loading.dart';
 
 class FeedScreen extends ConsumerWidget {
-
   const FeedScreen({super.key});
 
   @override
@@ -52,7 +51,8 @@ class FeedScreen extends ConsumerWidget {
                     height: 52,
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
-                      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.95),
+                      color:
+                          theme.scaffoldBackgroundColor.withValues(alpha: 0.95),
                       border: Border(
                         bottom: BorderSide(
                           color: theme.dividerColor.withValues(alpha: 0.15),
@@ -78,7 +78,8 @@ class FeedScreen extends ConsumerWidget {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                                color: theme.colorScheme.primary
+                                    .withValues(alpha: 0.2),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -124,11 +125,13 @@ class FeedScreen extends ConsumerWidget {
                     return const EmptyStateWidget(
                       icon: CupertinoIcons.doc_text,
                       title: 'Feed trống',
-                      subtitle: 'Hãy theo dõi thêm người để xem bài viết của họ',
+                      subtitle:
+                          'Hãy theo dõi thêm người để xem bài viết của họ',
                     );
                   }
 
-                  final showPymk = currentUserId != null && currentUserId.isNotEmpty;
+                  final showPymk =
+                      currentUserId != null && currentUserId.isNotEmpty;
                   final pymkPosition = posts.length >= 2 ? 3 : posts.length + 1;
                   final totalItemCount = posts.length + 2 + (showPymk ? 1 : 0);
 
@@ -148,7 +151,8 @@ class FeedScreen extends ConsumerWidget {
                             ref.invalidate(pymkProvider(currentUserId));
                           }
                         },
-                        builder: (ctx, mode, pulledExtent, triggerDistance, indicatorExtent) {
+                        builder: (ctx, mode, pulledExtent, triggerDistance,
+                            indicatorExtent) {
                           return _FeedRefreshHeader(
                             mode: mode,
                             pulledExtent: pulledExtent,
@@ -160,22 +164,28 @@ class FeedScreen extends ConsumerWidget {
                         itemCount: totalItemCount,
                         itemBuilder: (context, index) {
                           if (index == totalItemCount - 1) {
-                            return const SizedBox(height: 80); // Bottom padding cho floating tabbar
+                            return const SizedBox(
+                                height:
+                                    80); // Bottom padding cho floating tabbar
                           }
                           if (index == 0) {
                             return _buildCreatePostHeaderBar(context, ref);
                           }
 
                           if (showPymk && index == pymkPosition) {
-                            return PeopleYouMayKnowCarousel(currentUserId: currentUserId);
+                            return PeopleYouMayKnowCarousel(
+                                currentUserId: currentUserId);
                           }
 
-                          final postIndex = (showPymk && index > pymkPosition) ? index - 2 : index - 1;
+                          final postIndex = (showPymk && index > pymkPosition)
+                              ? index - 2
+                              : index - 1;
                           if (postIndex < 0 || postIndex >= posts.length) {
                             return const SizedBox.shrink();
                           }
 
                           return PostCard(
+                            key: ValueKey(posts[postIndex].id),
                             post: posts[postIndex],
                             currentUserId: currentUserId ?? '',
                             heroScope: 'feed',
@@ -225,8 +235,10 @@ class FeedScreen extends ConsumerWidget {
               name: profile.displayName,
               radius: 20,
             ),
-            loading: () => const CircleAvatar(radius: 20, backgroundColor: Colors.transparent),
-            error: (_, __) => const CircleAvatar(radius: 20, backgroundColor: Colors.grey),
+            loading: () => const CircleAvatar(
+                radius: 20, backgroundColor: Colors.transparent),
+            error: (_, __) =>
+                const CircleAvatar(radius: 20, backgroundColor: Colors.grey),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -234,9 +246,12 @@ class FeedScreen extends ConsumerWidget {
               onTap: () => context.push('/create'),
               borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF3A3B3C) : const Color(0xFFF0F2F5),
+                  color: isDark
+                      ? const Color(0xFF3A3B3C)
+                      : const Color(0xFFF0F2F5),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -251,7 +266,8 @@ class FeedScreen extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           IconButton(
-            icon: const Icon(CupertinoIcons.photo_on_rectangle, color: Colors.green, size: 22),
+            icon: const Icon(CupertinoIcons.photo_on_rectangle,
+                color: Colors.green, size: 22),
             onPressed: () => context.push('/create'),
           ),
         ],
@@ -310,7 +326,8 @@ class _FeedRefreshHeaderState extends State<_FeedRefreshHeader>
 
   @override
   Widget build(BuildContext context) {
-    final progress = (widget.pulledExtent / widget.triggerDistance).clamp(0.0, 1.0);
+    final progress =
+        (widget.pulledExtent / widget.triggerDistance).clamp(0.0, 1.0);
     final isRefreshing = widget.mode == RefreshIndicatorMode.refresh;
     final isArmed = widget.mode == RefreshIndicatorMode.armed ||
         widget.pulledExtent >= widget.triggerDistance;
@@ -340,13 +357,17 @@ class _FeedRefreshHeaderState extends State<_FeedRefreshHeader>
               gradient: LinearGradient(
                 colors: isArmed || isRefreshing
                     ? [AppColors.primary, const Color(0xFF7C3AED)]
-                    : [AppColors.primary.withValues(alpha: 0.6), AppColors.primary],
+                    : [
+                        AppColors.primary.withValues(alpha: 0.6),
+                        AppColors.primary
+                      ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: isRefreshing ? 0.35 : 0.15),
+                  color: AppColors.primary
+                      .withValues(alpha: isRefreshing ? 0.35 : 0.15),
                   blurRadius: isRefreshing ? 8 : 4,
                   offset: const Offset(0, 2),
                 ),

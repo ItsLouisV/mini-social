@@ -17,6 +17,52 @@ class SlidableActionItem {
   });
 }
 
+/// Coordinates custom swipe tiles so opening one closes the previously open
+/// tile in the same list.
+class IOSSlidableAutoCloseBehavior extends StatefulWidget {
+  final Widget child;
+
+  const IOSSlidableAutoCloseBehavior({super.key, required this.child});
+
+  @override
+  State<IOSSlidableAutoCloseBehavior> createState() =>
+      _IOSSlidableAutoCloseBehaviorState();
+}
+
+class _IOSSlidableAutoCloseBehaviorState
+    extends State<IOSSlidableAutoCloseBehavior> {
+  _IOSRubberbandSlidableTileState? _activeTile;
+
+  void claim(_IOSRubberbandSlidableTileState tile) {
+    if (!identical(_activeTile, tile)) {
+      _activeTile?.close();
+      _activeTile = tile;
+    }
+  }
+
+  void release(_IOSRubberbandSlidableTileState tile) {
+    if (identical(_activeTile, tile)) _activeTile = null;
+  }
+
+  @override
+  Widget build(BuildContext context) => _IOSSlidableScope(
+        state: this,
+        child: widget.child,
+      );
+}
+
+class _IOSSlidableScope extends InheritedWidget {
+  final _IOSSlidableAutoCloseBehaviorState state;
+
+  const _IOSSlidableScope({required this.state, required super.child});
+
+  static _IOSSlidableAutoCloseBehaviorState? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_IOSSlidableScope>()?.state;
+
+  @override
+  bool updateShouldNotify(_IOSSlidableScope oldWidget) => false;
+}
+
 /// Widget vuốt (swipe) mượt chuẩn iOS:
 /// - Kéo thả tự do không bị giới hạn cứng (Over-drag Rubberband physics)
 /// - Khi thả tay, tự động nảy đàn hồi (Spring Rebound) về dừng ở mép nút action cuối cùng
@@ -35,16 +81,20 @@ class IOSRubberbandSlidableTile extends StatefulWidget {
   });
 
   @override
-  State<IOSRubberbandSlidableTile> createState() => _IOSRubberbandSlidableTileState();
+  State<IOSRubberbandSlidableTile> createState() =>
+      _IOSRubberbandSlidableTileState();
 }
 
 class _IOSRubberbandSlidableTileState extends State<IOSRubberbandSlidableTile>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   double _dragOffset = 0.0;
+  _IOSSlidableAutoCloseBehaviorState? _autoCloseGroup;
 
-  double get _startMaxW => (widget.startActions?.length ?? 0) * widget.actionSlotWidth;
-  double get _endMaxW => (widget.endActions?.length ?? 0) * widget.actionSlotWidth;
+  double get _startMaxW =>
+      (widget.startActions?.length ?? 0) * widget.actionSlotWidth;
+  double get _endMaxW =>
+      (widget.endActions?.length ?? 0) * widget.actionSlotWidth;
 
   @override
   void initState() {
@@ -58,13 +108,29 @@ class _IOSRubberbandSlidableTileState extends State<IOSRubberbandSlidableTile>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextGroup = _IOSSlidableScope.maybeOf(context);
+    if (!identical(_autoCloseGroup, nextGroup)) {
+      _autoCloseGroup?.release(this);
+      _autoCloseGroup = nextGroup;
+    }
+  }
+
+  @override
   void dispose() {
+    _autoCloseGroup?.release(this);
     _controller.dispose();
     super.dispose();
   }
 
   void close() {
     _animateTo(0.0, 0.0);
+  }
+
+  void _onHorizontalDragStart(DragStartDetails details) {
+    _controller.stop();
+    _autoCloseGroup?.claim(this);
   }
 
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
@@ -146,7 +212,9 @@ class _IOSRubberbandSlidableTileState extends State<IOSRubberbandSlidableTile>
             color: Colors.transparent,
             child: Row(
               children: [
-                if (isRight && widget.startActions != null && widget.startActions!.isNotEmpty)
+                if (isRight &&
+                    widget.startActions != null &&
+                    widget.startActions!.isNotEmpty)
                   SizedBox(
                     width: _startMaxW,
                     child: _buildActionRow(
@@ -156,7 +224,9 @@ class _IOSRubberbandSlidableTileState extends State<IOSRubberbandSlidableTile>
                     ),
                   ),
                 const Spacer(),
-                if (isLeft && widget.endActions != null && widget.endActions!.isNotEmpty)
+                if (isLeft &&
+                    widget.endActions != null &&
+                    widget.endActions!.isNotEmpty)
                   SizedBox(
                     width: _endMaxW,
                     child: _buildActionRow(
@@ -174,6 +244,7 @@ class _IOSRubberbandSlidableTileState extends State<IOSRubberbandSlidableTile>
         Transform.translate(
           offset: Offset(offset, 0),
           child: GestureDetector(
+            onHorizontalDragStart: _onHorizontalDragStart,
             onHorizontalDragUpdate: _onHorizontalDragUpdate,
             onHorizontalDragEnd: _onHorizontalDragEnd,
             behavior: HitTestBehavior.opaque,
@@ -206,7 +277,8 @@ class _IOSRubberbandSlidableTileState extends State<IOSRubberbandSlidableTile>
 
         final double buttonProgress = progress <= startThreshold
             ? 0.0
-            : ((progress - startThreshold) / (endThreshold - startThreshold)).clamp(0.0, 1.0);
+            : ((progress - startThreshold) / (endThreshold - startThreshold))
+                .clamp(0.0, 1.0);
 
         if (buttonProgress <= 0.0) {
           return const Expanded(child: SizedBox.shrink());
@@ -214,9 +286,11 @@ class _IOSRubberbandSlidableTileState extends State<IOSRubberbandSlidableTile>
 
         final double curvedVal = Curves.easeOutCubic.transform(buttonProgress);
         final double scale = (curvedVal).clamp(0.0, 1.08);
-        final double circleOpacity = Curves.easeOut.transform(buttonProgress.clamp(0.0, 1.0));
+        final double circleOpacity =
+            Curves.easeOut.transform(buttonProgress.clamp(0.0, 1.0));
         final double labelOpacity = buttonProgress > 0.25
-            ? Curves.easeOut.transform(((buttonProgress - 0.25) / 0.75).clamp(0.0, 1.0))
+            ? Curves.easeOut
+                .transform(((buttonProgress - 0.25) / 0.75).clamp(0.0, 1.0))
             : 0.0;
 
         return Expanded(

@@ -225,6 +225,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   double? _vanishDragStartDy;
   bool _isAtBottom = true; // true when index-0 item is visible
   bool _isRecordingVoice = false;
+  bool _isPinnedBannerExpanded = false;
 
   void _deleteExpiredMessage(String messageId) {
     Future.microtask(() async {
@@ -751,7 +752,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _messageController.removeListener(_onTextChanged);
     _typingTimer?.cancel();
-    _typingChannel?.unsubscribe();
+    final typingChannel = _typingChannel;
+    _typingChannel = null;
+    if (typingChannel != null) {
+      unawaited(ref
+          .read(supabaseServiceProvider)
+          .client
+          .removeChannel(typingChannel));
+    }
     _messageController.dispose();
     _focusNode.dispose();
     _itemPositionsListener.itemPositions.removeListener(_onPositionChange);
@@ -1609,8 +1617,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 _buildInput(theme, hasWallpaper, isBlocked, isBlockedBy),
               ],
             ),
+            if (_isPinnedBannerExpanded && pinnedMessages.length > 1)
+              Positioned.fill(
+                key: const ValueKey('pinned-message-modal-barrier'),
+                child: ModalBarrier(
+                  color: Colors.black.withValues(
+                    alpha: theme.brightness == Brightness.dark ? 0.14 : 0.08,
+                  ),
+                  dismissible: true,
+                  onDismiss: () {
+                    setState(() => _isPinnedBannerExpanded = false);
+                  },
+                ),
+              ),
             if (pinnedMessages.isNotEmpty)
               Positioned(
+                key: const ValueKey('chat-pinned-banner-layer'),
                 top: 0,
                 left: 0,
                 right: 0,
@@ -1621,8 +1643,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   otherUserName: otherUserName,
                   hasWallpaper: hasWallpaper,
                   canManagePins: canManagePins,
+                  isExpanded: _isPinnedBannerExpanded,
+                  onExpandedChanged: (expanded) {
+                    setState(() => _isPinnedBannerExpanded = expanded);
+                  },
                   onJumpToMessage: (pin) => _jumpToPinnedMessage(pin),
                   onUnpinMessage: (messageId) async {
+                    if (_isPinnedBannerExpanded) {
+                      setState(() => _isPinnedBannerExpanded = false);
+                    }
                     try {
                       await ref
                           .read(chatRepositoryProvider)
@@ -1651,7 +1680,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     }
 
-    return scaffold;
+    return PopScope(
+      canPop: !_isPinnedBannerExpanded,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _isPinnedBannerExpanded) {
+          setState(() => _isPinnedBannerExpanded = false);
+        }
+      },
+      child: scaffold,
+    );
   }
 
   // ── Message List ──────────────────────────────────────────────────────────────
@@ -3227,8 +3264,7 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                           await notifier.deleteMessageLocally(message.id);
                         }
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                             content: Text(deletePermanently
                                 ? 'Đã xóa tin nhắn vĩnh viễn'
                                 : 'Đã xóa tin nhắn phía bạn'),
