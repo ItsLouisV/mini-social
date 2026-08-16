@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../core/extensions/string_extension.dart';
 
 class AppAvatar extends StatelessWidget {
-  static const int _sharedDecodeSize = 256;
 
   final String? imageUrl;
   final String? name;
@@ -27,22 +26,18 @@ class AppAvatar extends StatelessWidget {
     Widget avatar;
     final logicalSize = radius * 2;
 
-    if (imageUrl != null && imageUrl!.isNotEmpty) {
+    final hasValidUrl = imageUrl != null &&
+        imageUrl!.isNotEmpty &&
+        (imageUrl!.startsWith('http://') || imageUrl!.startsWith('https://'));
+
+    if (hasValidUrl) {
       avatar = SizedBox.square(
         dimension: logicalSize,
         child: CachedNetworkImage(
           imageUrl: imageUrl!,
-          // Mọi kích thước AppAvatar dùng chung một biến thể cache. Nếu tính
-          // theo radius, cùng URL ở danh sách chat (r=25) và app bar (r=19)
-          // sẽ bị decode lại khi chuyển màn hình và gây chớp placeholder.
-          memCacheWidth: _sharedDecodeSize,
-          memCacheHeight: _sharedDecodeSize,
-          maxWidthDiskCache: _sharedDecodeSize,
-          maxHeightDiskCache: _sharedDecodeSize,
           useOldImageOnUrlChange: true,
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          placeholderFadeInDuration: Duration.zero,
+          fadeInDuration: const Duration(milliseconds: 150),
+          fadeOutDuration: const Duration(milliseconds: 150),
           imageBuilder: (context, imageProvider) => CircleAvatar(
             radius: radius,
             backgroundImage: imageProvider,

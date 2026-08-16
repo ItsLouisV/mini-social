@@ -21,6 +21,7 @@ import '../widgets/slidable_circular_action_button.dart';
 import '../../../../core/services/connectivity_service.dart';
 
 import '../../../../shared/widgets/skeletons/tile_skeleton_loading.dart';
+import '../../../story/presentation/widgets/stories_bar.dart';
 
 class ConversationsScreen extends ConsumerStatefulWidget {
   const ConversationsScreen({super.key});
@@ -278,6 +279,9 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                   onChanged: (val) => setState(() => _searchQuery = val.trim()),
                 ),
               ),
+
+              // Stories Bar (Hàng tạo tin & tin mới có nhạc)
+              if (_searchQuery.isEmpty) const StoriesBar(),
 
               // Conversation list
               Expanded(

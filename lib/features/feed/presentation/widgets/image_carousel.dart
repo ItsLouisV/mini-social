@@ -29,9 +29,14 @@ class ImageCarousel extends StatefulWidget {
   State<ImageCarousel> createState() => _ImageCarouselState();
 }
 
-class _ImageCarouselState extends State<ImageCarousel> {
+class _ImageCarouselState extends State<ImageCarousel>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final mediaList = widget.media;
     if (mediaList.isEmpty) return const SizedBox.shrink();
 
@@ -351,15 +356,9 @@ class _ImageCarouselState extends State<ImageCarousel> {
     } else {
       Widget imageWidget;
       if (isNetwork) {
-        final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-        final logicalWidth = MediaQuery.sizeOf(context).width;
-        final decodeWidth =
-            (logicalWidth * devicePixelRatio).round().clamp(360, 1440).toInt();
         imageWidget = CachedNetworkImage(
           imageUrl: item.url,
           fit: BoxFit.cover,
-          memCacheWidth: decodeWidth,
-          maxWidthDiskCache: 1440,
           useOldImageOnUrlChange: true,
           fadeInDuration: const Duration(milliseconds: 200),
           fadeOutDuration: const Duration(milliseconds: 200),

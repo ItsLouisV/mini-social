@@ -755,10 +755,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final typingChannel = _typingChannel;
     _typingChannel = null;
     if (typingChannel != null) {
-      unawaited(ref
-          .read(supabaseServiceProvider)
-          .client
-          .removeChannel(typingChannel));
+      try {
+        final client = ref.read(supabaseServiceProvider).client;
+        unawaited(client.removeChannel(typingChannel));
+      } catch (_) {}
     }
     _messageController.dispose();
     _focusNode.dispose();

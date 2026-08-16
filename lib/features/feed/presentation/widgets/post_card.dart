@@ -41,10 +41,14 @@ class PostCard extends ConsumerStatefulWidget {
   ConsumerState<PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends ConsumerState<PostCard> {
+class _PostCardState extends ConsumerState<PostCard>
+    with AutomaticKeepAliveClientMixin {
   late DateTime _viewStartTime;
   late final RecommendationRepository _recommendationRepository;
   bool _showRestrictedContent = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -74,6 +78,7 @@ class _PostCardState extends ConsumerState<PostCard> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final post = widget.post;
     final currentUserId = widget.currentUserId;
     final isOwner = post.userId == currentUserId;

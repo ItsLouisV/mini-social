@@ -90,13 +90,81 @@ class RecommendationRepository {
         queryParameters: {'action': 'feed', 'limit': '${limit.clamp(1, 50)}'},
       );
       final raw = response.data is Map ? response.data['posts'] : null;
-      if (raw is! List) return [];
-      return raw
+      if (raw is! List || raw.isEmpty) return [];
+
+      final items = raw
           .map((item) => Map<String, dynamic>.from(item as Map))
           .where((item) {
             final status = item['moderation_status'] ?? 'published';
             return status == 'published' || status == 'shadow_limited';
           })
+          .toList();
+
+      if (items.isEmpty) return [];
+
+      // Detect missing profiles and post_media
+      final missingProfileUserIds = <String>{};
+      final missingMediaPostIds = <String>{};
+
+      for (final item in items) {
+        if (item['profiles'] == null && item['user_id'] != null) {
+          missingProfileUserIds.add(item['user_id'] as String);
+        }
+        final postId = item['id'] ?? item['post_id'];
+        if ((item['post_media'] == null || (item['post_media'] as List).isEmpty) && postId != null) {
+          missingMediaPostIds.add(postId as String);
+        }
+      }
+
+      // Fetch missing profiles in bulk
+      final Map<String, Map<String, dynamic>> fetchedProfiles = {};
+      if (missingProfileUserIds.isNotEmpty) {
+        try {
+          final profilesData = await _client
+              .from('profiles')
+              .select('*')
+              .inFilter('id', missingProfileUserIds.toList());
+          for (final p in profilesData as List) {
+            final map = Map<String, dynamic>.from(p as Map);
+            fetchedProfiles[map['id'] as String] = map;
+          }
+        } catch (e) {
+          debugPrint('Warning: Failed to fetch missing profiles for recommendations: $e');
+        }
+      }
+
+      // Fetch missing media in bulk
+      final Map<String, List<Map<String, dynamic>>> fetchedMedia = {};
+      if (missingMediaPostIds.isNotEmpty) {
+        try {
+          final mediaData = await _client
+              .from('post_media')
+              .select('*')
+              .inFilter('post_id', missingMediaPostIds.toList())
+              .order('order_index');
+          for (final m in mediaData as List) {
+            final map = Map<String, dynamic>.from(m as Map);
+            final pId = map['post_id'] as String;
+            fetchedMedia.putIfAbsent(pId, () => []).add(map);
+          }
+        } catch (e) {
+          debugPrint('Warning: Failed to fetch missing media for recommendations: $e');
+        }
+      }
+
+      // Populate missing profiles & media into items
+      for (final item in items) {
+        final uId = item['user_id'] as String?;
+        final pId = (item['id'] ?? item['post_id']) as String?;
+        if (item['profiles'] == null && uId != null && fetchedProfiles.containsKey(uId)) {
+          item['profiles'] = fetchedProfiles[uId];
+        }
+        if ((item['post_media'] == null || (item['post_media'] as List).isEmpty) && pId != null && fetchedMedia.containsKey(pId)) {
+          item['post_media'] = fetchedMedia[pId];
+        }
+      }
+
+      return items
           .map((item) =>
               PostModel.fromJson(item, isLiked: item['is_liked'] == true))
           .toList(growable: false);
