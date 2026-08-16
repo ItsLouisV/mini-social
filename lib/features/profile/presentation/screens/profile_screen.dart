@@ -16,6 +16,7 @@ import '../../../chat/presentation/widgets/full_screen_image_viewer.dart';
 import '../../domain/profile_model.dart';
 import '../../providers/profile_provider.dart';
 import '../widgets/profile_posts_grid.dart';
+import '../../../music/presentation/widgets/profile_music_card.dart';
 
 class ProfileScreen extends ConsumerWidget {
   final String userId;
@@ -225,11 +226,28 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                     ],
                   ),
+
                   if (profile.bio?.isNotEmpty == true) ...[
                     const SizedBox(height: 12),
                     _ClickableBioText(
                       text: profile.bio!,
                       style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                  if (profile.musicTrack != null) ...[
+                    const SizedBox(height: 8),
+                    ProfileMusicCard(
+                      track: profile.musicTrack!,
+                      isOwner: isMine,
+                      onDelete: isMine
+                          ? () async {
+                              await ref.read(profileRepositoryProvider).updateProfile(
+                                    userId: profile.id,
+                                    clearMusicTrack: true,
+                                  );
+                              ref.invalidate(profileProvider(profile.id));
+                            }
+                          : null,
                     ),
                   ],
                   if (profile.interests.isNotEmpty) ...[

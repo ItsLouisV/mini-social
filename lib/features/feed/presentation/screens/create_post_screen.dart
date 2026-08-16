@@ -26,6 +26,8 @@ import '../../../location/domain/place_model.dart';
 import '../../../location/presentation/location_picker_screen.dart';
 import '../../../location/data/photo_location_service.dart';
 import '../../../location/providers/location_provider.dart';
+import '../../../music/domain/music_track_model.dart';
+import '../../../music/presentation/widgets/music_picker_modal.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
   final PostModel? editPost;
@@ -48,6 +50,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   // Extra status items
   String? _selectedMusic;
+  MusicTrackModel? _selectedMusicTrack;
   PlaceModel? _selectedLocation;
   String? _selectedFeeling;
   final List<String> _taggedFriends = [];
@@ -63,6 +66,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
       _existingMedia = List<PostMedia>.from(widget.editPost!.media);
       _selectedLocation = widget.editPost!.location;
+      _selectedMusicTrack = widget.editPost!.musicTrack;
+      if (_selectedMusicTrack != null) {
+        _selectedMusic = '${_selectedMusicTrack!.title} - ${_selectedMusicTrack!.artist}';
+      }
     }
   }
 
@@ -316,91 +323,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     if (selected != null && mounted) setState(() => _selectedLocation = selected);
   }
 
-  void _showMusicModal() {
-    String searchQuery = '';
-    final songs = [
-      {'title': 'Việt Nam Ơi', 'artist': 'Minh Beta', 'duration': '3:45'},
-      {'title': 'Lạc Trôi', 'artist': 'Sơn Tùng M-TP', 'duration': '3:52'},
-      {'title': 'Chạy Ngay Đi', 'artist': 'Sơn Tùng M-TP', 'duration': '4:08'},
-      {'title': 'Ánh Nắng Của Anh', 'artist': 'Đức Phúc', 'duration': '4:20'},
-      {'title': 'Nơi Này Có Anh', 'artist': 'Sơn Tùng M-TP', 'duration': '4:35'},
-      {'title': 'Ngày Đầu Tiên', 'artist': 'Đức Phúc', 'duration': '3:30'},
-      {'title': 'Có Chắc Yêu Là Đây', 'artist': 'Sơn Tùng M-TP', 'duration': '3:22'},
-    ];
-
-    _showCustomFullScreenModal(
-      title: 'Chọn âm nhạc',
-      subtitle: 'Thêm bài hát nền cho bài viết của bạn',
-      heightFactor: 0.92,
-      bodyBuilder: (ctx, setModalState) {
-        final queryLower = searchQuery.toLowerCase();
-        final filteredSongs = songs.where((s) =>
-            s['title']!.toLowerCase().contains(queryLower) ||
-            s['artist']!.toLowerCase().contains(queryLower)).toList();
-
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Tìm kiếm bài hát, nghệ sĩ...',
-                  prefixIcon: const Icon(CupertinoIcons.search, size: 20),
-                  suffixIcon: searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(CupertinoIcons.clear_thick_circled, size: 18),
-                          onPressed: () {
-                            setModalState(() => searchQuery = '');
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: Theme.of(context).cardColor,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onChanged: (val) {
-                  setModalState(() => searchQuery = val);
-                },
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: filteredSongs.length,
-                itemBuilder: (context, i) {
-                  final song = filteredSongs[i];
-                  final isSelected = _selectedMusic == '${song['title']} - ${song['artist']}';
-                  return ListTile(
-                    leading: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.purple.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(CupertinoIcons.music_note_2, color: Colors.purpleAccent, size: 22),
-                    ),
-                    title: Text(song['title']!, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(song['artist']!),
-                    trailing: isSelected
-                        ? const Icon(CupertinoIcons.checkmark_alt_circle_fill, color: AppColors.primary)
-                        : Text(song['duration']!, style: TextStyle(color: Theme.of(context).hintColor, fontSize: 12)),
-                    onTap: () {
-                      setState(() => _selectedMusic = '${song['title']} - ${song['artist']}');
-                      Navigator.pop(ctx);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
+  Future<void> _showMusicModal() async {
+    final selectedTrack = await MusicPickerModal.show(
+      context,
+      currentTrack: _selectedMusicTrack,
     );
+    if (selectedTrack != null && mounted) {
+      setState(() {
+        _selectedMusicTrack = selectedTrack;
+        _selectedMusic = '${selectedTrack.title} - ${selectedTrack.artist}';
+      });
+    }
   }
 
   void _showFeelingModal() {
@@ -702,7 +635,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                             isSelected: _selectedMusic != null,
                             onTap: _showMusicModal,
                             onClear: _selectedMusic != null
-                                ? () => setState(() => _selectedMusic = null)
+                                ? () => setState(() {
+                                      _selectedMusic = null;
+                                      _selectedMusicTrack = null;
+                                    })
                                 : null,
                             bgColor: chipBgColor,
                             textColor: chipTextColor,

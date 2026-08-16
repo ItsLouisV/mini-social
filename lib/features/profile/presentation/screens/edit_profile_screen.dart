@@ -16,6 +16,9 @@ import '../../../../shared/widgets/app_text_field.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../providers/profile_provider.dart';
+import '../../../music/domain/music_track_model.dart';
+import '../../../music/presentation/widgets/music_picker_modal.dart';
+import '../../../music/presentation/widgets/profile_music_card.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -36,6 +39,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   XFile? _newCover;
   bool _initialized = false;
   List<String> _selectedInterests = [];
+  MusicTrackModel? _selectedMusicTrack;
+  bool _clearMusicTrack = false;
 
   @override
   void dispose() {
@@ -58,6 +63,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           _usernameController.text = profile.username;
           _bioController.text = profile.bio ?? '';
           _selectedInterests = List<String>.from(profile.interests);
+          _selectedMusicTrack = profile.musicTrack;
           _initialized = true;
         }
 
@@ -350,6 +356,88 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                          ),
                        ),
                        
+                       // ── Theme Song Section ────────────────────────
+                       const SizedBox(height: 24),
+                       Row(
+                         children: [
+                           const Icon(
+                             CupertinoIcons.music_note_2,
+                             color: Color(0xFF38BDF8),
+                             size: 18,
+                           ),
+                           const SizedBox(width: 8),
+                           Text(
+                             'NHẠC ĐẠI DIỆN TRANG CÁ NHÂN',
+                             style: TextStyle(
+                               color: Theme.of(context).colorScheme.primary,
+                               fontSize: 13,
+                               fontWeight: FontWeight.w800,
+                               letterSpacing: 1.2,
+                             ),
+                           ),
+                         ],
+                       ),
+                       const SizedBox(height: 12),
+                       Container(
+                         decoration: BoxDecoration(
+                           color: Theme.of(context).cardColor,
+                           borderRadius: BorderRadius.circular(20),
+                           border: Border.all(
+                             color: Theme.of(context).dividerColor.withValues(alpha: 0.08),
+                             width: 1,
+                           ),
+                         ),
+                         padding: const EdgeInsets.all(16),
+                         child: Column(
+                           crossAxisAlignment: CrossAxisAlignment.start,
+                           children: [
+                             if (_selectedMusicTrack != null && !_clearMusicTrack) ...[
+                               ProfileMusicCard(
+                                 track: _selectedMusicTrack!,
+                                 isOwner: true,
+                                 onDelete: () {
+                                   setState(() {
+                                     _clearMusicTrack = true;
+                                     _selectedMusicTrack = null;
+                                   });
+                                 },
+                               ),
+                               const SizedBox(height: 12),
+                             ],
+                             SizedBox(
+                               width: double.infinity,
+                               child: OutlinedButton.icon(
+                                 onPressed: () async {
+                                   final selected = await MusicPickerModal.show(
+                                     context,
+                                     currentTrack: _selectedMusicTrack,
+                                   );
+                                   if (selected != null) {
+                                     setState(() {
+                                       _selectedMusicTrack = selected;
+                                       _clearMusicTrack = false;
+                                     });
+                                   }
+                                 },
+                                 icon: const Icon(CupertinoIcons.music_note, size: 18),
+                                 label: Text(
+                                   _selectedMusicTrack != null
+                                       ? 'Đổi bài hát đại diện'
+                                       : 'Chọn bài hát đại diện',
+                                   style: const TextStyle(fontWeight: FontWeight.bold),
+                                 ),
+                                 style: OutlinedButton.styleFrom(
+                                   padding: const EdgeInsets.symmetric(vertical: 12),
+                                   shape: RoundedRectangleBorder(
+                                     borderRadius: BorderRadius.circular(16),
+                                   ),
+                                 ),
+                               ),
+                             ),
+                           ],
+                         ),
+                       ),
+
                        // ── Interests Wrap section ────────────────────
                        const SizedBox(height: 24),
                        Row(
@@ -543,6 +631,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         avatarUrl: newAvatarUrl,
         coverUrl: newCoverUrl,
         interests: _selectedInterests,
+        musicTrack: _selectedMusicTrack,
+        clearMusicTrack: _clearMusicTrack,
       );
 
       ref.invalidate(profileProvider(userId));

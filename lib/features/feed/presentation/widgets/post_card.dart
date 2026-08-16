@@ -20,6 +20,7 @@ import '../../../../shared/widgets/report_bottom_sheet.dart';
 import '../../../../shared/widgets/restricted_content_reveal.dart';
 
 import '../../../social/data/recommendation_repository.dart';
+import '../../../music/presentation/widgets/profile_music_card.dart';
 
 class PostCard extends ConsumerStatefulWidget {
   final PostModel post;
@@ -448,6 +449,16 @@ class _PostCardState extends ConsumerState<PostCard> {
               media: post.media,
               layoutType: post.layoutType,
               heroScope: '${widget.heroScope}_${post.id}',
+            ),
+
+          // Music Track Player
+          if (post.musicTrack != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: ProfileMusicCard(
+                track: post.musicTrack!,
+                isOwner: false,
+              ),
             ),
 
           // PostActions (Facebook layout)

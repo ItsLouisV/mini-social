@@ -1,3 +1,5 @@
+import '../../music/domain/music_track_model.dart';
+
 class ProfileModel {
   final String id;
   final String username;
@@ -11,6 +13,7 @@ class ProfileModel {
   final int followingCount;
   final List<String> interests;
   final bool isPrivateProfile;
+  final MusicTrackModel? musicTrack;
 
   const ProfileModel({
     required this.id,
@@ -25,6 +28,7 @@ class ProfileModel {
     this.followingCount = 0,
     this.interests = const [],
     this.isPrivateProfile = false,
+    this.musicTrack,
   });
 
   String get displayName => fullName?.isNotEmpty == true ? fullName! : username;
@@ -46,6 +50,9 @@ class ProfileModel {
       followingCount: (json['following_count'] ?? json['followingCount'] ?? 0) as int,
       interests: (json['interests'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       isPrivateProfile: (json['is_private_profile'] ?? json['isPrivateProfile'] ?? false) as bool,
+      musicTrack: json['music_track'] != null
+          ? MusicTrackModel.fromJson(json['music_track'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -59,6 +66,7 @@ class ProfileModel {
         'created_at': createdAt.toIso8601String(),
         'interests': interests,
         'is_private_profile': isPrivateProfile,
+        if (musicTrack != null) 'music_track': musicTrack!.toJson(),
       };
 
   ProfileModel copyWith({
@@ -72,6 +80,8 @@ class ProfileModel {
     int? followingCount,
     List<String>? interests,
     bool? isPrivateProfile,
+    MusicTrackModel? musicTrack,
+    bool clearMusicTrack = false,
   }) {
     return ProfileModel(
       id: id,
@@ -86,6 +96,7 @@ class ProfileModel {
       followingCount: followingCount ?? this.followingCount,
       interests: interests ?? this.interests,
       isPrivateProfile: isPrivateProfile ?? this.isPrivateProfile,
+      musicTrack: clearMusicTrack ? null : (musicTrack ?? this.musicTrack),
     );
   }
 }

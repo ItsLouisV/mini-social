@@ -13,8 +13,9 @@ import '../../../profile/providers/profile_provider.dart';
 import '../../domain/post_model.dart';
 import '../../providers/feed_provider.dart';
 import '../../../social/data/ai_repository.dart';
-import '../widgets/image_carousel.dart';
 import '../../../location/domain/place_model.dart';
+import '../../../music/domain/music_track_model.dart';
+import '../widgets/image_carousel.dart';
 
 class PostPublishPreviewScreen extends ConsumerStatefulWidget {
   final String caption;
@@ -22,6 +23,7 @@ class PostPublishPreviewScreen extends ConsumerStatefulWidget {
   final List<XFile> media;
   final String selectedLayout;
   final String? selectedMusic;
+  final MusicTrackModel? selectedMusicTrack;
   final PlaceModel? selectedLocation;
   final String? selectedFeeling;
   final List<String> taggedFriends;
@@ -35,6 +37,7 @@ class PostPublishPreviewScreen extends ConsumerStatefulWidget {
     this.media = const [],
     required this.selectedLayout,
     this.selectedMusic,
+    this.selectedMusicTrack,
     this.selectedLocation,
     this.selectedFeeling,
     this.taggedFriends = const [],
@@ -185,6 +188,7 @@ class _PostPublishPreviewScreenState
               moderationStatus: modStatus,
               isAiGenerated: _isAiLabelEnabled,
               location: widget.selectedLocation,
+              musicTrack: widget.selectedMusicTrack,
             );
       }
 

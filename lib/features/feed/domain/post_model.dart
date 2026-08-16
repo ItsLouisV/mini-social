@@ -1,3 +1,4 @@
+import '../../music/domain/music_track_model.dart';
 import '../../profile/domain/profile_model.dart';
 import '../../location/domain/place_model.dart';
 
@@ -87,6 +88,7 @@ class PostModel {
   final String? moderationStatus;
   final bool isAiGenerated;
   final PlaceModel? location;
+  final MusicTrackModel? musicTrack;
   final double? recommendationScore;
   final String? recommendationSource;
   final List<String> recommendationReasons;
@@ -108,6 +110,7 @@ class PostModel {
     this.moderationStatus,
     this.isAiGenerated = false,
     this.location,
+    this.musicTrack,
     this.recommendationScore,
     this.recommendationSource,
     this.recommendationReasons = const [],
@@ -160,6 +163,10 @@ class PostModel {
           json['is_ai_generated'].toString() == 'true' ||
           json['is_ai_generated'].toString() == '1',
       location: PlaceModel.fromPostJson(json),
+      musicTrack: json['music_track'] != null
+          ? MusicTrackModel.fromJson(
+              Map<String, dynamic>.from(json['music_track'] as Map))
+          : null,
       recommendationScore: (json['recommendation_score'] as num?)?.toDouble(),
       recommendationSource: json['recommendation_source'] as String?,
       recommendationReasons: (json['recommendation_reasons'] as List?)
@@ -188,6 +195,7 @@ class PostModel {
         'location_latitude': location?.latitude,
         'location_longitude': location?.longitude,
         'location_provider': location?.provider,
+        if (musicTrack != null) 'music_track': musicTrack!.toJson(),
         'recommendation_score': recommendationScore,
         'recommendation_source': recommendationSource,
         'recommendation_reasons': recommendationReasons,
@@ -200,6 +208,7 @@ class PostModel {
     String? layoutType,
     bool? isAiGenerated,
     PlaceModel? location,
+    MusicTrackModel? musicTrack,
   }) {
     return PostModel(
       id: id,
@@ -218,6 +227,7 @@ class PostModel {
       moderationStatus: moderationStatus,
       isAiGenerated: isAiGenerated ?? this.isAiGenerated,
       location: location ?? this.location,
+      musicTrack: musicTrack ?? this.musicTrack,
       recommendationScore: recommendationScore,
       recommendationSource: recommendationSource,
       recommendationReasons: recommendationReasons,

@@ -5,6 +5,7 @@ import '../domain/profile_model.dart';
 import '../../../core/constants/supabase_constants.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../feed/domain/post_model.dart';
+import '../../music/domain/music_track_model.dart';
 
 import '../../../core/services/isar_service.dart';
 
@@ -82,6 +83,8 @@ class ProfileRepository {
     String? coverUrl,
     List<String>? interests,
     bool? isPrivateProfile,
+    MusicTrackModel? musicTrack,
+    bool clearMusicTrack = false,
   }) async {
     final updates = <String, dynamic>{};
     if (fullName != null) updates['full_name'] = fullName;
@@ -91,6 +94,11 @@ class ProfileRepository {
     if (coverUrl != null) updates['cover_url'] = coverUrl;
     if (interests != null) updates['interests'] = interests;
     if (isPrivateProfile != null) updates['is_private_profile'] = isPrivateProfile;
+    if (clearMusicTrack) {
+      updates['music_track'] = null;
+    } else if (musicTrack != null) {
+      updates['music_track'] = musicTrack.toJson();
+    }
 
     await _client
         .from(SupabaseConstants.profilesTable)

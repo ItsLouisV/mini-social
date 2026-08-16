@@ -9,6 +9,7 @@ import '../domain/comment_model.dart';
 import '../domain/post_model.dart';
 import '../../../core/constants/supabase_constants.dart';
 import '../../location/domain/place_model.dart';
+import '../../music/domain/music_track_model.dart';
 
 import '../../../core/services/isar_service.dart';
 import '../../../core/services/sync_engine.dart';
@@ -265,6 +266,7 @@ class PostRepository {
     String? moderationStatus,
     bool isAiGenerated = false,
     PlaceModel? location,
+    MusicTrackModel? musicTrack,
   }) async {
     final userId = currentUserId!;
     final finalPostId = postId ?? _uuid.v4();
@@ -281,6 +283,7 @@ class PostRepository {
       'user_id': userId,
       'caption': finalCaption,
       'privacy': privacy,
+      if (musicTrack != null) 'music_track': musicTrack.toJson(),
       if (isAiGenerated) 'is_ai_generated': true,
       if (moderationScore != null) 'ai_moderation_score': moderationScore,
       if (moderationStatus != null) 'moderation_status': moderationStatus,

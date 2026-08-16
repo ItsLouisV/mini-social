@@ -26,7 +26,7 @@ class MyQrCodeScreen extends ConsumerStatefulWidget {
 class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
   final GlobalKey _qrCardKey = GlobalKey();
 
-  Future<void> _saveQrImage(BuildContext context, ProfileModel profile) async {
+  Future<void> _saveQrImage(ProfileModel profile) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final boundary = _qrCardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
@@ -60,13 +60,12 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Không thể tạo ảnh QR: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Không thể tạo ảnh QR: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -123,7 +122,7 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
                   profileAsync.maybeWhen(
                     data: (profile) {
                       return IconButton(
-                        onPressed: () => _saveQrImage(context, profile),
+                        onPressed: () => _saveQrImage(profile),
                         icon: Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
