@@ -50,17 +50,16 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
           await Clipboard.setData(ClipboardData(text: 'viora://profile/${profile.id}'));
         }
 
-        if (mounted) {
-          ToastService.showSuccess(
-            context,
-            shareSuccess
-                ? 'Đã xuất ảnh mã QR thành công!'
-                : 'Đã tạo ảnh QR & sao chép liên kết vào bộ nhớ tạm!',
-          );
-        }
+        if (!mounted) return;
+        ToastService.showSuccess(
+          context,
+          shareSuccess
+              ? 'Đã xuất ảnh mã QR thành công!'
+              : 'Đã tạo ảnh QR & sao chép liên kết vào bộ nhớ tạm!',
+        );
       }
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
         messenger.showSnackBar(
           SnackBar(
             content: Text('Không thể tạo ảnh QR: $e'),
@@ -150,9 +149,10 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
                 data: (profile) {
                   final qrPayload = 'viora://profile/${profile.id}';
 
-                  // Màu QR tự động theo theme
-                  final qrForegroundColor = isDark ? Colors.white : const Color(0xFF0F172A);
-                  final qrBackgroundColor = isDark ? const Color(0xFF1E293B) : Colors.white;
+                  // Đảm bảo mã QR luôn dùng mảng đen trên nền trắng tiêu chuẩn để
+                  // các thư viện quét QR (ML Kit / Camera / Gallery decoder) đọc được 100%
+                  const qrForegroundColor = Color(0xFF0F172A);
+                  const qrBackgroundColor = Colors.white;
 
                   return SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -253,13 +253,13 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
 
                                 // QR Code
                                 Container(
-                                  padding: const EdgeInsets.all(12),
+                                  padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
                                     color: qrBackgroundColor,
                                     borderRadius: BorderRadius.circular(20),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: colorScheme.shadow.withValues(alpha: 0.1),
+                                        color: Colors.black.withValues(alpha: 0.1),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
@@ -270,11 +270,11 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
                                     version: QrVersions.auto,
                                     size: 175.0,
                                     backgroundColor: qrBackgroundColor,
-                                    eyeStyle: QrEyeStyle(
+                                    eyeStyle: const QrEyeStyle(
                                       eyeShape: QrEyeShape.square,
                                       color: qrForegroundColor,
                                     ),
-                                    dataModuleStyle: QrDataModuleStyle(
+                                    dataModuleStyle: const QrDataModuleStyle(
                                       dataModuleShape: QrDataModuleShape.square,
                                       color: qrForegroundColor,
                                     ),

@@ -76,9 +76,6 @@ Score là tổng của:
 - Topic affinity: caption khớp sở thích đã khai báo.
 - Engagement quality: dùng logarithm của like/comment để tránh bài viral áp đảo tuyến tính.
 - Recency: bài mới nhận bonus giảm dần theo tuổi.
-- Seen penalty: trừ điểm khi bài đã xuất hiện nhiều lần hoặc vừa xuất hiện trong 6 giờ.
-- Consumed cooldown: tạm loại chính bài đã xem/tương tác khỏi candidate, nhưng vẫn
-  dùng event để học sở thích cho những bài mới khác.
 - Negative feedback: loại khỏi candidate thay vì chỉ trừ điểm.
 
 Response có ba trường phục vụ quan sát:
@@ -98,7 +95,6 @@ score = connection
       + ln(1 + likes) × 3
       + ln(1 + comments) × 5
       + 42 / (2 + age_hours)^0,85
-      - seen_penalty
       - author_repeat_penalty
       - restricted_penalty
 ```
@@ -111,8 +107,6 @@ score = connection
 | Discovery | +6 |
 | Khớp sở thích | +14 |
 | Author affinity | 0 đến +18 |
-| Mỗi impression | −6, tối đa −24 |
-| Vừa xuất hiện trong 6 giờ | −20 |
 | Từ bài thứ ba của cùng tác giả | −12 cho mỗi vị trí tiếp theo |
 | `shadow_limited` | −1.000.000 để luôn nằm cuối |
 
@@ -124,9 +118,7 @@ Author affinity dùng interaction 90 ngày:
 - Dwell: tối đa 1,5.
 - Tất cả giảm ảnh hưởng theo thời gian với chu kỳ xấp xỉ 30 ngày.
 
-Trước khi tính score, bài nằm trong consumed cooldown đã bị loại khỏi candidate.
-Vì vậy điểm affinity học được từ bài X chỉ có tác dụng với các bài khác, không
-làm X tự quay lại feed trong thời gian cooldown.
+Lưu ý: Toàn bộ cơ chế trừ điểm đã xem (seen_penalty) và tạm loại bài (cooldown) đã được gỡ bỏ hoàn toàn. Bài viết và avatar tác giả giữ nguyên vị trí ổn định trong feed khi lướt qua hoặc tải lại, giống như trải nghiệm của các mạng xã hội lớn (Facebook/Threads/X).
 
 ## 6. Event contract
 
@@ -146,36 +138,11 @@ Các event hợp lệ:
 
 Mỗi event cần UUID riêng. Server giới hạn tối đa 50 event/request và upsert theo `event_id` để retry an toàn.
 
-### Vòng đời một bài đã xem
+### Vòng đời bài viết và tần suất xuất hiện
 
-Recommendation không được hiểu là “xem bài nào thì tiếp tục tăng điểm chính bài
-đó”. Luồng đúng là:
+Người dùng xem/tương tác bài viết sẽ tích lũy event tương tác (`view_dwell`, `like`, `comment`, v.v.) để học affinity tác giả và sở thích. Bài viết không bị ẩn hay loại khỏi feed bởi cooldown, giúp người dùng không bị mất bài viết hay avatar của tác giả khi cuộn qua.
 
-```text
-Người dùng xem/tương tác bài X
-→ X đi vào cooldown và tạm rời feed
-→ interaction với X làm tăng affinity tác giả/chủ đề
-→ hệ thống dùng affinity đó để tìm bài Y, Z mới
-```
-
-Cooldown hiện tại:
-
-| Hành vi | Khi nào được coi là consumed | Không đề xuất lại |
-|---|---|---:|
-| Xem | `view_dwell >= 2 giây` | 7 ngày |
-| Mở ảnh/media | Có `image_click` | 14 ngày |
-| Like | Có `like` | 30 ngày |
-| Bình luận | Có `comment` | 30 ngày |
-| Chia sẻ | Có `share` | 30 ngày |
-| Không quan tâm/report | Negative event/dismissal | Không đưa lại khi dismissal còn hiệu lực |
-
-Một bài chỉ lướt rất nhanh chưa được coi là consumed và vẫn có thể xuất hiện lại.
-Seen penalty tiếp tục xử lý trường hợp bài đã xuất hiện nhưng chưa đủ điều kiện
-consumed: mỗi impression trừ 6 điểm, tối đa 24 điểm; vừa xuất hiện trong 6 giờ
-trừ thêm 20 điểm.
-
-Cooldown không xóa event. Author affinity vẫn lấy interaction trong 90 ngày với
-time decay và trần 18 điểm, nhưng affinity chỉ nâng các bài khác của tác giả đó.
+Seen penalty xử lý việc giảm nhẹ ưu tiên bài đã xuất hiện gần đây: mỗi impression trừ 6 điểm (tối đa 24 điểm); vừa xuất hiện trong 6 giờ trừ thêm 20 điểm.
 
 ## 7. Cursor pagination
 

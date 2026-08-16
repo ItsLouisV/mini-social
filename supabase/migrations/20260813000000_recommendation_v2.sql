@@ -130,22 +130,6 @@ BEGIN
         WHERE re.user_id = v_user_id AND re.created_at >= NOW() - INTERVAL '30 days'
         GROUP BY re.post_id
     ),
-    consumed AS (
-        -- Một bài đã được tiêu thụ sẽ rời candidate feed trong một khoảng
-        -- cooldown. Event vẫn được giữ để học affinity cho tác giả/chủ đề.
-        SELECT DISTINCT re.post_id
-        FROM public.recommendation_events re
-        WHERE re.user_id = v_user_id
-          AND re.post_id IS NOT NULL
-          AND (
-            (re.event_type IN ('like', 'comment', 'share')
-              AND re.created_at >= NOW() - INTERVAL '30 days')
-            OR (re.event_type = 'image_click'
-              AND re.created_at >= NOW() - INTERVAL '14 days')
-            OR (re.event_type = 'view_dwell' AND re.duration_ms >= 2000
-              AND re.created_at >= NOW() - INTERVAL '7 days')
-          )
-    ),
     scored_base AS (
         SELECT po.id AS post_id, po.user_id, po.caption, po.likes_count, po.comments_count,
             po.privacy, po.created_at,
@@ -175,8 +159,6 @@ BEGIN
                 + LN(1.0 + GREATEST(COALESCE(po.likes_count, 0), 0)) * 3.0
                 + LN(1.0 + GREATEST(COALESCE(po.comments_count, 0), 0)) * 5.0
                 + 42.0 / POWER(2.0 + GREATEST(0.0, EXTRACT(EPOCH FROM (NOW() - po.created_at)) / 3600.0), 0.85)
-                - LEAST(24.0, COALESCE(s.impression_count, 0) * 6.0)
-                - CASE WHEN s.last_impression >= NOW() - INTERVAL '6 hours' THEN 20.0 ELSE 0.0 END
                 - CASE WHEN po.moderation_status = 'shadow_limited' THEN 1000000.0 ELSE 0.0 END
             )::DOUBLE PRECISION AS score
         FROM public.posts po
@@ -185,7 +167,6 @@ BEGIN
         WHERE po.deleted_at IS NULL
           AND COALESCE(po.moderation_status, 'published') IN ('published', 'shadow_limited')
           AND COALESCE(s.negative, FALSE) = FALSE
-          AND po.id NOT IN (SELECT c.post_id FROM consumed c)
           AND po.user_id NOT IN (SELECT target_id FROM my_blocks)
           AND NOT EXISTS (
               SELECT 1 FROM public.recommendation_dismissals rd

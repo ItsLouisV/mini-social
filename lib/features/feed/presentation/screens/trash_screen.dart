@@ -106,13 +106,58 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
         ],
       );
 
-  Widget _content(ThemeData theme, List<PostModel> posts) => ListView.separated(
+  Widget _content(ThemeData theme, List<PostModel> posts) => ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        itemCount: posts.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (_, index) => _postCard(theme, posts[index]),
+        itemCount: posts.length + 1,
+        itemBuilder: (_, index) {
+          if (index == 0) {
+            return _banner(theme);
+          }
+          final post = posts[index - 1];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _postCard(theme, post),
+          );
+        },
       );
+
+  Widget _banner(ThemeData theme) {
+    final colors = theme.colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colors.primary.withValues(alpha: 0.2),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            CupertinoIcons.info_circle_fill,
+            size: 20,
+            color: colors.primary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Tất cả bài viết trong thùng rác sẽ tự động bị xóa vĩnh viễn sau 30 ngày',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colors.onSurface,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _postCard(ThemeData theme, PostModel post) {
     final colors = theme.colorScheme;

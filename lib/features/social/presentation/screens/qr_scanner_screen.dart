@@ -180,12 +180,18 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
 
   /// Nhận diện QR code từ ảnh bằng Google ML Kit (hoạt động tốt nhất với ảnh tĩnh)
   Future<String?> _decodeQrWithMlKit(String imagePath) async {
-    final barcodeScanner = mlkit.BarcodeScanner(formats: [mlkit.BarcodeFormat.qrCode]);
+    final barcodeScanner = mlkit.BarcodeScanner(formats: [
+      mlkit.BarcodeFormat.qrCode,
+      mlkit.BarcodeFormat.all,
+    ]);
     try {
       final inputImage = mlkit.InputImage.fromFilePath(imagePath);
       final List<mlkit.Barcode> barcodes = await barcodeScanner.processImage(inputImage);
-      if (barcodes.isNotEmpty) {
-        return barcodes.first.rawValue;
+      for (final barcode in barcodes) {
+        final val = barcode.rawValue;
+        if (val != null && val.trim().isNotEmpty) {
+          return val;
+        }
       }
     } catch (e) {
       debugPrint('ML Kit barcode scan error: $e');

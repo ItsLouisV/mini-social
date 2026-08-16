@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../auth/providers/auth_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
 
 enum PasscodeMode { setup, verify }
@@ -55,16 +57,28 @@ class PasscodeDialog extends ConsumerStatefulWidget {
 }
 
 class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTickerProviderStateMixin {
-  // Tạm khóa khôi phục bằng email cho tới khi dịch vụ OTP được cấu hình xong.
-  static bool _emailRecoveryEnabled = false;
+  // Toàn cục lưu số lần thử sai và thời điểm hết khóa trong phiên làm việc
+  static int _globalFailedAttempts = 0;
+  static DateTime? _globalLockoutEndTime;
 
   String _passcode = '';
   String _errorMessage = '';
-  int _failedAttempts = 0;
   late PasscodeMode _currentMode;
-  
+  Timer? _countdownTimer;
+
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
+
+  bool get _isLockedOut {
+    if (_globalLockoutEndTime == null) return false;
+    return DateTime.now().isBefore(_globalLockoutEndTime!);
+  }
+
+  Duration get _remainingLockout {
+    if (_globalLockoutEndTime == null) return Duration.zero;
+    final diff = _globalLockoutEndTime!.difference(DateTime.now());
+    return diff.isNegative ? Duration.zero : diff;
+  }
 
   @override
   void initState() {
@@ -81,7 +95,7 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
       TweenSequenceItem(tween: Tween(begin: 10.0, end: -10.0), weight: 2),
       TweenSequenceItem(tween: Tween(begin: -10.0, end: 0.0), weight: 1),
     ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut));
-        
+
     _shakeController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         _shakeController.reset();
@@ -90,15 +104,39 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
         });
       }
     });
+
+    if (_isLockedOut) {
+      _startCountdownTimer();
+    }
   }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _shakeController.dispose();
     super.dispose();
   }
 
+  void _startCountdownTimer() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (!_isLockedOut) {
+        timer.cancel();
+        setState(() {
+          _errorMessage = '';
+        });
+      } else {
+        setState(() {});
+      }
+    });
+  }
+
   void _onKeyPress(String key) {
+    if (_isLockedOut) return;
     if (_passcode.length < 6 && !_shakeController.isAnimating) {
       setState(() {
         _passcode += key;
@@ -112,6 +150,7 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
   }
 
   void _onDelete() {
+    if (_isLockedOut) return;
     if (_passcode.isNotEmpty && !_shakeController.isAnimating) {
       setState(() {
         _passcode = _passcode.substring(0, _passcode.length - 1);
@@ -121,88 +160,66 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
   }
 
   Future<void> _onComplete() async {
+    if (_isLockedOut) return;
     final enteredPasscode = _passcode;
-    
+
     if (_currentMode == PasscodeMode.setup) {
-      // Set new passcode
+      // Thiết lập mã PIN mới
       await ref.read(hiddenChatProvider.notifier).setPasscode(enteredPasscode);
+      _globalFailedAttempts = 0;
+      _globalLockoutEndTime = null;
       if (mounted) {
         Navigator.of(context).pop(true);
       }
     } else {
-      // Verify passcode
+      // Xác thực mã PIN
       final isValid = await ref.read(hiddenChatProvider.notifier).verifyPasscode(enteredPasscode);
       if (!mounted) return;
-      
+
       if (isValid) {
+        _globalFailedAttempts = 0;
+        _globalLockoutEndTime = null;
         Navigator.of(context).pop(true);
       } else {
-        _failedAttempts++;
+        _globalFailedAttempts++;
+        final attempts = _globalFailedAttempts;
+
+        Duration? lockoutDuration;
+        if (attempts == 5) {
+          lockoutDuration = const Duration(minutes: 1); // Sai 5 lần -> Chờ 1 phút
+        } else if (attempts == 6) {
+          lockoutDuration = const Duration(minutes: 5); // Sai tiếp -> Chờ 5 phút
+        } else if (attempts == 7) {
+          lockoutDuration = const Duration(minutes: 30); // Sai tiếp -> Chờ 30 phút
+        } else if (attempts >= 8) {
+          lockoutDuration = const Duration(hours: 1); // Sai tiếp -> Chờ 1 tiếng+
+        }
+
+        if (lockoutDuration != null) {
+          _globalLockoutEndTime = DateTime.now().add(lockoutDuration);
+          _startCountdownTimer();
+        }
+
         setState(() {
-          _errorMessage = 'Mã PIN không chính xác';
+          if (attempts < 5) {
+            _errorMessage = 'Mã PIN không chính xác (Còn ${5 - attempts} lần thử)';
+          } else {
+            _errorMessage = '';
+          }
         });
         _shakeController.forward();
       }
     }
   }
 
+  /// Khôi phục PIN bằng Email/Username + Mật khẩu tài khoản.
+  /// Đã khóa/vô hiệu hóa luồng gửi mã OTP qua Email.
   Future<void> _showForgotPasswordDialog() async {
-    if (!_emailRecoveryEnabled) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Khôi phục mã PIN qua email đang tạm thời không khả dụng.'),
-        ),
-      );
-      return;
-    }
-
-    final email = Supabase.instance.client.auth.currentUser?.email;
-    if (email == null || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không tìm thấy email của tài khoản hiện tại.')),
-      );
-      return;
-    }
-
-    String maskedEmail = email;
-    try {
-      final response = await Supabase.instance.client.functions.invoke(
-        'hidden-passcode-recovery',
-        body: const {'action': 'request'},
-      );
-      final data = response.data;
-      if (data is Map && data['email'] is String) maskedEmail = data['email'] as String;
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_recoveryError(e, 'Không thể gửi mã xác minh.'))),
-      );
-      return;
-    }
-
-    if (!mounted) return;
-    final verified = await _showRecoveryVerificationDialog(maskedEmail);
-    if (verified != true || !mounted) return;
-
-    await ref.read(hiddenChatProvider.notifier).removePasscode();
-    if (!mounted) return;
-    setState(() {
-      _currentMode = PasscodeMode.setup;
-      _passcode = '';
-      _errorMessage = '';
-      _failedAttempts = 0;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Xác thực thành công. Hãy thiết lập mã PIN mới.')),
-    );
-  }
-
-  Future<bool?> _showRecoveryVerificationDialog(String maskedEmail) async {
-    final codeController = TextEditingController();
+    final emailOrUsernameController = TextEditingController();
     final passwordController = TextEditingController();
     final theme = Theme.of(context);
 
-    final result = await showDialog<bool>(
+    final verified = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -221,27 +238,23 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(CupertinoIcons.mail_solid, size: 42, color: theme.colorScheme.primary),
+                      Icon(CupertinoIcons.lock_shield, size: 44, color: theme.colorScheme.primary),
                       const SizedBox(height: 12),
                       Text(
-                        'Mã 6 số đã được gửi tới $maskedEmail. Mã có hiệu lực trong 2 phút.',
+                        'Nhập Email/Tên đăng nhập và Mật khẩu tài khoản để đặt lại mã PIN.',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 20),
                       TextField(
-                        controller: codeController,
+                        controller: emailOrUsernameController,
                         autofocus: true,
-                        keyboardType: TextInputType.number,
+                        keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
-                        maxLength: 6,
-                        textAlign: TextAlign.center,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        style: const TextStyle(fontSize: 22, letterSpacing: 7, fontWeight: FontWeight.w700),
                         decoration: const InputDecoration(
-                          labelText: 'Mã xác minh email',
-                          hintText: '123456',
-                          counterText: '',
+                          labelText: 'Email hoặc Tên đăng nhập',
+                          hintText: 'Nhập email hoặc username',
+                          prefixIcon: Icon(CupertinoIcons.person),
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -264,7 +277,11 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                       ),
                       if (error != null) ...[
                         const SizedBox(height: 12),
-                        Text(error!, textAlign: TextAlign.center, style: TextStyle(color: theme.colorScheme.error)),
+                        Text(
+                          error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: theme.colorScheme.error, fontSize: 13),
+                        ),
                       ],
                     ],
                   ),
@@ -279,10 +296,10 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                   onPressed: isLoading
                       ? null
                       : () async {
-                          final code = codeController.text.trim();
+                          final input = emailOrUsernameController.text.trim();
                           final password = passwordController.text;
-                          if (code.length != 6 || password.isEmpty) {
-                            setStateDialog(() => error = 'Vui lòng nhập đủ mã 6 số và mật khẩu tài khoản.');
+                          if (input.isEmpty || password.isEmpty) {
+                            setStateDialog(() => error = 'Vui lòng nhập Email/Tên đăng nhập và Mật khẩu.');
                             return;
                           }
                           setStateDialog(() {
@@ -290,21 +307,25 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                             error = null;
                           });
                           try {
-                            final response = await Supabase.instance.client.functions.invoke(
-                              'hidden-passcode-recovery',
-                              body: {'action': 'verify', 'code': code, 'password': password},
+                            final authRepo = ref.read(authRepositoryProvider);
+                            final response = await authRepo.signIn(
+                              emailOrUsername: input,
+                              password: password,
                             );
-                            final data = response.data;
-                            if (data is Map && data['verified'] == true) {
-                              if (ctx.mounted) Navigator.pop(ctx, true);
-                              return;
+
+                            final currentUser = Supabase.instance.client.auth.currentUser;
+                            if (response.user == null || response.user!.id != currentUser?.id) {
+                              throw const AuthException('Tài khoản xác minh không trùng khớp với tài khoản hiện tại.');
                             }
-                            throw Exception('Không thể xác minh tài khoản.');
+
+                            if (ctx.mounted) Navigator.pop(ctx, true);
                           } catch (e) {
                             if (!ctx.mounted) return;
                             setStateDialog(() {
                               isLoading = false;
-                              error = _recoveryError(e, 'Mã hoặc mật khẩu không chính xác.');
+                              error = e is AuthException
+                                  ? e.message
+                                  : 'Email/Tên đăng nhập hoặc mật khẩu không chính xác.';
                             });
                           }
                         },
@@ -323,27 +344,60 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
       },
     );
 
-    codeController.dispose();
+    emailOrUsernameController.dispose();
     passwordController.dispose();
-    return result;
+
+    if (verified == true && mounted) {
+      await ref.read(hiddenChatProvider.notifier).removePasscode();
+      _globalFailedAttempts = 0;
+      _globalLockoutEndTime = null;
+      _countdownTimer?.cancel();
+
+      setState(() {
+        _currentMode = PasscodeMode.setup;
+        _passcode = '';
+        _errorMessage = '';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Xác thực thành công. Vui lòng thiết lập mã PIN mới.')),
+        );
+      }
+    }
   }
 
-  String _recoveryError(Object error, String fallback) {
-    if (error is FunctionException) {
-      final details = error.details;
-      if (details is Map && details['error'] is String) {
-        return details['error'] as String;
-      }
-      if (details is String && details.isNotEmpty) return details;
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    if (hours > 0) {
+      return '${twoDigits(hours)}:${twoDigits(minutes)}:${twoDigits(seconds)}';
     }
-    return fallback;
+    return '${twoDigits(minutes)}:${twoDigits(seconds)}';
+  }
+
+  String _getLockoutMessage() {
+    if (!_isLockedOut) return _errorMessage;
+    final formatted = _formatDuration(_remainingLockout);
+    final attempts = _globalFailedAttempts;
+    if (attempts == 5) {
+      return 'Nhập sai 5 lần. Vui lòng thử lại sau $formatted';
+    } else if (attempts == 6) {
+      return 'Nhập sai tiếp. Vui lòng thử lại sau $formatted';
+    } else if (attempts == 7) {
+      return 'Nhập sai tiếp. Vui lòng thử lại sau $formatted';
+    } else {
+      return 'Thử quá nhiều lần. Vui lòng thử lại sau $formatted';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     String displayTitle = widget.title ?? '';
     if (displayTitle.isEmpty) {
       if (_currentMode == PasscodeMode.setup) {
@@ -365,13 +419,13 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
               child: Container(
-                color: isDark 
-                    ? Colors.black.withValues(alpha: 0.25) 
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.25)
                     : Colors.white.withValues(alpha: 0.45),
               ),
             ),
           ),
-          
+
           // Close button
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
@@ -395,17 +449,17 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
             child: Column(
               children: [
                 const Spacer(flex: 2),
-                
+
                 // Icon
                 Icon(
-                  _currentMode == PasscodeMode.setup 
+                  _currentMode == PasscodeMode.setup
                       ? CupertinoIcons.lock_shield
                       : CupertinoIcons.lock,
                   size: 40,
                   color: textColor,
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Title
                 Text(
                   displayTitle,
@@ -446,10 +500,10 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isFilled ? primaryColor : Colors.transparent,
-                              border: isFilled 
-                                  ? null 
+                              border: isFilled
+                                  ? null
                                   : Border.all(
-                                      color: isDark ? Colors.white54 : Colors.black54, 
+                                      color: isDark ? Colors.white54 : Colors.black54,
                                       width: 1.5,
                                     ),
                             ),
@@ -459,33 +513,43 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
                     );
                   },
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Error Text & Forgot Passcode
                 SizedBox(
-                  height: 64, // Đủ chiều cao cho cả 2
+                  height: 72,
                   child: Column(
                     children: [
-                      if (_errorMessage.isNotEmpty)
-                        Text(
-                          _errorMessage,
-                          style: TextStyle(color: theme.colorScheme.error, fontSize: 14),
-                        ),
-                      if (_failedAttempts >= 3 && _currentMode == PasscodeMode.verify)
-                        CupertinoButton(
-                          onPressed: _showForgotPasswordDialog,
-                          padding: const EdgeInsets.only(top: 12),
-                          minimumSize: Size.zero,
+                      if (_isLockedOut || _errorMessage.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: Text(
-                            _emailRecoveryEnabled ? 'Quên mã PIN?' : 'Khôi phục PIN đang tạm khóa',
+                            _getLockoutMessage(),
+                            textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: _emailRecoveryEnabled ? primaryColor : theme.hintColor,
+                              color: theme.colorScheme.error,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
+                      if (_currentMode == PasscodeMode.verify) ...[
+                        const SizedBox(height: 4),
+                        CupertinoButton(
+                          onPressed: _showForgotPasswordDialog,
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          child: Text(
+                            'Quên mã PIN?',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
