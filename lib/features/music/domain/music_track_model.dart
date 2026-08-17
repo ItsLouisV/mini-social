@@ -15,14 +15,38 @@ class MusicTrackModel {
     this.album,
   });
 
+  /// Factory constructor supporting both iTunes API JSON and Deezer API JSON formats
   factory MusicTrackModel.fromJson(Map<String, dynamic> json) {
+    // Deezer vs iTunes Artist parsing
+    String artistName = '';
+    if (json['artist'] is Map) {
+      artistName = (json['artist'] as Map)['name']?.toString() ?? '';
+    } else {
+      artistName = (json['artist'] ?? json['artistName'] ?? '').toString();
+    }
+
+    // Deezer vs iTunes Album & Artwork parsing
+    String? albumName;
+    String artwork = '';
+    if (json['album'] is Map) {
+      final albumMap = json['album'] as Map;
+      albumName = albumMap['title']?.toString();
+      artwork = (albumMap['cover_medium'] ?? albumMap['cover'] ?? '').toString();
+    } else {
+      albumName = json['album']?.toString() ?? json['collectionName']?.toString();
+      artwork = (json['artwork_url'] ?? json['artworkUrl100'] ?? json['artworkUrl'] ?? '').toString();
+    }
+
+    // Preview URL (iTunes uses previewUrl/preview_url; Deezer uses preview)
+    final preview = (json['preview'] ?? json['preview_url'] ?? json['previewUrl'] ?? '').toString();
+
     return MusicTrackModel(
       id: (json['id'] ?? json['trackId'] ?? '').toString(),
-      title: json['title'] ?? json['trackName'] ?? '',
-      artist: json['artist'] ?? json['artistName'] ?? '',
-      previewUrl: json['preview_url'] ?? json['previewUrl'] ?? '',
-      artworkUrl: json['artwork_url'] ?? json['artworkUrl100'] ?? json['artworkUrl'] ?? '',
-      album: json['album'] ?? json['collectionName'],
+      title: (json['title'] ?? json['trackName'] ?? '').toString(),
+      artist: artistName,
+      previewUrl: preview,
+      artworkUrl: artwork,
+      album: albumName,
     );
   }
 
@@ -37,10 +61,16 @@ class MusicTrackModel {
     };
   }
 
-  /// Scale artwork URL from iTunes (e.g. 100x100 -> 300x300)
+  /// Scale artwork URL from iTunes / Deezer (e.g. 100x100 -> 300x300)
   String getHighResArtworkUrl([int size = 300]) {
     if (artworkUrl.isEmpty) return '';
-    return artworkUrl.replaceAll('100x100bb', '${size}x${size}bb');
+    if (artworkUrl.contains('100x100bb')) {
+      return artworkUrl.replaceAll('100x100bb', '${size}x${size}bb');
+    }
+    if (artworkUrl.contains('250x250-000000-80-0-0.jpg')) {
+      return artworkUrl.replaceAll('250x250-000000-80-0-0.jpg', '${size}x$size-000000-80-0-0.jpg');
+    }
+    return artworkUrl;
   }
 
   @override

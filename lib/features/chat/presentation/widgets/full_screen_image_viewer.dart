@@ -15,9 +15,12 @@ class FullScreenImageViewer extends StatefulWidget {
     Navigator.push(
       context,
       PageRouteBuilder(
-        opaque: false,
+        // opaque: true (để Flutter vẽ lại màn hình bên dưới sau khi pop).
+        // opaque: false gây màn hình đen và ẩn avatar/ảnh sau khi đóng viewer.
+        opaque: true,
         maintainState: true,
-        barrierColor: Colors.transparent,
+        transitionDuration: const Duration(milliseconds: 280),
+        reverseTransitionDuration: const Duration(milliseconds: 220),
         pageBuilder: (context, _, __) => FullScreenImageViewer(imageUrl: imageUrl),
         transitionsBuilder: (context, animation, _, child) {
           return FadeTransition(opacity: animation, child: child);
@@ -258,7 +261,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.black,
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
         child: Listener(

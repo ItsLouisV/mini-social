@@ -1,9 +1,11 @@
 import 'dart:async';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/services/audio_player/app_audio_player.dart';
 
 import '../../domain/music_track_model.dart';
 import '../../providers/music_provider.dart';
@@ -34,7 +36,7 @@ class MusicPickerModal extends ConsumerStatefulWidget {
 
 class _MusicPickerModalState extends ConsumerState<MusicPickerModal> {
   final TextEditingController _searchController = TextEditingController();
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  late final AppAudioPlayer _audioPlayer;
   Timer? _debounceTimer;
 
   String? _previewTrackId;
@@ -43,13 +45,7 @@ class _MusicPickerModalState extends ConsumerState<MusicPickerModal> {
   @override
   void initState() {
     super.initState();
-    _audioPlayer.onPlayerStateChanged.listen((state) {
-      if (mounted) {
-        setState(() {
-          _isPlaying = state == PlayerState.playing;
-        });
-      }
-    });
+    _audioPlayer = createAudioPlayer();
   }
 
   @override
@@ -73,12 +69,26 @@ class _MusicPickerModalState extends ConsumerState<MusicPickerModal> {
   Future<void> _togglePreview(MusicTrackModel track) async {
     if (_previewTrackId == track.id && _isPlaying) {
       await _audioPlayer.pause();
+      setState(() {
+        _isPlaying = false;
+      });
     } else {
       await _audioPlayer.stop();
       setState(() {
         _previewTrackId = track.id;
+        _isPlaying = true;
       });
-      await _audioPlayer.play(UrlSource(track.previewUrl));
+      try {
+        await _audioPlayer.play(track.previewUrl);
+      } catch (e) {
+        debugPrint('Audio preview error: $e');
+        if (mounted) {
+          setState(() {
+            _previewTrackId = null;
+            _isPlaying = false;
+          });
+        }
+      }
     }
   }
 
@@ -266,7 +276,44 @@ class _MusicPickerModalState extends ConsumerState<MusicPickerModal> {
                 child: CircularProgressIndicator(color: Color(0xFF38BDF8)),
               ),
               error: (err, _) => Center(
-                child: Text('Lỗi nạp bài hát: $err'),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(CupertinoIcons.wifi_exclamationmark,
+                          size: 44, color: Colors.grey),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Không tải được danh sách nhạc',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        kIsWeb
+                            ? 'Trình duyệt có thể đang chặn kết nối. Hãy thử lại.'
+                            : 'Kiểm tra kết nối mạng và thử lại.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          ref.invalidate(musicSearchResultsProvider);
+                        },
+                        icon: const Icon(CupertinoIcons.refresh, size: 16),
+                        label: const Text('Thử lại'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF38BDF8),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

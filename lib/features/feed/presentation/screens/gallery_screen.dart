@@ -11,28 +11,38 @@ class GalleryScreen extends StatefulWidget {
   final List<String> imageUrls;
   final int initialIndex;
   final String heroScope;
+  /// Hero IDs tương ứng với từng URL trong imageUrls.
+  /// Nếu được truyền vào, Hero tag = '${heroScope}_${heroIds[index]}'.
+  /// Nếu không, fallback về '${heroScope}_${imageUrls[index]}' (tương thích ngược).
+  final List<String>? heroIds;
 
   const GalleryScreen({
     super.key,
     required this.imageUrls,
     required this.heroScope,
     this.initialIndex = 0,
+    this.heroIds,
   });
 
   /// Mở Gallery với hiệu ứng FadeTransition nền trong suốt mượt mà
   static void open(BuildContext context,
       {required List<String> imageUrls,
       required String heroScope,
-      int initialIndex = 0}) {
+      int initialIndex = 0,
+      List<String>? heroIds}) {
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder(
-        opaque: false,
+        // opaque: true (mặc định) để Flutter vẽ lại màn hình bên dưới sau khi pop.
+        // Dùng opaque: false gây lỗi màn hình đen và ẩn Avatar/ảnh sau khi đóng gallery.
+        opaque: true,
         maintainState: true,
-        barrierColor: Colors.transparent,
+        transitionDuration: const Duration(milliseconds: 280),
+        reverseTransitionDuration: const Duration(milliseconds: 220),
         pageBuilder: (context, _, __) => GalleryScreen(
           imageUrls: imageUrls,
           initialIndex: initialIndex,
           heroScope: heroScope,
+          heroIds: heroIds,
         ),
         transitionsBuilder: (context, animation, _, child) {
           return FadeTransition(opacity: animation, child: child);
@@ -269,7 +279,7 @@ class _GalleryScreenState extends State<GalleryScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.black,
       body: Listener(
         onPointerDown: _handlePointerDown,
         onPointerMove: _handlePointerMove,
@@ -302,8 +312,11 @@ class _GalleryScreenState extends State<GalleryScreen>
                             minScale: PhotoViewComputedScale.contained * 0.8,
                             maxScale: PhotoViewComputedScale.covered * 2,
                             heroAttributes: PhotoViewHeroAttributes(
-                              tag:
-                                  '${widget.heroScope}_${widget.imageUrls[index]}',
+                              // Dùng heroId (= item.id) nếu có, mới khớp với tag trong ImageCarousel.
+                              // Fallback về URL nếu gọi từ màn hình khác không truyền heroIds.
+                              tag: widget.heroIds != null && index < widget.heroIds!.length
+                                  ? '${widget.heroScope}_${widget.heroIds![index]}'
+                                  : '${widget.heroScope}_${widget.imageUrls[index]}',
                               flightShuttleBuilder: (flightContext,
                                   animation,
                                   flightDirection,

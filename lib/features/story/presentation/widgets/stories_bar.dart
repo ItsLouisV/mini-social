@@ -55,6 +55,10 @@ class StoriesBar extends ConsumerWidget {
               });
 
               final hasMyStories = myStories != null && myStories.isNotEmpty;
+              final List<List<StoryModel>> allGroups = [
+                if (hasMyStories) myStories,
+                ...friendStoryGroups,
+              ];
 
               return Row(
                 children: [
@@ -117,7 +121,11 @@ class StoriesBar extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.only(right: 14),
                       child: GestureDetector(
-                        onTap: () => StoryViewerModal.show(context, stories: myStories!),
+                        onTap: () => StoryViewerModal.show(
+                          context,
+                          allGroups: allGroups,
+                          initialUserIndex: 0,
+                        ),
                         child: Column(
                           children: [
                             Container(
@@ -166,16 +174,20 @@ class StoriesBar extends ConsumerWidget {
                     ),
 
                   // 2. Vị trí 2+: Tin của Bạn bè (Đã xếp theo thời gian hết hạn giảm dần)
-                  ...friendStoryGroups.map((userStoryList) {
+                  ...friendStoryGroups.asMap().entries.map((entry) {
+                    final friendIdx = entry.key;
+                    final userStoryList = entry.value;
                     final firstStory = userStoryList.first;
                     final author = firstStory.author;
+                    final userIndex = (hasMyStories ? 1 : 0) + friendIdx;
 
                     return Padding(
                       padding: const EdgeInsets.only(right: 14),
                       child: GestureDetector(
                         onTap: () => StoryViewerModal.show(
                           context,
-                          stories: userStoryList,
+                          allGroups: allGroups,
+                          initialUserIndex: userIndex,
                         ),
                         child: Column(
                           children: [

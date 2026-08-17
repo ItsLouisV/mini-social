@@ -1,8 +1,8 @@
-import 'package:audioplayers/audioplayers.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/services/audio_player/app_audio_player.dart';
 import '../../domain/music_track_model.dart';
 
 class ProfileMusicCard extends StatefulWidget {
@@ -27,7 +27,7 @@ class ProfileMusicCard extends StatefulWidget {
 
 class _ProfileMusicCardState extends State<ProfileMusicCard>
     with SingleTickerProviderStateMixin {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  late final AppAudioPlayer _audioPlayer;
   late AnimationController _rotationController;
   bool _isPlaying = false;
   bool _isLoadingAudio = false;
@@ -35,36 +35,11 @@ class _ProfileMusicCardState extends State<ProfileMusicCard>
   @override
   void initState() {
     super.initState();
+    _audioPlayer = createAudioPlayer();
     _rotationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 4),
     );
-
-    _audioPlayer.onPlayerStateChanged.listen((state) {
-      if (mounted) {
-        setState(() {
-          _isPlaying = state == PlayerState.playing;
-          if (state == PlayerState.playing ||
-              state == PlayerState.paused ||
-              state == PlayerState.completed) {
-            _isLoadingAudio = false;
-          }
-        });
-        if (_isPlaying) {
-          _rotationController.repeat();
-        } else {
-          _rotationController.stop();
-        }
-      }
-    });
-
-    if (widget.autoPlay && widget.track.previewUrl.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _playAudioFast();
-        }
-      });
-    }
   }
 
   @override
@@ -78,15 +53,21 @@ class _ProfileMusicCardState extends State<ProfileMusicCard>
   Future<void> _playAudioFast() async {
     if (widget.track.previewUrl.isEmpty) return;
     try {
-      setState(() => _isLoadingAudio = true);
-      await _audioPlayer.setSourceUrl(widget.track.previewUrl);
-      await _audioPlayer.resume();
-    } catch (_) {
-      try {
-        await _audioPlayer.play(UrlSource(widget.track.previewUrl));
-      } catch (_) {}
+      setState(() {
+        _isLoadingAudio = true;
+        _isPlaying = true;
+      });
+      _rotationController.repeat();
+      await _audioPlayer.stop();
+      await _audioPlayer.play(widget.track.previewUrl);
+    } catch (e) {
+      debugPrint('ProfileMusicCard audio error: $e');
+      if (mounted) {
+        setState(() => _isPlaying = false);
+        _rotationController.stop();
+      }
     } finally {
-      if (mounted && _isPlaying) {
+      if (mounted) {
         setState(() => _isLoadingAudio = false);
       }
     }
@@ -95,6 +76,8 @@ class _ProfileMusicCardState extends State<ProfileMusicCard>
   Future<void> _toggleAudio() async {
     if (_isPlaying) {
       await _audioPlayer.pause();
+      setState(() => _isPlaying = false);
+      _rotationController.stop();
     } else {
       await _playAudioFast();
     }

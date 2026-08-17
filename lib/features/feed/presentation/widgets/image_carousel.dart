@@ -466,6 +466,9 @@ class _ImageCarouselState extends State<ImageCarousel>
           GalleryScreen.open(
             context,
             imageUrls: imagesOnly.map((m) => m.url).toList(),
+            // Truyền heroIds để Hero tag khớp chính xác với tag trong _buildMediaItem.
+            // '${heroScope}_${item.id}' tại carousel == '${heroScope}_${heroId}' tại gallery.
+            heroIds: imagesOnly.map((m) => m.id).toList(),
             initialIndex: imageIndex,
             heroScope: widget.heroScope,
           );
