@@ -132,7 +132,15 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
       _playCurrentMusic();
       _startTimer();
     } else if (_userIndex < widget.allGroups.length - 1) {
-      _pageController.nextPage(
+      final nextUser = _userIndex + 1;
+      setState(() {
+        _userIndex = nextUser;
+        _storyIndex = 0;
+      });
+      _playCurrentMusic();
+      _startTimer();
+      _pageController.animateToPage(
+        nextUser,
         duration: const Duration(milliseconds: 500),
         curve: Curves.fastOutSlowIn,
       );
@@ -149,7 +157,15 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
       _playCurrentMusic();
       _startTimer();
     } else if (_userIndex > 0) {
-      _pageController.previousPage(
+      final prevUser = _userIndex - 1;
+      setState(() {
+        _userIndex = prevUser;
+        _storyIndex = 0;
+      });
+      _playCurrentMusic();
+      _startTimer();
+      _pageController.animateToPage(
+        prevUser,
         duration: const Duration(milliseconds: 500),
         curve: Curves.fastOutSlowIn,
       );

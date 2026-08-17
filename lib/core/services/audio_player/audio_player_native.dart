@@ -5,6 +5,19 @@ import 'app_audio_player.dart';
 class NativeAppAudioPlayer implements AppAudioPlayer {
   final AudioPlayer _player = AudioPlayer();
 
+  Source _resolveSource(String url) {
+    if (url.startsWith('http://') ||
+        url.startsWith('https://') ||
+        url.startsWith('blob:')) {
+      return UrlSource(url);
+    }
+    String assetPath = url;
+    if (assetPath.startsWith('assets/')) {
+      assetPath = assetPath.substring(7); // strip 'assets/' prefix for AssetSource
+    }
+    return AssetSource(assetPath);
+  }
+
   @override
   Future<void> play(String url, {bool loop = false}) async {
     try {
@@ -16,7 +29,7 @@ class NativeAppAudioPlayer implements AppAudioPlayer {
         await _player.setReleaseMode(ReleaseMode.release);
       }
       await _player.setVolume(1.0);
-      await _player.play(UrlSource(url));
+      await _player.play(_resolveSource(url));
     } catch (e) {
       debugPrint('Native audio play error: $e');
     }

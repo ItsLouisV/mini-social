@@ -671,8 +671,14 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
       }
     }
 
-    return Scaffold(
-      body: Stack(
+    return Listener(
+      onPointerDown: (_) {
+        if (kIsWeb) {
+          CallAudioService().playRingtone();
+        }
+      },
+      child: Scaffold(
+        body: Stack(
         fit: StackFit.expand,
         children: [
           // Nền mặc định: avatar người gọi được làm mờ hoặc màu nền dự phòng.
@@ -867,8 +873,9 @@ class _IncomingCallScreenState extends ConsumerState<IncomingCallScreen>
           ), // SafeArea close
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

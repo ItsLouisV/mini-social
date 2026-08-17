@@ -1,4 +1,5 @@
-import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
+import '../../../core/services/audio_player/app_audio_player.dart';
 
 /// Quản lý âm thanh cho màn hình call (ringtone gọi đến / dialtone gọi đi)
 class CallAudioService {
@@ -6,7 +7,7 @@ class CallAudioService {
   factory CallAudioService() => _instance;
   CallAudioService._();
 
-  AudioPlayer? _player;
+  AppAudioPlayer? _player;
   int _operation = 0;
 
   /// Phát tiếng chuông gọi đến (lặp lại)
@@ -14,26 +15,22 @@ class CallAudioService {
     final operation = ++_operation;
     await _stop();
     if (operation != _operation) return;
-    final player = AudioPlayer();
+    final player = createAudioPlayer();
     _player = player;
-    await player.setReleaseMode(ReleaseMode.loop);
-    await player.setVolume(1.0);
     if (operation == _operation) {
-      await player.play(AssetSource('sounds/ringtone.mp3'));
+      await player.play('assets/sounds/ringtone.mp3', loop: true);
     }
   }
 
-  /// Phát tiếng gọi đi / dialtone (lặp lại, nhỏ hơn)
+  /// Phát tiếng gọi đi / dialtone (lặp lại)
   Future<void> playDialtone() async {
     final operation = ++_operation;
     await _stop();
     if (operation != _operation) return;
-    final player = AudioPlayer();
+    final player = createAudioPlayer();
     _player = player;
-    await player.setReleaseMode(ReleaseMode.loop);
-    await player.setVolume(0.5);
     if (operation == _operation) {
-      await player.play(AssetSource('sounds/dialtone.mp3'));
+      await player.play('assets/sounds/dialtone.mp3', loop: true);
     }
   }
 
@@ -46,8 +43,10 @@ class CallAudioService {
   Future<void> _stop() async {
     try {
       await _player?.stop();
-      await _player?.dispose();
-    } catch (_) {}
+      _player?.dispose();
+    } catch (e) {
+      debugPrint('CallAudioService stop error: $e');
+    }
     _player = null;
   }
 }

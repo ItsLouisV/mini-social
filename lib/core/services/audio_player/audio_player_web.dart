@@ -6,17 +6,43 @@ import 'app_audio_player.dart';
 class WebAppAudioPlayer implements AppAudioPlayer {
   html.AudioElement? _audioElement;
 
+  html.AudioElement _getOrCreateAudioElement() {
+    if (_audioElement == null) {
+      _audioElement = html.AudioElement()
+        ..crossOrigin = 'anonymous';
+      html.document.body?.children.add(_audioElement!);
+    }
+    return _audioElement!;
+  }
+
+  String _resolveWebUrl(String url) {
+    if (url.startsWith('http://') ||
+        url.startsWith('https://') ||
+        url.startsWith('blob:')) {
+      return url;
+    }
+    if (url.startsWith('assets/')) {
+      return 'assets/$url';
+    }
+    return 'assets/assets/$url';
+  }
+
   @override
   Future<void> play(String url, {bool loop = false}) async {
-    await stop();
-    if (url.isEmpty) return;
+    if (url.isEmpty) {
+      await stop();
+      return;
+    }
     try {
-      _audioElement = html.AudioElement(url)
-        ..loop = loop
-        ..crossOrigin = 'anonymous'
-        ..autoplay = true;
-      _audioElement!.load();
-      await _audioElement!.play();
+      final resolvedUrl = _resolveWebUrl(url);
+      final element = _getOrCreateAudioElement();
+      element.pause();
+      element.loop = loop;
+      element.src = resolvedUrl;
+      element.load();
+      await element.play().catchError((err) {
+        debugPrint('Safari autoplay notice: $err');
+      });
     } catch (e) {
       debugPrint('Web native audio play notice: $e');
     }
@@ -28,9 +54,7 @@ class WebAppAudioPlayer implements AppAudioPlayer {
       try {
         _audioElement!.pause();
         _audioElement!.removeAttribute('src');
-        _audioElement!.load();
       } catch (_) {}
-      _audioElement = null;
     }
   }
 
@@ -44,6 +68,8 @@ class WebAppAudioPlayer implements AppAudioPlayer {
   @override
   void dispose() {
     stop();
+    _audioElement?.remove();
+    _audioElement = null;
   }
 }
 
