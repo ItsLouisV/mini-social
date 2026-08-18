@@ -42,6 +42,7 @@ class StoryRepository {
     String? caption,
     MusicTrackModel? musicTrack,
     String backgroundColor = '#1C1C1E',
+    Map<String, dynamic>? metadata,
   }) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('User not authenticated');
@@ -66,6 +67,7 @@ class StoryRepository {
       if (caption != null && caption.trim().isNotEmpty) 'caption': caption.trim(),
       if (musicTrack != null) 'music_track': musicTrack.toJson(),
       'background_color': backgroundColor,
+      if (metadata != null) 'metadata': metadata,
     };
 
     final result = await _client

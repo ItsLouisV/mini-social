@@ -72,31 +72,40 @@ class StoriesBar extends ConsumerWidget {
                           Stack(
                             alignment: Alignment.bottomRight,
                             children: [
-                              myProfileAsync.when(
-                                data: (profile) => AppAvatar(
-                                  imageUrl: profile.avatarUrl,
-                                  name: profile.displayName,
-                                  radius: 24,
+                              Padding(
+                                padding: const EdgeInsets.all(4.5),
+                                child: myProfileAsync.when(
+                                  data: (profile) => AppAvatar(
+                                    imageUrl: profile.avatarUrl,
+                                    name: profile.displayName,
+                                    radius: 24,
+                                  ),
+                                  loading: () => const CircleAvatar(
+                                      radius: 24, backgroundColor: Colors.grey),
+                                  error: (_, __) => const CircleAvatar(
+                                      radius: 24, backgroundColor: Colors.grey),
                                 ),
-                                loading: () => const CircleAvatar(radius: 24, backgroundColor: Colors.grey),
-                                error: (_, __) => const CircleAvatar(radius: 24, backgroundColor: Colors.grey),
                               ),
-                              Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
+                              Positioned(
+                                right: 2,
+                                bottom: 2,
                                 child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF007AFF),
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: theme.scaffoldBackgroundColor,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
-                                    CupertinoIcons.plus,
-                                    size: 11,
-                                    color: Colors.white,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(3),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF007AFF),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      CupertinoIcons.plus,
+                                      size: 11,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),

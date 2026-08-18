@@ -375,15 +375,27 @@ class _ConversationSettingsScreenState
                                       borderRadius: BorderRadius.circular(9),
                                       child: Hero(
                                         tag: msg.firstMediaUrl!,
-                                        child: CachedNetworkImage(
-                                          imageUrl: msg.firstMediaUrl!,
-                                          fit: BoxFit.cover,
-                                          placeholder: (_, __) => const Center(
-                                              child: CupertinoActivityIndicator(
-                                                  radius: 8)),
-                                          errorWidget: (_, __, ___) =>
-                                              const Icon(CupertinoIcons.photo),
-                                        ),
+                                        child: kIsWeb
+                                            ? Image.network(
+                                                msg.firstMediaUrl!,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) =>
+                                                    const Icon(CupertinoIcons.photo),
+                                                loadingBuilder: (_, child, loadingProgress) {
+                                                  if (loadingProgress == null) return child;
+                                                  return const Center(
+                                                      child: CupertinoActivityIndicator(radius: 8));
+                                                },
+                                              )
+                                            : CachedNetworkImage(
+                                                imageUrl: msg.firstMediaUrl!,
+                                                fit: BoxFit.cover,
+                                                placeholder: (_, __) => const Center(
+                                                    child: CupertinoActivityIndicator(
+                                                        radius: 8)),
+                                                errorWidget: (_, __, ___) =>
+                                                    const Icon(CupertinoIcons.photo),
+                                              ),
                                       ),
                                     ),
                                   ),

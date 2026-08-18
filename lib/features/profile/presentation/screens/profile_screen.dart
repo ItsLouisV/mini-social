@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -173,12 +174,24 @@ class ProfileScreen extends ConsumerWidget {
                 child: profile.coverUrl != null && profile.coverUrl!.isNotEmpty
                     ? Hero(
                         tag: 'cover_${profile.id}',
-                        child: CachedNetworkImage(
-                          imageUrl: profile.coverUrl!,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(color: theme.colorScheme.surfaceContainerHighest),
-                          errorWidget: (_, __, ___) => Container(color: theme.colorScheme.surfaceContainerHighest),
-                        ),
+                        child: kIsWeb
+                            ? Image.network(
+                                profile.coverUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                    color: theme.colorScheme.surfaceContainerHighest),
+                                loadingBuilder: (_, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                      color: theme.colorScheme.surfaceContainerHighest);
+                                },
+                              )
+                            : CachedNetworkImage(
+                                imageUrl: profile.coverUrl!,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => Container(color: theme.colorScheme.surfaceContainerHighest),
+                                errorWidget: (_, __, ___) => Container(color: theme.colorScheme.surfaceContainerHighest),
+                              ),
                       )
                     : Container(
                         decoration: BoxDecoration(

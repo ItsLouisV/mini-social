@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -101,7 +101,7 @@ class _MusicPickerModalState extends ConsumerState<MusicPickerModal> {
     final searchResultsAsync = ref.watch(musicSearchResultsProvider);
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: MediaQuery.of(context).size.height * 0.92,
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -210,19 +210,36 @@ class _MusicPickerModalState extends ConsumerState<MusicPickerModal> {
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              CachedNetworkImage(
-                                imageUrl: track.getHighResArtworkUrl(100),
-                                width: 48,
-                                height: 48,
-                                fit: BoxFit.cover,
-                                placeholder: (_, __) => Container(color: Colors.grey.shade300),
-                                errorWidget: (_, __, ___) => Container(
-                                  width: 48,
-                                  height: 48,
-                                  color: Colors.grey.shade800,
-                                  child: const Icon(CupertinoIcons.music_note, color: Colors.white),
-                                ),
-                              ),
+                              kIsWeb
+                                  ? Image.network(
+                                      track.getHighResArtworkUrl(100),
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        width: 48,
+                                        height: 48,
+                                        color: Colors.grey.shade300,
+                                        child: const Icon(CupertinoIcons.music_note, color: Colors.grey),
+                                      ),
+                                      loadingBuilder: (_, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return Container(color: Colors.grey.shade300);
+                                      },
+                                    )
+                                  : CachedNetworkImage(
+                                      imageUrl: track.getHighResArtworkUrl(100),
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                      placeholder: (_, __) => Container(color: Colors.grey.shade300),
+                                      errorWidget: (_, __, ___) => Container(
+                                        width: 48,
+                                        height: 48,
+                                        color: Colors.grey.shade300,
+                                        child: const Icon(CupertinoIcons.music_note, color: Colors.grey),
+                                      ),
+                                    ),
                               IconButton(
                                 icon: Icon(
                                   isThisPreviewing

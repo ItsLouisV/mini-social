@@ -129,7 +129,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                   )
                                 : (profile.coverUrl != null
                                     ? DecorationImage(
-                                        image: CachedNetworkImageProvider(profile.coverUrl!),
+                                        image: kIsWeb
+                                            ? NetworkImage(profile.coverUrl!)
+                                            : CachedNetworkImageProvider(profile.coverUrl!) as ImageProvider,
                                         fit: BoxFit.cover,
                                       )
                                     : null),

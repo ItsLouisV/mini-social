@@ -1,7 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../providers/chat_provider.dart';
 import '../widgets/full_screen_image_viewer.dart';
@@ -135,12 +136,23 @@ class _SharedMediaScreenState extends ConsumerState<SharedMediaScreen> with Sing
               borderRadius: BorderRadius.circular(12),
               child: Hero(
                 tag: msg.firstMediaUrl!,
-                child: CachedNetworkImage(
-                  imageUrl: msg.firstMediaUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) => const Center(child: CupertinoActivityIndicator()),
-                  errorWidget: (_, __, ___) => const Icon(CupertinoIcons.photo, size: 30),
-                ),
+                child: kIsWeb
+                    ? Image.network(
+                        msg.firstMediaUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(CupertinoIcons.photo, size: 30),
+                        loadingBuilder: (_, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const Center(child: CupertinoActivityIndicator());
+                        },
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: msg.firstMediaUrl!,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => const Center(child: CupertinoActivityIndicator()),
+                        errorWidget: (_, __, ___) => const Icon(CupertinoIcons.photo, size: 30),
+                      ),
               ),
             ),
           ),

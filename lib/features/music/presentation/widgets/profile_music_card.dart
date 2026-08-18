@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../../../core/services/audio_player/app_audio_player.dart';
@@ -140,18 +141,34 @@ class _ProfileMusicCardState extends State<ProfileMusicCard>
                   ),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(isCompact ? 14 : 20),
-                    child: CachedNetworkImage(
-                      imageUrl: widget.track.getHighResArtworkUrl(100),
-                      width: isCompact ? 24 : 36,
-                      height: isCompact ? 24 : 36,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(color: Colors.grey.shade400),
-                      errorWidget: (_, __, ___) => Icon(
-                        CupertinoIcons.music_note,
-                        color: Colors.white,
-                        size: isCompact ? 14 : 18,
-                      ),
-                    ),
+                    child: kIsWeb
+                        ? Image.network(
+                            widget.track.getHighResArtworkUrl(100),
+                            width: isCompact ? 24 : 36,
+                            height: isCompact ? 24 : 36,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Icon(
+                              CupertinoIcons.music_note,
+                              color: Colors.white,
+                              size: isCompact ? 14 : 18,
+                            ),
+                            loadingBuilder: (_, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(color: Colors.grey.shade400);
+                            },
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: widget.track.getHighResArtworkUrl(100),
+                            width: isCompact ? 24 : 36,
+                            height: isCompact ? 24 : 36,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(color: Colors.grey.shade400),
+                            errorWidget: (_, __, ___) => Icon(
+                              CupertinoIcons.music_note,
+                              color: Colors.white,
+                              size: isCompact ? 14 : 18,
+                            ),
+                          ),
                   ),
                 ],
               ),

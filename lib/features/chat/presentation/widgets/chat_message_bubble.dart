@@ -1464,23 +1464,42 @@ class _ImageBubble extends StatelessWidget {
             ),
             child: _isLocalPath && !kIsWeb
                 ? Image.file(io.File(url), fit: BoxFit.cover)
-                : CachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(
-                      width: 200,
-                      height: 160,
-                      color: Colors.grey.withValues(alpha: 0.2),
-                      child: const Center(child: CupertinoActivityIndicator()),
-                    ),
-                    errorWidget: (_, __, ___) => Container(
-                      width: 200,
-                      height: 160,
-                      color: Colors.grey.withValues(alpha: 0.2),
-                      child:
-                          const Icon(CupertinoIcons.photo, color: Colors.grey),
-                    ),
-                  ),
+                : (kIsWeb
+                    ? Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 200,
+                          height: 160,
+                          color: Colors.grey.withValues(alpha: 0.2),
+                          child: const Icon(CupertinoIcons.photo, color: Colors.grey),
+                        ),
+                        loadingBuilder: (_, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            width: 200,
+                            height: 160,
+                            color: Colors.grey.withValues(alpha: 0.2),
+                            child: const Center(child: CupertinoActivityIndicator()),
+                          );
+                        },
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: url,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                          width: 200,
+                          height: 160,
+                          color: Colors.grey.withValues(alpha: 0.2),
+                          child: const Center(child: CupertinoActivityIndicator()),
+                        ),
+                        errorWidget: (_, __, ___) => Container(
+                          width: 200,
+                          height: 160,
+                          color: Colors.grey.withValues(alpha: 0.2),
+                          child: const Icon(CupertinoIcons.photo, color: Colors.grey),
+                        ),
+                      )),
           ),
         ),
       ),

@@ -356,23 +356,43 @@ class _ImageCarouselState extends State<ImageCarousel>
     } else {
       Widget imageWidget;
       if (isNetwork) {
-        imageWidget = CachedNetworkImage(
-          imageUrl: item.url,
-          fit: BoxFit.cover,
-          useOldImageOnUrlChange: true,
-          fadeInDuration: const Duration(milliseconds: 200),
-          fadeOutDuration: const Duration(milliseconds: 200),
-          placeholder: (_, __) => Container(
-            color: AppColors.shimmerBase,
-          ),
-          errorWidget: (_, __, ___) => Container(
-            color: AppColors.surfaceVariant,
-            child: const Icon(
-              CupertinoIcons.photo,
-              color: AppColors.textHint,
+        if (kIsWeb) {
+          imageWidget = Image.network(
+            item.url,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              color: AppColors.surfaceVariant,
+              child: const Icon(
+                CupertinoIcons.photo,
+                color: AppColors.textHint,
+              ),
             ),
-          ),
-        );
+            loadingBuilder: (_, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                color: AppColors.shimmerBase,
+              );
+            },
+          );
+        } else {
+          imageWidget = CachedNetworkImage(
+            imageUrl: item.url,
+            fit: BoxFit.cover,
+            useOldImageOnUrlChange: true,
+            fadeInDuration: const Duration(milliseconds: 200),
+            fadeOutDuration: const Duration(milliseconds: 200),
+            placeholder: (_, __) => Container(
+              color: AppColors.shimmerBase,
+            ),
+            errorWidget: (_, __, ___) => Container(
+              color: AppColors.surfaceVariant,
+              child: const Icon(
+                CupertinoIcons.photo,
+                color: AppColors.textHint,
+              ),
+            ),
+          );
+        }
       } else {
         imageWidget = kIsWeb
             ? Image.network(item.url, fit: BoxFit.cover)

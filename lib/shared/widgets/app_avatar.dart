@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../core/extensions/string_extension.dart';
@@ -31,21 +32,40 @@ class AppAvatar extends StatelessWidget {
         (imageUrl!.startsWith('http://') || imageUrl!.startsWith('https://'));
 
     if (hasValidUrl) {
-      avatar = SizedBox.square(
-        dimension: logicalSize,
-        child: CachedNetworkImage(
-          imageUrl: imageUrl!,
-          useOldImageOnUrlChange: true,
-          fadeInDuration: const Duration(milliseconds: 150),
-          fadeOutDuration: const Duration(milliseconds: 150),
-          imageBuilder: (context, imageProvider) => CircleAvatar(
-            radius: radius,
-            backgroundImage: imageProvider,
+      if (kIsWeb) {
+        avatar = SizedBox.square(
+          dimension: logicalSize,
+          child: ClipOval(
+            child: Image.network(
+              imageUrl!,
+              width: logicalSize,
+              height: logicalSize,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => _buildInitials(context),
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return _buildPlaceholder(context);
+              },
+            ),
           ),
-          placeholder: (context, url) => _buildPlaceholder(context),
-          errorWidget: (context, url, error) => _buildInitials(context),
-        ),
-      );
+        );
+      } else {
+        avatar = SizedBox.square(
+          dimension: logicalSize,
+          child: CachedNetworkImage(
+            imageUrl: imageUrl!,
+            useOldImageOnUrlChange: true,
+            fadeInDuration: const Duration(milliseconds: 150),
+            fadeOutDuration: const Duration(milliseconds: 150),
+            imageBuilder: (context, imageProvider) => CircleAvatar(
+              radius: radius,
+              backgroundImage: imageProvider,
+            ),
+            placeholder: (context, url) => _buildPlaceholder(context),
+            errorWidget: (context, url, error) => _buildInitials(context),
+          ),
+        );
+      }
     } else {
       avatar = _buildInitials(context);
     }

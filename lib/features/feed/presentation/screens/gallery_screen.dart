@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
@@ -306,8 +307,9 @@ class _GalleryScreenState extends State<GalleryScreen>
                         scrollPhysics: const BouncingScrollPhysics(),
                         builder: (BuildContext context, int index) {
                           return PhotoViewGalleryPageOptions(
-                            imageProvider: CachedNetworkImageProvider(
-                                widget.imageUrls[index]),
+                            imageProvider: kIsWeb
+                                ? NetworkImage(widget.imageUrls[index]) as ImageProvider
+                                : CachedNetworkImageProvider(widget.imageUrls[index]),
                             initialScale: PhotoViewComputedScale.contained,
                             minScale: PhotoViewComputedScale.contained * 0.8,
                             maxScale: PhotoViewComputedScale.covered * 2,

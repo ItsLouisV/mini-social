@@ -403,16 +403,31 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
   }
 
   Widget _buildImage() {
-    return _isLocalPath && !kIsWeb
-        ? Image.file(io.File(widget.imageUrl), fit: BoxFit.contain)
-        : CachedNetworkImage(
-            imageUrl: widget.imageUrl,
-            fit: BoxFit.contain,
-            // Triệt tiêu thời gian chuyển đổi của CachedNetworkImage để tránh chớp nháy ảnh khi bắt đầu bay Hero
-            fadeInDuration: Duration.zero,
-            fadeOutDuration: Duration.zero,
-            placeholder: (_, __) => const Center(child: CupertinoActivityIndicator(color: Colors.white)),
-            errorWidget: (_, __, ___) => const Icon(CupertinoIcons.photo, color: Colors.grey, size: 50),
-          );
+    if (_isLocalPath && !kIsWeb) {
+      return Image.file(io.File(widget.imageUrl), fit: BoxFit.contain);
+    }
+    if (kIsWeb) {
+      return Image.network(
+        widget.imageUrl,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) =>
+            const Icon(CupertinoIcons.photo, color: Colors.grey, size: 50),
+        loadingBuilder: (_, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const Center(
+              child: CupertinoActivityIndicator(color: Colors.white));
+        },
+      );
+    }
+    return CachedNetworkImage(
+      imageUrl: widget.imageUrl,
+      fit: BoxFit.contain,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (_, __) =>
+          const Center(child: CupertinoActivityIndicator(color: Colors.white)),
+      errorWidget: (_, __, ___) =>
+          const Icon(CupertinoIcons.photo, color: Colors.grey, size: 50),
+    );
   }
 }

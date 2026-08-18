@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -271,19 +272,36 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
   Widget _thumbnail(ThemeData theme, PostModel post) => Stack(children: [
         AspectRatio(
           aspectRatio: 2.15,
-          child: CachedNetworkImage(
-            imageUrl: post.media.first.thumbnailUrl ?? post.media.first.url,
-            fit: BoxFit.cover,
-            placeholder: (_, __) => Container(
-                color: theme.colorScheme.surfaceContainerHighest,
-                alignment: Alignment.center,
-                child: const CupertinoActivityIndicator()),
-            errorWidget: (_, __, ___) => Container(
-                color: theme.colorScheme.surfaceContainerHighest,
-                alignment: Alignment.center,
-                child: Icon(CupertinoIcons.photo,
-                    color: theme.colorScheme.onSurfaceVariant)),
-          ),
+          child: kIsWeb
+              ? Image.network(
+                  post.media.first.thumbnailUrl ?? post.media.first.url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      alignment: Alignment.center,
+                      child: Icon(CupertinoIcons.photo,
+                          color: theme.colorScheme.onSurfaceVariant)),
+                  loadingBuilder: (_, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: const CupertinoActivityIndicator());
+                  },
+                )
+              : CachedNetworkImage(
+                  imageUrl: post.media.first.thumbnailUrl ?? post.media.first.url,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      alignment: Alignment.center,
+                      child: const CupertinoActivityIndicator()),
+                  errorWidget: (_, __, ___) => Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      alignment: Alignment.center,
+                      child: Icon(CupertinoIcons.photo,
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
         ),
         if (post.media.length > 1)
           Positioned(
