@@ -22,7 +22,33 @@ class _ModerationNotificationDetailScreenState extends ConsumerState<ModerationN
     controller.dispose();if(submitted==true){await _load();if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Kháng cáo đã được gửi. Chúng tôi sẽ thông báo khi có kết quả.')));}
   }
 
-  @override Widget build(BuildContext context){final theme=Theme.of(context);return Scaffold(appBar:AppBar(title:const Text('Chi tiết thông báo'),centerTitle:false),body:_loading?const Center(child:CircularProgressIndicator()):_error!=null?Center(child:Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisSize:MainAxisSize.min,children:[const Icon(CupertinoIcons.exclamationmark_circle,size:44),const SizedBox(height:12),Text(_error.toString(),textAlign:TextAlign.center),TextButton(onPressed:_load,child:const Text('Thử lại'))])):_detail==null?const Center(child:Text('Thông báo không tồn tại hoặc bạn không có quyền xem.')):_buildContent(theme));}
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chi tiết thông báo'), centerTitle: false),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(CupertinoIcons.exclamationmark_circle, size: 44),
+                        const SizedBox(height: 12),
+                        Text(_error.toString(), textAlign: TextAlign.center),
+                        TextButton(onPressed: _load, child: const Text('Thử lại')),
+                      ],
+                    ),
+                  ),
+                )
+              : _detail == null
+                  ? const Center(child: Text('Thông báo không tồn tại hoặc bạn không có quyền xem.'))
+                  : _buildContent(theme),
+    );
+  }
 
   Widget _buildContent(ThemeData theme){final detail=_detail!;final action=Map<String,dynamic>.from(detail['action'] as Map? ?? {});final report=Map<String,dynamic>.from(detail['report'] as Map? ?? {});final content=Map<String,dynamic>.from(detail['reported_content'] as Map? ?? {});final appeal=detail['appeal'] is Map?Map<String,dynamic>.from(detail['appeal'] as Map):null;final canAppeal=detail['can_appeal']==true;final actionType=action['action_type']?.toString();return RefreshIndicator(onRefresh:_load,child:ListView(padding:const EdgeInsets.all(18),children:[Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:theme.colorScheme.primaryContainer,borderRadius:BorderRadius.circular(20)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(actionType=='restore'?CupertinoIcons.checkmark_shield_fill:CupertinoIcons.exclamationmark_shield_fill,color:theme.colorScheme.primary,size:34),const SizedBox(height:14),Text(_decisionLabel(actionType),style:theme.textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.w800)),const SizedBox(height:7),Text(detail['content']?.toString()??'Quyết định kiểm duyệt đã được cập nhật.',style:theme.textTheme.bodyMedium)])),const SizedBox(height:16),_InfoCard(title:'Nội dung liên quan',icon:CupertinoIcons.doc_text,children:[_InfoRow(label:'Loại nội dung',value:action['content_type']?.toString()??'—'),_InfoRow(label:'Nội dung',value:content['text']?.toString()??'Nội dung không còn khả dụng'),_InfoRow(label:'Lý do báo cáo',value:report['reason']?.toString()??'—')]),const SizedBox(height:12),_InfoCard(title:'Kết quả xem xét',icon:CupertinoIcons.shield,children:[_InfoRow(label:'Quyết định',value:_decisionLabel(actionType)),_InfoRow(label:'Lý do xử lý',value:action['reason']?.toString()??'Theo Tiêu chuẩn cộng đồng'),_InfoRow(label:'Thời gian',value:_formatDate(action['created_at']))]),if(appeal!=null)...[const SizedBox(height:12),_InfoCard(title:'Kháng cáo của bạn',icon:CupertinoIcons.arrow_counterclockwise,children:[_InfoRow(label:'Trạng thái',value:_appealStatus(appeal['status']?.toString())),_InfoRow(label:'Nội dung',value:appeal['appeal_reason']?.toString()??'—'),if(appeal['reviewer_note']!=null)_InfoRow(label:'Phản hồi',value:appeal['reviewer_note'].toString())])],if(canAppeal)...[const SizedBox(height:22),FilledButton.icon(onPressed:_openAppealSheet,icon:const Icon(CupertinoIcons.arrow_counterclockwise),label:const Text('Kháng cáo quyết định'),style:FilledButton.styleFrom(minimumSize:const Size.fromHeight(52)))],const SizedBox(height:36)]));}
   String _appealStatus(String? status)=>switch(status){'pending'=>'Đang chờ xem xét','approved'=>'Đã chấp nhận','rejected'=>'Đã từ chối',_=>'Không xác định'};
