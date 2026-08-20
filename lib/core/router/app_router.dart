@@ -40,6 +40,7 @@ import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/social/presentation/screens/follow_list_screen.dart';
 import '../../features/social/presentation/screens/friends_list_screen.dart';
 import '../../features/social/presentation/screens/notification_screen.dart';
+import '../../features/social/presentation/screens/moderation_notification_detail_screen.dart';
 import '../../features/social/presentation/screens/my_qr_code_screen.dart';
 import '../../features/social/presentation/screens/qr_scanner_screen.dart';
 import '../../features/social/providers/follow_provider.dart';
@@ -462,6 +463,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: '/notifications',
                 pageBuilder: (_, __) =>
                     const CupertinoPage(child: NotificationScreen()),
+                routes: [
+                  GoRoute(
+                    path: 'moderation/:notificationId',
+                    parentNavigatorKey: _rootNavigatorKey,
+                    pageBuilder: (_, state) => CupertinoPage(
+                      child: ModerationNotificationDetailScreen(
+                        notificationId: state.pathParameters['notificationId']!,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

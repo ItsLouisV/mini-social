@@ -126,6 +126,30 @@ class SocialRepository {
         .eq('is_read', false);
   }
 
+  Future<Map<String, dynamic>?> getModerationNotificationDetail(
+    String notificationId,
+  ) async {
+    final data = await _client.rpc(
+      'get_my_moderation_notification',
+      params: {'p_notification_id': notificationId},
+    );
+    if (data == null) return null;
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<void> submitModerationAppeal({
+    required String notificationId,
+    required String reason,
+  }) async {
+    await _client.rpc(
+      'submit_my_moderation_appeal',
+      params: {
+        'p_notification_id': notificationId,
+        'p_reason': reason,
+      },
+    );
+  }
+
   Future<void> deleteNotification(String notificationId) async {
     await _client
         .from(SupabaseConstants.notificationsTable)

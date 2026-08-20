@@ -242,6 +242,12 @@ class _NotificationTile extends ConsumerWidget {
             }
           }
           switch (type) {
+            case 'moderation':
+              final notificationId = notification['id'] as String?;
+              if (notificationId != null) {
+                context.push('/notifications/moderation/$notificationId');
+              }
+              break;
             case 'like':
             case 'comment':
             case 'reply':
