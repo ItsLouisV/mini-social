@@ -249,7 +249,7 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
       final uid = client.auth.currentUser?.id ?? 'anonymous';
       final ext = picked.name.split('.').last.toLowerCase();
       final fileName = '$uid/${_uuid.v4()}.$ext';
-      final bucket = SupabaseConstants.wallpapersBucket;
+      const bucket = SupabaseConstants.wallpapersBucket;
 
       if (kIsWeb) {
         final bytes = await picked.readAsBytes();
@@ -805,8 +805,6 @@ class _WallpaperPreviewScreenState extends State<_WallpaperPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Stack(
       fit: StackFit.expand,
@@ -992,11 +990,11 @@ class _WallpaperPreviewScreenState extends State<_WallpaperPreviewScreen> {
                   },
                 ),
               ),
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Áp dụng cho cả hai bên',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
@@ -1011,8 +1009,8 @@ class _WallpaperPreviewScreenState extends State<_WallpaperPreviewScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    const Text(
+                    SizedBox(height: 2),
+                    Text(
                       'Cả bạn và người kia đều thấy hình nền này trong chat',
                       style: TextStyle(
                         color: Colors.white70,

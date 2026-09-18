@@ -133,7 +133,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
     final themeName = themeState[widget.conversationId] ?? 'blue';
     final accentColor = getChatThemePrimaryColor(themeName);
 
-    String _getSenderName(MessageModel msg) {
+    String getSenderName(MessageModel msg) {
       if (msg.senderId == widget.currentUserId) {
         return 'Bạn';
       }
@@ -142,7 +142,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
           : widget.otherUserName;
     }
 
-    String _getContentSnippet(MessageModel msg) {
+    String getContentSnippet(MessageModel msg) {
       if (msg.isText) {
         final text = msg.content?.trim();
         return text?.isNotEmpty == true ? text! : '[Tin nhắn]';
@@ -165,9 +165,9 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
       return '[Tin nhắn]';
     }
 
-    final contentSnippet = _getContentSnippet(latestMsg);
+    final contentSnippet = getContentSnippet(latestMsg);
 
-    final senderName = _getSenderName(latestMsg);
+    final senderName = getSenderName(latestMsg);
 
     // Keep the surface translucent so the conversation remains perceptible
     // underneath, like a sheet of liquid glass.
@@ -362,11 +362,10 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                           else if (widget.canManagePins)
                             CupertinoButton(
                               padding: EdgeInsets.zero,
-                              minSize: 28,
                               onPressed: () {
                                 HapticFeedback.lightImpact();
                                 widget.onUnpinMessage(latestPin.messageId);
-                              },
+                              }, minimumSize: const Size(28, 28),
                               child: const Icon(
                                 CupertinoIcons.trash_fill,
                                 size: 18,
@@ -406,9 +405,9 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                           final msg = pin.message;
                           if (msg == null) return const SizedBox.shrink();
 
-                          final pinSnippet = _getContentSnippet(msg);
+                          final pinSnippet = getContentSnippet(msg);
 
-                          final pinSender = _getSenderName(msg);
+                          final pinSender = getSenderName(msg);
 
                           // final pinMedia = msg.firstMediaUrl;
 
@@ -475,7 +474,7 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                       width: 28,
                                       height: 28,
                                       child: FittedBox(
-                                        child: pinMediaPreview!,
+                                        child: pinMediaPreview,
                                       ),
                                     ),
                                   ],
@@ -484,11 +483,10 @@ class _ChatPinnedBannerState extends ConsumerState<ChatPinnedBanner> {
                                     const SizedBox(width: 4),
                                     CupertinoButton(
                                       padding: EdgeInsets.zero,
-                                      minSize: 28,
                                       onPressed: () {
                                         HapticFeedback.lightImpact();
                                         widget.onUnpinMessage(pin.messageId);
-                                      },
+                                      }, minimumSize: const Size(28, 28),
                                       child: const Icon(
                                         CupertinoIcons.trash,
                                         size: 15,

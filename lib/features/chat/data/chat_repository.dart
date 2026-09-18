@@ -122,7 +122,7 @@ class ChatRepository {
           '⚠️ [ChatRepository] Failed fetching online conversations, loading from local DB: $e');
       // Offline fallback: read from local DB
       if (_isarService != null) {
-        final cached = _isarService!.getConversations();
+        final cached = _isarService.getConversations();
         return cached
             .map((c) => ConversationModel(
                   id: c['id'] as String,
@@ -955,7 +955,7 @@ class ChatRepository {
     if (offset == 0 && _upstashRedis != null) {
       try {
         final cachedJsonList =
-            await _upstashRedis!.getCachedRecentMessages(conversationId);
+            await _upstashRedis.getCachedRecentMessages(conversationId);
         if (cachedJsonList.isNotEmpty) {
           final cachedMsgs =
               cachedJsonList.map((e) => MessageModel.fromJson(e)).toList();
@@ -995,13 +995,13 @@ class ChatRepository {
                   'media_urls': m.mediaUrls,
                 })
             .toList();
-        await _isarService!.saveMessages(conversationId, jsonMsgs);
-        await _isarService!
+        await _isarService.saveMessages(conversationId, jsonMsgs);
+        await _isarService
             .pruneConversationMessages(conversationId, maxKeep: 100);
       }
 
       if (offset == 0 && _upstashRedis != null && data.isNotEmpty) {
-        _upstashRedis!
+        _upstashRedis
             .cacheMessagesList(
           conversationId,
           List<Map<String, dynamic>>.from(data),
@@ -1017,7 +1017,7 @@ class ChatRepository {
           '⚠️ [ChatRepository] Offline fallback for messages: loading from local DB: $e');
       // Offline fallback: load from local DB
       if (_isarService != null) {
-        final cached = _isarService!
+        final cached = _isarService
             .getMessages(conversationId, limit: limit, offset: offset);
         return cached.map((m) {
           final rawMediaUrls = m['media_urls'];
@@ -1095,7 +1095,7 @@ class ChatRepository {
   }) async {
     final userId = currentUserId;
     if (userId != null && _upstashRedis != null) {
-      final allowed = await _upstashRedis!.checkRateLimit(
+      final allowed = await _upstashRedis.checkRateLimit(
         userId,
         maxRequests: 5,
         windowSeconds: 15,
@@ -1161,7 +1161,7 @@ class ChatRepository {
       ]);
 
       if (_upstashRedis != null) {
-        _upstashRedis!
+        _upstashRedis
             .cacheRecentMessage(conversationId, data)
             .catchError((err) {
           debugPrint(
@@ -1176,7 +1176,7 @@ class ChatRepository {
 
       // Đẩy vào Outbox Sync Queue khi không có mạng
       if (_syncEngine != null) {
-        await _syncEngine!.enqueueAction(
+        await _syncEngine.enqueueAction(
           actionType: 'sendMessage',
           payload: {
             'conversation_id': conversationId,
@@ -1251,7 +1251,7 @@ class ChatRepository {
 
     // Invalidate Redis cache so next load fetches fresh from Supabase (contains media_urls)
     if (_upstashRedis != null) {
-      _upstashRedis!.invalidateMessagesCache(conversationId).catchError((err) {
+      _upstashRedis.invalidateMessagesCache(conversationId).catchError((err) {
         debugPrint(
             '⚠️ [ChatRepository] Lỗi invalidate Redis cache (image): $err');
       });
@@ -1307,7 +1307,7 @@ class ChatRepository {
 
     // Invalidate Redis cache so next load fetches fresh from Supabase (contains media_urls)
     if (_upstashRedis != null) {
-      _upstashRedis!.invalidateMessagesCache(conversationId).catchError((err) {
+      _upstashRedis.invalidateMessagesCache(conversationId).catchError((err) {
         debugPrint(
             '⚠️ [ChatRepository] Lỗi invalidate Redis cache (voice): $err');
       });
@@ -1354,7 +1354,7 @@ class ChatRepository {
 
     // 3. Invalidate Redis cache so next load fetches fresh is_seen: true from Supabase
     if (_upstashRedis != null) {
-      _upstashRedis!.invalidateMessagesCache(conversationId).catchError((err) {
+      _upstashRedis.invalidateMessagesCache(conversationId).catchError((err) {
         debugPrint(
             '⚠️ [ChatRepository.markAsSeen] Lỗi invalidate Redis cache: $err');
       });

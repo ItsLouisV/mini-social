@@ -72,7 +72,7 @@ class _VoiceRecorderBarState extends State<VoiceRecorderBar>
   Future<void> _startRecording() async {
     try {
       if (await _audioRecorder.hasPermission()) {
-        final RecordConfig config = const RecordConfig(
+        const RecordConfig config = RecordConfig(
           encoder: AudioEncoder.aacLc,
           bitRate: 128000,
           sampleRate: 48000,

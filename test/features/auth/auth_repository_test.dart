@@ -1,3 +1,4 @@
+// ignore_for_file: depend_on_referenced_packages
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -43,18 +44,6 @@ class FakeGoTrueClient extends Fake implements GoTrueClient {
     lastProvider = provider;
     lastRedirectTo = redirectTo;
     return OAuthResponse(url: 'https://fake-supabase-oauth-url.com', provider: provider);
-  }
-
-  @override
-  Future<bool> signInWithOAuth(
-    OAuthProvider provider, {
-    String? redirectTo,
-    String? scopes,
-    Map<String, String>? queryParams,
-  }) async {
-    lastProvider = provider;
-    lastRedirectTo = redirectTo;
-    return true;
   }
 }
 

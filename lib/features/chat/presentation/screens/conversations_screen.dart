@@ -360,20 +360,6 @@ class _ConversationTile extends ConsumerWidget {
     required this.onTap,
   });
 
-  double _actionExtentRatio(
-    BuildContext context,
-    int actionCount,
-  ) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-
-    // Không chỉ circle 42px.
-    // Cần cả khoảng trống xung quanh action để swipe nhìn thoáng.
-    const actionSlotWidth = 72.0;
-
-    final requiredWidth = actionSlotWidth * actionCount;
-
-    return (requiredWidth / screenWidth).clamp(0.0, 1.0);
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -533,7 +519,7 @@ class _ConversationTile extends ConsumerWidget {
                       ? conv.groupAvatarUrl
                       : conv.otherUser?.avatarUrl,
                   name: conv.isGroup
-                      ? (conv.groupName ?? 'Group')
+                      ? conv.groupName
                       : conv.otherUser?.displayName,
                   radius: 25,
                 ),
@@ -550,7 +536,7 @@ class _ConversationTile extends ConsumerWidget {
                           Expanded(
                             child: Text(
                               conv.isGroup
-                                  ? (conv.groupName ?? 'Nhóm trò chuyện')
+                                  ? conv.groupName
                                   : (conv.otherUser?.displayName ??
                                       'Người dùng'),
                               style: TextStyle(

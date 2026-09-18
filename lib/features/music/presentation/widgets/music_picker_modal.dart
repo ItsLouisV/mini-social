@@ -306,12 +306,12 @@ class _MusicPickerModalState extends ConsumerState<MusicPickerModal> {
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                       const SizedBox(height: 6),
-                      Text(
+                      const Text(
                         kIsWeb
                             ? 'Trình duyệt có thể đang chặn kết nối. Hãy thử lại.'
                             : 'Kiểm tra kết nối mạng và thử lại.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.grey, fontSize: 13),
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(

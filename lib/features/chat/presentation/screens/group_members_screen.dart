@@ -373,8 +373,9 @@ class _GroupMembersScreenState extends ConsumerState<GroupMembersScreen> {
             member.userId,
           );
       _refreshMembers();
-      if (mounted)
+      if (mounted) {
         ToastService.showSuccess(context, 'Đã bỏ hạn chế thành viên');
+      }
     } catch (e) {
       if (mounted) ToastService.showError(context, 'Lỗi bỏ hạn chế: $e');
     }

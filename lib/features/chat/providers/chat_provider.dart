@@ -353,38 +353,6 @@ class ChatMessagesNotifier
     );
   }
 
-  /// Sync ngầm — không block UI
-  void _syncInBackground(
-    String conversationId,
-    ChatSyncService? sync,
-    bool isOnline,
-  ) {
-    if (!isOnline || sync == null) return;
-
-    Future.microtask(() async {
-      try {
-        final synced = await sync.syncMessages(conversationId);
-        final current = state.valueOrNull;
-        if (current == null || synced.isEmpty) return;
-
-        final deletedIds = await _getDeletedMessageIds();
-        // Merge: thay thế bằng synced messages nếu có nhiều hơn
-        final existingIds = current.messages.map((m) => m.id).toSet();
-        final newOnes = synced
-            .where((m) =>
-                !existingIds.contains(m.id) && !deletedIds.contains(m.id))
-            .toList();
-
-        if (newOnes.isNotEmpty) {
-          final merged = [...newOnes, ...current.messages];
-          merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          state = AsyncData(current.copyWith(messages: merged));
-        }
-      } catch (_) {
-        // Sync thất bại → giữ cache
-      }
-    });
-  }
 
   Future<MessageModel> _fetchFullMessage(String id) async {
     final data = await ref

@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -24,7 +23,6 @@ import '../../domain/conversation_member_model.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
 import '../../domain/group_permissions.dart';
-import '../widgets/message_context_menu_route.dart';
 import '../widgets/passcode_dialog.dart';
 import '../widgets/group_member_actions.dart';
 
@@ -99,7 +97,7 @@ class _ConversationSettingsScreenState
           final otherUser = conv.otherUser;
           final otherUserName = otherUser?.displayName ?? 'Người dùng';
           final chatTitle =
-              isGroup ? (conv.groupName ?? 'Nhóm trò chuyện') : otherUserName;
+              isGroup ? conv.groupName : otherUserName;
           final otherUserUsername = otherUser?.username ?? '';
           final avatarUrl =
               isGroup ? conv.groupAvatarUrl : otherUser?.avatarUrl;
@@ -1304,7 +1302,6 @@ class _ConversationSettingsScreenState
     );
   }
 
-  bool _isLoading = true;
 
   void _showMemberContextMenu(
     BuildContext context,
@@ -1668,8 +1665,9 @@ class _ConversationSettingsScreenState
                           context, 'Đã tắt tiếng $name (${entry.$1})');
                     }
                   } catch (e) {
-                    if (context.mounted)
+                    if (context.mounted) {
                       ToastService.showError(context, 'Lỗi: $e');
+                    }
                   }
                 },
                 child: Text(entry.$1),
@@ -1713,11 +1711,13 @@ class _ConversationSettingsScreenState
                 ref.invalidate(groupMembersProvider(conversationId));
                 ref.invalidate(groupBansProvider(conversationId));
                 ref.invalidate(conversationsProvider);
-                if (context.mounted)
+                if (context.mounted) {
                   ToastService.showSuccess(context, 'Đã cấm $name khỏi nhóm');
+                }
               } catch (e) {
-                if (context.mounted)
+                if (context.mounted) {
                   ToastService.showError(context, 'Lỗi cấm thành viên: $e');
+                }
               }
             },
             child: const Text('Cấm'),
@@ -1756,12 +1756,14 @@ class _ConversationSettingsScreenState
                     .transferOwnership(conversationId, member.userId);
                 ref.invalidate(groupMembersProvider(conversationId));
                 ref.invalidate(conversationsProvider);
-                if (context.mounted)
+                if (context.mounted) {
                   ToastService.showSuccess(
                       context, 'Đã chuyển quyền Owner cho $name');
+                }
               } catch (e) {
-                if (context.mounted)
+                if (context.mounted) {
                   ToastService.showError(context, 'Lỗi chuyển quyền: $e');
+                }
               }
             },
             child: const Text('Xác nhận'),

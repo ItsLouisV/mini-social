@@ -85,7 +85,9 @@ List<CommentNode> flattenTree(List<CommentNode> roots) {
     }
   }
 
-  for (var r in roots) traverse(r);
+  for (var r in roots) {
+    traverse(r);
+  }
   return result;
 }
 
@@ -617,7 +619,7 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
     // Level 1: marginLeft = 0, radius = 18
     // Level 2: marginLeft = 40, radius = 14
     // Level 3: marginLeft = 80, radius = 14
-    final maxLevel = 3;
+    const maxLevel = 3;
     final level = widget.node.level > maxLevel ? maxLevel : widget.node.level;
     final indent = (level - 1) * 40.0;
     final avatarRadius = level == 1 ? 18.0 : 14.0;

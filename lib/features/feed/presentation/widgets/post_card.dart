@@ -1046,8 +1046,9 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
                                 );
                               }
                             } finally {
-                              if (mounted)
+                              if (mounted) {
                                 setState(() => _isSubmitting = false);
+                              }
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -1115,7 +1116,7 @@ class _HiddenPostBannerState extends State<_HiddenPostBanner> {
           color: isSelected
               ? theme.colorScheme.primary
                   .withValues(alpha: isDark ? 0.22 : 0.12)
-              : (isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
+              : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? theme.colorScheme.primary : Colors.transparent,

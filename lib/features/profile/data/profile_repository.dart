@@ -65,7 +65,7 @@ class ProfileRepository {
     } catch (e) {
       debugPrint('⚠️ [ProfileRepository] Offline fallback for profile: $e');
       if (_isarService != null) {
-        final cached = _isarService!.getProfile(userId);
+        final cached = _isarService.getProfile(userId);
         if (cached != null) {
           return ProfileModel.fromJson(cached);
         }

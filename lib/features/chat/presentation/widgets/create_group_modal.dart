@@ -404,7 +404,7 @@ class _CreateGroupModalState extends ConsumerState<CreateGroupModal> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Row(
                   children: [
-                    Text(
+                    const Text(
                       'ĐÃ CHỌN',
                       style: TextStyle(
                         fontSize: 12,

@@ -28,7 +28,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   bool _showStt = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
-  double _playbackRate = 1.0;
+  final double _playbackRate = 1.0;
 
   StreamSubscription? _durationSubscription;
   StreamSubscription? _positionSubscription;

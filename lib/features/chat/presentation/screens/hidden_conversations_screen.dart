@@ -63,7 +63,7 @@ class HiddenConversationsScreen extends ConsumerWidget {
           });
 
           if (filteredConvs.isEmpty) {
-            return Center(
+            return const Center(
               child: EmptyStateWidget(
                 icon: CupertinoIcons.eye_slash,
                 title: 'Không có tin nhắn ẩn',
@@ -124,7 +124,6 @@ class _HiddenConversationTile extends ConsumerStatefulWidget {
 class _HiddenConversationTileState
     extends ConsumerState<_HiddenConversationTile>
     with SingleTickerProviderStateMixin {
-  static const double _actionWidth = 72.0;
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _squashAnimation;
@@ -198,7 +197,7 @@ class _HiddenConversationTileState
   }
 
   void _playRebound() {
-    final spring = SpringDescription(
+    const spring = SpringDescription(
       mass: 1.0,
       stiffness: 450,
       damping: 18,
@@ -212,20 +211,6 @@ class _HiddenConversationTileState
     _controller.animateWith(simulation);
   }
 
-  double _actionExtentRatio(
-    BuildContext context,
-    int actionCount,
-  ) {
-    final availableWidth = MediaQuery.sizeOf(context).width;
-
-    // Không chỉ circle 42px.
-    // Cần cả khoảng trống xung quanh action để swipe nhìn thoáng.
-    const actionSlotWidth = 72.0;
-
-    final requiredWidth = actionSlotWidth * actionCount;
-
-    return (requiredWidth / availableWidth).clamp(0.0, 1.0);
-  }
 
   @override
   Widget build(BuildContext context) {

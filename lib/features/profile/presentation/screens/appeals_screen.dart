@@ -173,7 +173,7 @@ class _AppealsScreenState extends ConsumerState<AppealsScreen> {
                               subtitle: Text('Strike count: +${v['strike_count_at_time'] ?? 1}'),
                               trailing: Chip(
                                 label: Text(isActive ? 'Hiệu lực' : 'Đã gỡ', style: const TextStyle(fontSize: 10)),
-                                backgroundColor: isActive ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                                backgroundColor: isActive ? Colors.red.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
                               ),
                             ),
                           );

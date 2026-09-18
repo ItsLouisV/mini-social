@@ -17,6 +17,7 @@ import '../../../core/services/sync_engine.dart';
 class PostRepository {
   final SupabaseService _service;
   final IsarService? _isarService;
+  // ignore: unused_field
   final SyncEngine? _syncEngine;
   final _uuid = const Uuid();
 
@@ -96,7 +97,9 @@ class PostRepository {
 
         if (status == 'hidden' ||
             status == 'removed' ||
-            status == 'under_review') return false;
+            status == 'under_review') {
+          return false;
+        }
         if (postUserId == userId) return true;
         if (status != 'published' && status != 'shadow_limited') return false;
 
@@ -147,7 +150,7 @@ class PostRepository {
       // Sync posts to local DB (platform-independent)
       if (_isarService != null && resultPosts.isNotEmpty) {
         final jsonList = resultPosts.map((p) => p.toJson()).toList();
-        await _isarService!.savePosts(jsonList);
+        await _isarService.savePosts(jsonList);
       }
 
       return resultPosts;
@@ -156,7 +159,7 @@ class PostRepository {
           '⚠️ [PostRepository] Offline fallback for feed: loading from local DB: $e');
       // Offline fallback
       if (_isarService != null) {
-        final cached = _isarService!.getPosts(limit: pageSize, offset: from);
+        final cached = _isarService.getPosts(limit: pageSize, offset: from);
         return cached.map((p) => PostModel.fromJson(p)).toList();
       }
       rethrow;

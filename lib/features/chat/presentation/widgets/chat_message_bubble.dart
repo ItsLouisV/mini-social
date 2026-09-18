@@ -318,7 +318,9 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                             Text(
                               () {
                                 if (message.replyToMessage!.senderId ==
-                                    widget.currentUserId) return 'Bạn';
+                                    widget.currentUserId) {
+                                  return 'Bạn';
+                                }
                                 final replyProfile = ref
                                     .watch(profileProvider(
                                         message.replyToMessage!.senderId))
@@ -610,7 +612,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                         content: Text(deletePermanently
                             ? 'Đã xóa tin nhắn vĩnh viễn'
                             : 'Đã xóa tin nhắn phía bạn'),
-                        duration: Duration(seconds: 1),
+                        duration: const Duration(seconds: 1),
                       ));
                     },
                   ),
@@ -894,7 +896,9 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                               Text(
                                 () {
                                   if (message.replyToMessage!.senderId ==
-                                      widget.currentUserId) return 'Bạn';
+                                      widget.currentUserId) {
+                                    return 'Bạn';
+                                  }
                                   final replyProfile = ref
                                       .watch(profileProvider(
                                           message.replyToMessage!.senderId))

@@ -79,6 +79,7 @@ dependencies:
   geolocator: ^14.0.2
   exif: ^3.3.0
 
+  realtime_client: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -87,6 +88,7 @@ dev_dependencies:
   build_runner: ^2.4.11
   isar_generator: ^3.1.0+1
 
+  url_launcher_platform_interface: any
 flutter:
   uses-material-design: true
   assets:

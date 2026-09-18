@@ -1,7 +1,5 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:image_picker/image_picker.dart';
 
 class ImageCompressor {
   /// Nén XFile hình ảnh và trả về danh sách byte Uint8List đã nén.

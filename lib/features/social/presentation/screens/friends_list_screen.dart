@@ -132,8 +132,8 @@ class _FriendsListTab extends ConsumerWidget {
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             minimumSize: Size.zero,
-            backgroundColor: Colors.green.withOpacity(0.1),
-            side: BorderSide(color: Colors.green.withOpacity(0.2)),
+            backgroundColor: Colors.green.withValues(alpha: 0.1),
+            side: BorderSide(color: Colors.green.withValues(alpha: 0.2)),
           ),
           child: const Text(
             'Bạn bè',

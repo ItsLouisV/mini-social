@@ -183,7 +183,7 @@ class _IOSRubberbandSlidableTileState extends State<IOSRubberbandSlidableTile>
   }
 
   void _animateTo(double target, double velocity) {
-    final spring = SpringDescription(
+    const spring = SpringDescription(
       mass: 1.0,
       stiffness: 380,
       damping: 24,

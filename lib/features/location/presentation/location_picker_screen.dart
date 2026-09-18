@@ -161,7 +161,7 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen> {
         title: const Text('Thêm vị trí'),
         actions: [
           if (_locationMessage?.contains('Cài đặt') == true)
-            TextButton(onPressed: Geolocator.openAppSettings, child: const Text('Cài đặt')),
+            const TextButton(onPressed: Geolocator.openAppSettings, child: Text('Cài đặt')),
         ],
       ),
       body: Column(

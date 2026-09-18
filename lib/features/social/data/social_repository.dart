@@ -97,14 +97,14 @@ class SocialRepository {
 
       // Cache to local DB (platform-independent)
       if (_isarService != null && list.isNotEmpty) {
-        await _isarService!.saveNotifications(list);
+        await _isarService.saveNotifications(list);
       }
 
       return list;
     } catch (e) {
       debugPrint('⚠️ [SocialRepository] Offline fallback for notifications: loading from local DB: $e');
       if (_isarService != null) {
-        return _isarService!.getNotifications(limit: 50);
+        return _isarService.getNotifications(limit: 50);
       }
       rethrow;
     }

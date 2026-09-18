@@ -113,16 +113,18 @@ class _DeviceManagementScreenState extends ConsumerState<DeviceManagementScreen>
     final lowerUa = ua.toLowerCase();
     
     String os = 'Thiết bị lạ';
-    if (lowerUa.contains('windows')) os = 'Windows';
-    else if (lowerUa.contains('macintosh') || lowerUa.contains('mac os')) os = 'macOS';
+    if (lowerUa.contains('windows')) {
+      os = 'Windows';
+    } else if (lowerUa.contains('macintosh') || lowerUa.contains('mac os')) os = 'macOS';
     else if (lowerUa.contains('iphone')) os = 'iPhone';
     else if (lowerUa.contains('ipad')) os = 'iPad';
     else if (lowerUa.contains('android')) os = 'Android';
     else if (lowerUa.contains('linux')) os = 'Linux';
 
     String browser = '';
-    if (lowerUa.contains('chrome')) browser = 'Chrome';
-    else if (lowerUa.contains('safari') && !lowerUa.contains('chrome')) browser = 'Safari';
+    if (lowerUa.contains('chrome')) {
+      browser = 'Chrome';
+    } else if (lowerUa.contains('safari') && !lowerUa.contains('chrome')) browser = 'Safari';
     else if (lowerUa.contains('firefox')) browser = 'Firefox';
     else if (lowerUa.contains('edge')) browser = 'Edge';
 

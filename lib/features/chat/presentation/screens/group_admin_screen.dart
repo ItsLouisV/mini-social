@@ -90,8 +90,9 @@ class GroupAdminScreen extends ConsumerWidget {
                           .setAdminOnlyMessaging(conversationId, enabled: val);
                       ref.invalidate(conversationsProvider);
                     } catch (e) {
-                      if (context.mounted)
+                      if (context.mounted) {
                         ToastService.showError(context, 'Lỗi: $e');
+                      }
                     }
                   },
                   cardBgColor: cardBgColor,
@@ -395,8 +396,9 @@ class _MutedMembersList extends ConsumerWidget {
                                   'Đã bỏ tắt tiếng ${m.profile?.displayName ?? "thành viên"}');
                             }
                           } catch (e) {
-                            if (context.mounted)
+                            if (context.mounted) {
                               ToastService.showError(context, 'Lỗi: $e');
+                            }
                           }
                         },
                       )
@@ -495,8 +497,9 @@ class _BannedMembersList extends ConsumerWidget {
                                 'Đã bỏ lệnh cấm cho ${ban.userDisplayName ?? "thành viên"}');
                           }
                         } catch (e) {
-                          if (context.mounted)
+                          if (context.mounted) {
                             ToastService.showError(context, 'Lỗi: $e');
+                          }
                         }
                       },
                     ),

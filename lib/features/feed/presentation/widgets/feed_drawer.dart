@@ -67,7 +67,7 @@ class FeedDrawer extends ConsumerWidget {
                             image: NetworkImage(profile.coverUrl!),
                             fit: BoxFit.cover,
                             colorFilter: ColorFilter.mode(
-                              Colors.black.withOpacity(0.35),
+                              Colors.black.withValues(alpha: 0.35),
                               BlendMode.darken,
                             ),
                           )

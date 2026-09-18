@@ -15,7 +15,7 @@ void main() {
     });
 
     test('Should map NetworkException to NetworkFailure', () {
-      final exception = NetworkException();
+      const exception = NetworkException();
       final failure = GlobalErrorHandler.handleException(exception);
 
       expect(failure, isA<NetworkFailure>());

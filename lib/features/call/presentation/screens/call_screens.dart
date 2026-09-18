@@ -1424,6 +1424,7 @@ class _ActiveCallScreenState extends ConsumerState<ActiveCallScreen> {
                     onTap: () async {
                       final next = !_speakerOn;
                       if (!kIsWeb) {
+                        // ignore: deprecated_member_use
                         await _room?.setSpeakerOn(next);
                       }
                       if (mounted) setState(() => _speakerOn = next);

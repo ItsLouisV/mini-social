@@ -83,7 +83,7 @@ class ConversationModel {
 
   int getUnreadCount([String? userId]) {
     if (userId != null && userId == participant2 && _legacyP2Unread != null) {
-      return _legacyP2Unread!;
+      return _legacyP2Unread;
     }
     if (userId != null && myMemberState != null) {
       if (myMemberState!.userId == userId) return myMemberState!.unreadCount;
@@ -97,7 +97,7 @@ class ConversationModel {
 
   bool isPinned([String? userId]) {
     if (userId != null && userId == participant2 && _legacyP2Pinned != null) {
-      return _legacyP2Pinned!;
+      return _legacyP2Pinned;
     }
     if (userId != null && myMemberState != null) {
       if (myMemberState!.userId == userId) return myMemberState!.isPinned;
@@ -108,7 +108,7 @@ class ConversationModel {
 
   bool isHidden([String? userId]) {
     if (userId != null && userId == participant2 && _legacyP2Hidden != null) {
-      return _legacyP2Hidden!;
+      return _legacyP2Hidden;
     }
     if (userId != null && myMemberState != null) {
       if (myMemberState!.userId == userId) return myMemberState!.isHidden;

@@ -213,7 +213,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   RealtimeChannel? _typingChannel;
   bool _isOtherUserTyping = false;
   String? _typingUserName;
-  String? _typingAvatarUrl;
   Timer? _typingTimer;
   DateTime? _lastTypingSentTime;
 
@@ -563,14 +562,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     if (conv != null &&
                         !conv.isGroup &&
                         conv.otherUser?.displayName != null &&
-                        conv.otherUser!.displayName!.isNotEmpty) {
-                      resolvedName = conv.otherUser!.displayName!;
+                        conv.otherUser!.displayName.isNotEmpty) {
+                      resolvedName = conv.otherUser!.displayName;
                     } else {
                       final senderProfile =
                           ref.read(profileProvider(senderId)).valueOrNull;
                       if (senderProfile?.displayName != null &&
-                          senderProfile!.displayName!.isNotEmpty) {
-                        resolvedName = senderProfile.displayName!;
+                          senderProfile!.displayName.isNotEmpty) {
+                        resolvedName = senderProfile.displayName;
                       } else if (senderProfile?.fullName != null &&
                           senderProfile!.fullName!.isNotEmpty) {
                         resolvedName = senderProfile.fullName!;
@@ -586,7 +585,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     setState(() {
                       _isOtherUserTyping = true;
                       _typingUserName = resolvedName;
-                      _typingAvatarUrl = null;
                     });
                     _typingTimer?.cancel();
                     _typingTimer =
@@ -595,7 +593,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         setState(() {
                           _isOtherUserTyping = false;
                           _typingUserName = null;
-                          _typingAvatarUrl = null;
                         });
                       }
                     });
@@ -604,7 +601,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     setState(() {
                       _isOtherUserTyping = false;
                       _typingUserName = null;
-                      _typingAvatarUrl = null;
                     });
                   }
                 }
@@ -642,8 +638,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final supabaseUser =
           ref.read(supabaseServiceProvider).client.auth.currentUser;
       final userName = (currentUser?.displayName != null &&
-              currentUser!.displayName!.isNotEmpty)
-          ? currentUser.displayName!
+              currentUser!.displayName.isNotEmpty)
+          ? currentUser.displayName
           : (currentUser?.fullName != null && currentUser!.fullName!.isNotEmpty)
               ? currentUser.fullName!
               : (supabaseUser?.userMetadata?['display_name'] ??
@@ -920,51 +916,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       );
     } else {
       _itemScrollController.jumpTo(index: 0);
-    }
-  }
-
-  /// Scroll tới tin nhắn có [msgId].
-  ///
-  /// Nếu tin đã có trong state → scroll ngay.
-  /// Nếu chưa có → gọi notifier fetch window → notifier set pendingScrollToId
-  ///             → _handlePendingScroll sẽ xử lý sau khi rebuild.
-  Future<void> _requestScrollToMessage(String msgId) async {
-    final notifier =
-        ref.read(realtimeMessagesProvider(widget.conversationId).notifier);
-    final messagesState =
-        ref.read(realtimeMessagesProvider(widget.conversationId)).valueOrNull;
-
-    if (messagesState == null) return;
-
-    final targetMsg =
-        messagesState.messages.firstWhere((m) => m.id == msgId, orElse: () {
-      // Chưa trong state, cần biết createdAt để fetch window
-      // Trường hợp này xảy ra khi gọi từ reply bubble có replyToMessage
-      return _emptyMessage;
-    });
-
-    if (targetMsg.id.isEmpty) {
-      // Không có đủ thông tin → báo user
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Không thể tìm thấy tin nhắn gốc'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
-      return;
-    }
-
-    // Tin đã trong state → scroll trực tiếp
-    if (_cachedIndexMap.containsKey(msgId)) {
-      _scrollToIndex(_cachedIndexMap[msgId]!, msgId);
-    } else {
-      // Tin trong state nhưng chưa trong cache (vừa update) → trigger rebuild
-      await notifier.jumpToMessage(
-        messageId: msgId,
-        createdAt: targetMsg.createdAt,
-      );
     }
   }
 
@@ -2903,7 +2854,9 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                             Text(
                               () {
                                 if (message.replyToMessage!.senderId ==
-                                    widget.currentUserId) return 'Bạn';
+                                    widget.currentUserId) {
+                                  return 'Bạn';
+                                }
                                 final replyProfile = ref
                                     .watch(profileProvider(
                                         message.replyToMessage!.senderId))
@@ -3561,7 +3514,9 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                                 Text(
                                   () {
                                     if (message.replyToMessage!.senderId ==
-                                        widget.currentUserId) return 'Bạn';
+                                        widget.currentUserId) {
+                                      return 'Bạn';
+                                    }
                                     final replyProfile = ref
                                         .watch(profileProvider(
                                             message.replyToMessage!.senderId))
@@ -4625,7 +4580,6 @@ class _VanishTimerIndicator extends StatefulWidget {
   final VoidCallback onExpired;
 
   const _VanishTimerIndicator({
-    super.key,
     required this.message,
     required this.onExpired,
   });

@@ -700,7 +700,7 @@ class _PasscodeNumKeyState extends State<_PasscodeNumKey> with SingleTickerProvi
 
   void _playRebound() {
     // Spring physics rebound for fluid elastic iOS feel
-    final spring = SpringDescription(
+    const spring = SpringDescription(
       mass: 1.0,
       stiffness: 450,
       damping: 18,
@@ -845,7 +845,7 @@ class _PasscodeDeleteKeyState extends State<_PasscodeDeleteKey> with SingleTicke
   }
 
   void _playRebound() {
-    final spring = SpringDescription(
+    const spring = SpringDescription(
       mass: 1.0,
       stiffness: 450,
       damping: 18,
