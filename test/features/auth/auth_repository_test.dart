@@ -112,7 +112,7 @@ void main() {
 
       expect(result, isTrue);
       expect(fakeClient._auth.lastProvider, equals(OAuthProvider.google));
-      expect(fakeClient._auth.lastRedirectTo, equals('minisocial://login-callback'));
+      expect(fakeClient._auth.lastRedirectTo, equals('viora://login-callback'));
     });
 
     test('signInWithApple invokes signInWithOAuth with Apple provider', () async {
@@ -120,7 +120,7 @@ void main() {
 
       expect(result, isTrue);
       expect(fakeClient._auth.lastProvider, equals(OAuthProvider.apple));
-      expect(fakeClient._auth.lastRedirectTo, equals('minisocial://login-callback'));
+      expect(fakeClient._auth.lastRedirectTo, equals('viora://login-callback'));
     });
 
     test('getActiveSessions calls rpc and returns session list', () async {

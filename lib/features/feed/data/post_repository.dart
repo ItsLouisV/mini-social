@@ -381,7 +381,7 @@ class PostRepository {
       }
     }
 
-    // 3. Trigger async moderate-content Edge Function in background (non-blocking)
+    // 3. Trigger Multi-Agents Content Moderation (non-blocking)
     _safeInvokeFunction(
       'moderate-content',
       body: {
@@ -389,6 +389,16 @@ class PostRepository {
         'target_id': finalPostId,
         'content': finalCaption,
         'image_urls': uploadedMediaUrls,
+      },
+    );
+
+    // 4. Trigger Agent R1 tạo Vector Embedding 768d cho bài viết
+    _safeInvokeFunction(
+      'ai-service',
+      body: {
+        'action': 'generate_post_embedding',
+        'postId': finalPostId,
+        'text': finalCaption,
       },
     );
 
@@ -649,7 +659,7 @@ class PostRepository {
 
     final comment = CommentModel.fromJson(data);
 
-    // Trigger async moderate-content Edge Function in background (non-blocking)
+    // Trigger Multi-Agents Content Moderation (non-blocking)
     _safeInvokeFunction(
       'moderate-content',
       body: {
@@ -859,7 +869,7 @@ class PostRepository {
       }
     }
 
-    // 3. Trigger async moderate-content Edge Function in background (non-blocking)
+    // 3. Trigger Multi-Agents Content Moderation (non-blocking)
     _safeInvokeFunction(
       'moderate-content',
       body: {
@@ -867,6 +877,16 @@ class PostRepository {
         'target_id': postId,
         'content': caption,
         if (uploadedUrls.isNotEmpty) 'image_urls': uploadedUrls,
+      },
+    );
+
+    // 4. Trigger Agent R1 cập nhật Vector Embedding 768d cho bài viết
+    _safeInvokeFunction(
+      'ai-service',
+      body: {
+        'action': 'generate_post_embedding',
+        'postId': postId,
+        'text': caption,
       },
     );
   }
@@ -879,12 +899,21 @@ class PostRepository {
     final userId = currentUserId;
     if (userId == null) return [];
 
+    // Trigger lazy auto-purge cho các bài viết quá hạn 30 ngày (chạy ngầm, không block UI)
+    _autoPurgeMyExpiredPosts();
+
     try {
+      final cutoff = DateTime.now()
+          .toUtc()
+          .subtract(const Duration(days: 30))
+          .toIso8601String();
+
       final data = await _client
           .from(SupabaseConstants.postsTable)
           .select('*, profiles(*), post_media(*)')
           .eq('user_id', userId)
           .filter('deleted_at', 'is', 'not_null')
+          .gte('deleted_at', cutoff)
           .order('deleted_at', ascending: false);
 
       final list = (data as List).map((e) => PostModel.fromJson(e)).toList();
@@ -893,6 +922,55 @@ class PostRepository {
       print('Error fetching trashed posts: $e');
       return [];
     }
+  }
+
+  /// Dọn sạch toàn bộ bài viết trong thùng rác ngay lập tức
+  Future<void> emptyTrash() async {
+    final userId = currentUserId;
+    if (userId == null) return;
+
+    try {
+      final trashed = await getTrashedPosts();
+      for (final post in trashed) {
+        await deletePost(post.id);
+      }
+    } catch (e) {
+      print('Error emptying trash: $e');
+      rethrow;
+    }
+  }
+
+  /// Lazy auto-purge ngầm các bài viết trong thùng rác đã quá 30 ngày
+  void _autoPurgeMyExpiredPosts() {
+    Future(() async {
+      final uid = currentUserId;
+      if (uid == null) return;
+      try {
+        // Thử chạy RPC chuyên dụng trên Postgres
+        await _client.rpc('cleanup_my_expired_trashed_posts', params: {'retention_days': 30});
+      } catch (_) {
+        // Fallback: Tự truy vấn và dọn dẹp các bài viết quá hạn 30 ngày của user
+        try {
+          final cutoff = DateTime.now()
+              .toUtc()
+              .subtract(const Duration(days: 30))
+              .toIso8601String();
+          final expiredRows = await _client
+              .from(SupabaseConstants.postsTable)
+              .select('id')
+              .eq('user_id', uid)
+              .filter('deleted_at', 'is', 'not_null')
+              .lte('deleted_at', cutoff);
+
+          for (final row in (expiredRows as List)) {
+            final postId = row['id'] as String;
+            await deletePost(postId);
+          }
+        } catch (err) {
+          print('Lazy trash cleanup fallback error: $err');
+        }
+      }
+    });
   }
 
   void _safeInvokeFunction(String functionName, {Map<String, dynamic>? body}) {

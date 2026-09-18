@@ -41,7 +41,15 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final posts = ref.watch(trashedPostsProvider);
+    final postsAsync = ref.watch(trashedPostsProvider);
+
+    // Lọc chỉ giữ lại các bài viết còn nằm trong hạn lưu trữ 30 ngày
+    final activePosts = postsAsync.valueOrNull?.where((post) {
+      final deadline = post.deletedAt?.add(_retentionPeriod);
+      if (deadline == null) return false;
+      return deadline.isAfter(DateTime.now());
+    }).toList();
+
     return CupertinoPageScaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       navigationBar: CupertinoNavigationBar(
@@ -58,20 +66,37 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
         ),
         middle: Text(AppTranslations.tr(ref, 'trash'),
             style: const TextStyle(fontWeight: FontWeight.w700)),
+        trailing: (activePosts != null && activePosts.isNotEmpty)
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => _confirmEmptyTrash(),
+                child: Text(
+                  'Dọn sạch',
+                  style: TextStyle(
+                    color: theme.colorScheme.error,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+              )
+            : null,
       ),
       child: Material(
         type: MaterialType.transparency,
         child: SafeArea(
-          child: posts.when(
+          child: postsAsync.when(
             loading: () => const Center(child: CupertinoActivityIndicator()),
             error: (error, _) => AppErrorWidget(
               message: error.toString(),
               onRetry: () => ref.invalidate(trashedPostsProvider),
             ),
-            data: (items) => RefreshIndicator.adaptive(
-              onRefresh: () => ref.refresh(trashedPostsProvider.future),
-              child: items.isEmpty ? _empty(theme) : _content(theme, items),
-            ),
+            data: (_) {
+              final posts = activePosts ?? [];
+              return RefreshIndicator.adaptive(
+                onRefresh: () => ref.refresh(trashedPostsProvider.future),
+                child: posts.isEmpty ? _empty(theme) : _content(theme, posts),
+              );
+            },
           ),
         ),
       ),
@@ -410,5 +435,41 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
         ToastService.showError(context, 'Không thể xóa bài viết: $error');
       }
     }
+  }
+
+  void _confirmEmptyTrash() {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('Dọn sạch thùng rác?'),
+        content: const Text(
+            'Tất cả bài viết trong thùng rác sẽ bị xóa vĩnh viễn ngay lập tức. Bạn không thể hoàn tác thao tác này.'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => dialogContext.pop(),
+            child: const Text('Hủy'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              dialogContext.pop();
+              try {
+                await ref.read(postRepositoryProvider).emptyTrash();
+                ref.invalidate(trashedPostsProvider);
+                ref.invalidate(feedPostsProvider);
+                if (mounted) {
+                  ToastService.showSuccess(context, 'Đã dọn sạch thùng rác.');
+                }
+              } catch (error) {
+                if (mounted) {
+                  ToastService.showError(context, 'Không thể dọn thùng rác: $error');
+                }
+              }
+            },
+            child: const Text('Dọn sạch ngay'),
+          ),
+        ],
+      ),
+    );
   }
 }

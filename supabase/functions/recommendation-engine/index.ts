@@ -1,9 +1,33 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { Redis } from "npm:@upstash/redis@1.28.4";
+import { Ratelimit } from "npm:@upstash/ratelimit@1.0.1";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+const UPSTASH_REDIS_REST_URL = Deno.env.get("UPSTASH_REDIS_REST_URL") ?? "";
+const UPSTASH_REDIS_REST_TOKEN = Deno.env.get("UPSTASH_REDIS_REST_TOKEN") ?? "";
+
+let redis: Redis | null = null;
+let ratelimit: Ratelimit | null = null;
+
+if (UPSTASH_REDIS_REST_URL && UPSTASH_REDIS_REST_TOKEN) {
+  try {
+    redis = new Redis({
+      url: UPSTASH_REDIS_REST_URL,
+      token: UPSTASH_REDIS_REST_TOKEN,
+    });
+    ratelimit = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(60, "60 s"),
+      analytics: true,
+    });
+  } catch (err) {
+    console.error("Upstash Redis init error (recommendation-engine):", err);
+  }
+}
 const MAX_EVENTS_PER_REQUEST = 50;
 const ALLOWED_EVENTS = new Set([
   "impression", "view_dwell", "image_click", "like", "comment",
@@ -56,6 +80,14 @@ serve(async (req: Request): Promise<Response> => {
   try {
     const url = new URL(req.url);
     const action = url.searchParams.get("action") ?? "feed";
+
+    // Upstash Redis Rate Limiting cho người dùng
+    if (ratelimit) {
+      const { success } = await ratelimit.limit(`ratelimit:rec:${user.id}`);
+      if (!success) {
+        return json({ error: "Quá nhiều yêu cầu gợi ý. Vui lòng chờ giây lát.", code: "RATE_LIMITED" }, 429);
+      }
+    }
 
     if (req.method === "POST" && action === "track") {
       const body = await req.json().catch(() => ({}));
@@ -136,14 +168,45 @@ serve(async (req: Request): Promise<Response> => {
     const hasCursor = cursorScore != null && Number.isFinite(cursorScore) && cursorCreatedAt != null && isUuid(cursorPostId);
     if (cursorScoreRaw != null && !hasCursor) return json({ error: "Invalid cursor", code: "INVALID_CURSOR" }, 400);
 
-    const { data: rankedPosts, error: rpcError } = await userClient.rpc("get_recommended_feed_v2", {
+    // Upstash Redis Cache cho Feed trang đầu (giảm tải 80-90% DB RPC khi user refresh liên tục)
+    const isFirstPage = !hasCursor;
+    const feedCacheKey = (redis && isFirstPage) ? `rec:feed:${user.id}:${limit}` : null;
+    if (redis && feedCacheKey) {
+      try {
+        const cachedPayload = await redis.get<any>(feedCacheKey);
+        if (cachedPayload && cachedPayload.success && Array.isArray(cachedPayload.posts)) {
+          return json({ ...cachedPayload, cached: true });
+        }
+      } catch (_) {}
+    }
+
+    let rankedPosts: any[] | null = null;
+    let rankerVersion = "feed-v3";
+
+    // 1. Thử gọi RPC get_recommended_feed_v3 (Semantic AI Matching)
+    const { data: v3Data, error: v3Error } = await userClient.rpc("get_recommended_feed_v3", {
       p_limit: limit,
       p_cursor_score: hasCursor ? cursorScore : null,
       p_cursor_created_at: hasCursor ? cursorCreatedAt : null,
       p_cursor_post_id: hasCursor ? cursorPostId : null,
     });
-    if (rpcError) throw rpcError;
-    if (!rankedPosts?.length) return json({ success: true, posts: [], nextCursor: null, rankerVersion: "feed-v2" });
+
+    if (!v3Error && v3Data) {
+      rankedPosts = v3Data;
+    } else {
+      // 2. Fallback sang v2 nếu v3 chưa sẵn sàng
+      const { data: v2Data, error: v2Error } = await userClient.rpc("get_recommended_feed_v2", {
+        p_limit: limit,
+        p_cursor_score: hasCursor ? cursorScore : null,
+        p_cursor_created_at: hasCursor ? cursorCreatedAt : null,
+        p_cursor_post_id: hasCursor ? cursorPostId : null,
+      });
+      if (v2Error) throw v2Error;
+      rankedPosts = v2Data;
+      rankerVersion = "feed-v2";
+    }
+
+    if (!rankedPosts?.length) return json({ success: true, posts: [], nextCursor: null, rankerVersion });
 
     const postIds = rankedPosts.map((p: Record<string, unknown>) => p.post_id as string);
     const authorIds = [...new Set(rankedPosts.map((p: Record<string, unknown>) => p.user_id as string))];
@@ -180,12 +243,19 @@ serve(async (req: Request): Promise<Response> => {
       recommendation_reasons: post.reason_codes ?? [],
     }));
     const last = rankedPosts[rankedPosts.length - 1];
-    return json({
-      success: true, posts, rankerVersion: "feed-v2",
+    const finalPayload = {
+      success: true, posts, rankerVersion,
       nextCursor: rankedPosts.length < limit ? null : {
         score: last.score, createdAt: last.created_at, postId: last.post_id,
       },
-    });
+    };
+
+    // Cache kết quả trang đầu vào Upstash Redis (TTL: 25 giây)
+    if (redis && feedCacheKey && posts.length > 0) {
+      redis.set(feedCacheKey, finalPayload, { ex: 25 }).catch(() => {});
+    }
+
+    return json(finalPayload);
   } catch (error) {
     if (error instanceof Error && error.message === "INVALID_EVENT") {
       return json({ error: "Invalid recommendation event", code: "INVALID_EVENT" }, 400);

@@ -87,13 +87,6 @@ class _PostCardState extends ConsumerState<PostCard>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    if (post.moderationStatus == 'shadow_limited' && !_showRestrictedContent) {
-      return RestrictedContentReveal(
-        actionLabel: 'Xem bài viết đã bị ẩn',
-        onReveal: () => setState(() => _showRestrictedContent = true),
-      );
-    }
-
     if (status == PostLocalStatus.dismissed) {
       return const SizedBox.shrink();
     }
@@ -325,7 +318,8 @@ class _PostCardState extends ConsumerState<PostCard>
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  if (post.moderationStatus == 'pending')
+                  if (post.moderationStatus == 'pending' ||
+                      post.moderationStatus == 'under_review')
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
@@ -433,38 +427,51 @@ class _PostCardState extends ConsumerState<PostCard>
             const SizedBox(height: 8),
           ],
 
-          // Caption Text (Tự động highlight #hashtag & @username)
-          if (post.caption?.isNotEmpty == true) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: ParsedCaptionText(
-                text: post.caption!,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: Theme.of(context).textTheme.bodyMedium?.color,
-                  height: 1.3,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
+          // Phần nội dung bài viết được bọc bởi lớp kính mờ đục nếu bị hạn chế (shadow_limited)
+          RestrictedBlurOverlay(
+            isRestricted: post.moderationStatus == 'shadow_limited',
+            isRevealed: _showRestrictedContent,
+            onReveal: () => setState(() => _showRestrictedContent = true),
+            onRehide: () => setState(() => _showRestrictedContent = false),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Caption Text (Tự động highlight #hashtag & @username)
+                if (post.caption?.isNotEmpty == true) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: ParsedCaptionText(
+                      text: post.caption!,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
 
-          // Media (full width, flush to edge)
-          if (post.media.isNotEmpty)
-            ImageCarousel(
-              media: post.media,
-              layoutType: post.layoutType,
-              heroScope: '${widget.heroScope}_${post.id}',
-            ),
+                // Media (full width, flush to edge)
+                if (post.media.isNotEmpty)
+                  ImageCarousel(
+                    media: post.media,
+                    layoutType: post.layoutType,
+                    heroScope: '${widget.heroScope}_${post.id}',
+                  ),
 
-          // Music Track Player
-          if (post.musicTrack != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: ProfileMusicCard(
-                track: post.musicTrack!,
-                isOwner: false,
-              ),
+                // Music Track Player
+                if (post.musicTrack != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: ProfileMusicCard(
+                      track: post.musicTrack!,
+                      isOwner: false,
+                    ),
+                  ),
+              ],
             ),
+          ),
 
           // PostActions (Facebook layout)
           PostActions(

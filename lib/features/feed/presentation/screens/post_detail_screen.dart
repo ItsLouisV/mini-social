@@ -194,17 +194,6 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
 
   Widget _buildContent(BuildContext context, WidgetRef ref, PostModel post,
       AsyncValue<List<CommentModel>> commentsAsync, String? currentUserId) {
-    if (post.moderationStatus == 'shadow_limited' && !_showRestrictedPost) {
-      return ListView(
-        children: [
-          RestrictedContentReveal(
-            actionLabel: 'Xem bài viết đã bị ẩn',
-            onReveal: () => setState(() => _showRestrictedPost = true),
-          ),
-        ],
-      );
-    }
-
     return ListView(
       children: [
         // Post header
@@ -231,19 +220,32 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
           ),
         ),
 
-        if (post.caption?.isNotEmpty == true)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: ParsedCaptionText(
-                text: post.caption!, style: AppTextStyles.bodyMedium),
-          ),
+        // Phần nội dung (Caption & Media) được phủ kính mờ đục nếu bị hạn chế
+        RestrictedBlurOverlay(
+          isRestricted: post.moderationStatus == 'shadow_limited',
+          isRevealed: _showRestrictedPost,
+          onReveal: () => setState(() => _showRestrictedPost = true),
+          onRehide: () => setState(() => _showRestrictedPost = false),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (post.caption?.isNotEmpty == true)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: ParsedCaptionText(
+                      text: post.caption!, style: AppTextStyles.bodyMedium),
+                ),
 
-        if (post.media.isNotEmpty)
-          ImageCarousel(
-            media: post.media,
-            layoutType: post.layoutType,
-            heroScope: 'post_detail_${post.id}',
+              if (post.media.isNotEmpty)
+                ImageCarousel(
+                  media: post.media,
+                  layoutType: post.layoutType,
+                  heroScope: 'post_detail_${post.id}',
+                ),
+            ],
           ),
+        ),
 
         PostActions(post: post),
 

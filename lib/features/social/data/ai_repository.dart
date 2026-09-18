@@ -274,30 +274,34 @@ class AIRepository {
     }
     return [];
   }
-  /// Tự động quét bất đồng bộ sau khi đăng bài (Lớp 2 + 3 Async Scan)
+  /// Tự động kích hoạt kiểm duyệt ngầm Multi-Agents và tạo Embedding cho bài viết
   Future<void> triggerAsyncPostScan({
     required String postId,
     required String content,
     required String userId,
-    String? imageBase64,
+    List<String> imageUrls = const [],
   }) async {
     try {
-      await _client.functions.invoke(
-        'ai-service',
-        body: {
-          'action': 'async_post_scan',
-          'postId': postId,
-          'content': content,
-          'userId': userId,
-          if (imageBase64 != null) 'imageBase64': imageBase64,
-        },
-      );
+      // 1. Kích hoạt Content Moderation Multi-Agents
+      _safeInvokeFunction('moderate-content', body: {
+        'content_type': 'post',
+        'target_id': postId,
+        'content': content,
+        'image_urls': imageUrls,
+      });
+
+      // 2. Kích hoạt Agent R1 tạo Vector Embedding 768d cho bài viết
+      _safeInvokeFunction('ai-service', body: {
+        'action': 'generate_post_embedding',
+        'postId': postId,
+        'text': content,
+      });
     } catch (e) {
       debugPrint('Async Post Scan error: $e');
     }
   }
 
-  /// Ghi nhận bản ghi vi phạm vào bảng user_violations
+  /// Ghi nhận hành động xử lý vi phạm vào bảng moderation_actions (v2)
   Future<void> recordViolation({
     required String userId,
     String? contentId,
@@ -307,26 +311,30 @@ class AIRepository {
     required String reason,
   }) async {
     try {
-      await _client.from('user_violations').insert({
-        'user_id': userId,
-        if (contentId != null) 'content_id': contentId,
+      final idColumn = contentType == 'comment'
+          ? 'comment_id'
+          : (contentType == 'message' ? 'message_id' : 'post_id');
+
+      await _client.from('moderation_actions').insert({
         'content_type': contentType,
-        'violation_type': violationType,
-        'risk_score': riskScore,
+        if (contentId != null) idColumn: contentId,
+        'target_user_id': userId,
+        'action_type': 'auto_block',
         'reason': reason,
+        'is_automated': true,
       });
     } catch (e) {
       debugPrint('Record violation log error: $e');
     }
   }
 
-  /// Lấy danh sách vi phạm của người dùng
+  /// Lấy danh sách nhật ký xử lý vi phạm của người dùng từ moderation_actions (v2)
   Future<List<Map<String, dynamic>>> getViolations(String userId) async {
     try {
       final res = await _client
-          .from('user_violations')
+          .from('moderation_actions')
           .select()
-          .eq('user_id', userId)
+          .eq('target_user_id', userId)
           .order('created_at', ascending: false);
       return List<Map<String, dynamic>>.from(res);
     } catch (e) {
@@ -335,7 +343,7 @@ class AIRepository {
     }
   }
 
-  /// Lấy danh sách đơn kháng cáo của người dùng
+  /// Lấy danh sách đơn kháng cáo của người dùng (v2)
   Future<List<Map<String, dynamic>>> getAppeals(String userId) async {
     try {
       final res = await _client
@@ -350,7 +358,7 @@ class AIRepository {
     }
   }
 
-  /// Gửi đơn kháng cáo
+  /// Gửi đơn kháng cáo (v2: moderation_action_id, appeal_reason)
   Future<bool> submitAppeal({
     required String userId,
     required String reason,
@@ -359,8 +367,8 @@ class AIRepository {
     try {
       await _client.from('appeals').insert({
         'user_id': userId,
-        'reason': reason,
-        if (actionId != null) 'action_id': actionId,
+        'appeal_reason': reason,
+        if (actionId != null) 'moderation_action_id': actionId,
         'status': 'pending',
       });
       return true;
