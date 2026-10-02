@@ -8,6 +8,7 @@ abstract class AppAudioPlayer {
   Future<void> play(String url, {bool loop = false});
   Future<void> stop();
   Future<void> pause();
+  Future<void> resume();
   void dispose();
 }
 

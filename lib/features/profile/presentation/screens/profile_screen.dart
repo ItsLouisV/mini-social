@@ -17,9 +17,11 @@ import '../../../chat/presentation/widgets/full_screen_image_viewer.dart';
 import '../../domain/profile_model.dart';
 import '../../providers/profile_provider.dart';
 import '../widgets/profile_posts_grid.dart';
+import '../widgets/profile_stories_grid.dart';
+import '../widgets/profile_stories_highlights.dart';
 import '../../../music/presentation/widgets/profile_music_card.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   final String userId;
   final bool isMe;
 
@@ -30,10 +32,17 @@ class ProfileScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profileAsync = ref.watch(profileProvider(userId));
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  int _selectedTab = 0; // 0: Posts, 1: Stories Archive
+
+  @override
+  Widget build(BuildContext context) {
+    final profileAsync = ref.watch(profileProvider(widget.userId));
     final currentUserId = ref.watch(currentUserIdProvider);
-    final isMine = isMe || currentUserId == userId;
+    final isMine = widget.isMe || currentUserId == widget.userId;
     final canPop = context.canPop();
 
     return Scaffold(
@@ -44,7 +53,7 @@ class ProfileScreen extends ConsumerWidget {
             loading: () => _buildShimmer(context),
             error: (e, _) => AppErrorWidget(
               message: e.toString(),
-              onRetry: () => ref.invalidate(profileProvider(userId)),
+              onRetry: () => ref.invalidate(profileProvider(widget.userId)),
             ),
           ),
           if (canPop)
@@ -101,10 +110,9 @@ class ProfileScreen extends ConsumerWidget {
           SliverPersistentHeader(
             pinned: true,
             delegate: _SliverAppBarDelegate(
-              minHeight: 50.0,
-              maxHeight: 50.0,
+              minHeight: 48.0,
+              maxHeight: 48.0,
               child: Container(
-                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: Theme.of(context).scaffoldBackgroundColor,
                   border: Border(
@@ -114,9 +122,101 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                child: const Text(
-                  'Bài viết',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedTab = 0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  CupertinoIcons.square_grid_2x2,
+                                  size: 18,
+                                  color: _selectedTab == 0
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).hintColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Bài viết',
+                                  style: TextStyle(
+                                    fontWeight: _selectedTab == 0
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: _selectedTab == 0
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).hintColor,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              height: 2.5,
+                              width: 60,
+                              decoration: BoxDecoration(
+                                color: _selectedTab == 0
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedTab = 1),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  CupertinoIcons.clock,
+                                  size: 18,
+                                  color: _selectedTab == 1
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).hintColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Kho lưu trữ tin',
+                                  style: TextStyle(
+                                    fontWeight: _selectedTab == 1
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: _selectedTab == 1
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).hintColor,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              height: 2.5,
+                              width: 80,
+                              decoration: BoxDecoration(
+                                color: _selectedTab == 1
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -147,8 +247,10 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
             )
+          else if (_selectedTab == 0)
+            ProfilePostsGrid(userId: profile.id)
           else
-            ProfilePostsGrid(userId: profile.id),
+            ProfileStoriesGrid(userId: profile.id),
         ],
       ),
     );
@@ -166,7 +268,11 @@ class ProfileScreen extends ConsumerWidget {
             // Cover Image
             GestureDetector(
               onTap: profile.coverUrl != null && profile.coverUrl!.isNotEmpty
-                  ? () => FullScreenImageViewer.open(context, profile.coverUrl!)
+                  ? () => FullScreenImageViewer.open(
+                        context,
+                        profile.coverUrl!,
+                        heroTag: 'cover_${profile.id}',
+                      )
                   : null,
               child: SizedBox(
                 height: 200,
@@ -334,6 +440,11 @@ class ProfileScreen extends ConsumerWidget {
                       ],
                     ),
                   ],
+                  const SizedBox(height: 14),
+                  ProfileStoriesHighlights(
+                    userId: profile.id,
+                    isMine: isMine,
+                  ),
                 ],
               ),
             ),
@@ -346,7 +457,11 @@ class ProfileScreen extends ConsumerWidget {
           left: 16,
           child: GestureDetector(
             onTap: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
-                ? () => FullScreenImageViewer.open(context, profile.avatarUrl!)
+                ? () => FullScreenImageViewer.open(
+                      context,
+                      profile.avatarUrl!,
+                      heroTag: 'avatar_${profile.id}',
+                    )
                 : null,
             child: Hero(
               tag: 'avatar_${profile.id}',

@@ -19,6 +19,7 @@ import '../widgets/new_message_modal.dart';
 import '../widgets/passcode_dialog.dart';
 import '../widgets/slidable_circular_action_button.dart';
 import '../../../../core/services/connectivity_service.dart';
+import '../../../../core/services/toast_service.dart';
 
 import '../../../../shared/widgets/skeletons/tile_skeleton_loading.dart';
 import '../../../story/presentation/widgets/stories_bar.dart';
@@ -105,9 +106,9 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                         .read(hiddenChatProvider.notifier)
                         .removePasscode();
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Chưa có cuộc trò chuyện nào bị ẩn')),
+                      ToastService.showInfo(
+                        context,
+                        'Chưa có cuộc trò chuyện nào bị ẩn',
                       );
                     }
                   } else {
@@ -437,8 +438,9 @@ class _ConversationTile extends ConsumerWidget {
               await ref.read(chatRepositoryProvider).toggleHide(conv);
               ref.invalidate(conversationsProvider);
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Đã ẩn cuộc trò chuyện')),
+                ToastService.showSuccess(
+                  context,
+                  'Đã ẩn cuộc trò chuyện',
                 );
               }
             }

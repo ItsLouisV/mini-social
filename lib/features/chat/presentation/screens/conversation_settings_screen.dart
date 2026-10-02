@@ -1039,6 +1039,7 @@ class _ConversationSettingsScreenState
             placeholder: 'Nhập tên nhóm mới...',
             autofocus: true,
             maxLength: 40,
+            textCapitalization: TextCapitalization.words,
             inputFormatters: [LengthLimitingTextInputFormatter(40)],
           ),
         ),

@@ -66,6 +66,13 @@ class WebAppAudioPlayer implements AppAudioPlayer {
   }
 
   @override
+  Future<void> resume() async {
+    try {
+      await _audioElement?.play();
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
     stop();
     _audioElement?.remove();

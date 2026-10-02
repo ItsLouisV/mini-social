@@ -367,6 +367,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: TextField(
+                textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   hintText: 'Tìm kiếm cảm xúc, hoạt động...',
                   prefixIcon: const Icon(CupertinoIcons.search, size: 20),
@@ -446,6 +447,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: TextField(
+                    textCapitalization: TextCapitalization.words,
                     decoration: InputDecoration(
                       hintText: 'Tìm kiếm bạn bè...',
                       prefixIcon: const Icon(CupertinoIcons.search, size: 20),
@@ -690,6 +692,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     // ── Text Area ("Bạn đang nghĩ gì?") ───────────────────
                     TextField(
                       controller: _captionController,
+                      textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
                         hintText: AppTranslations.tr(ref, 'whats_on_your_mind'),
                         hintStyle: TextStyle(

@@ -50,6 +50,13 @@ class NativeAppAudioPlayer implements AppAudioPlayer {
   }
 
   @override
+  Future<void> resume() async {
+    try {
+      await _player.resume();
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
     _player.stop();
     _player.dispose();

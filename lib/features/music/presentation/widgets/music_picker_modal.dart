@@ -151,6 +151,7 @@ class _MusicPickerModalState extends ConsumerState<MusicPickerModal> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: TextField(
               controller: _searchController,
+              textCapitalization: TextCapitalization.sentences,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 hintText: 'Tìm bài hát, ca sĩ...',

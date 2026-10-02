@@ -124,6 +124,7 @@ class _AppealsScreenState extends ConsumerState<AppealsScreen> {
                             TextField(
                               controller: _reasonController,
                               maxLines: 3,
+                              textCapitalization: TextCapitalization.sentences,
                               decoration: const InputDecoration(
                                 hintText: 'Mô tả rõ lý do bạn cho rằng quyết định kiểm duyệt chưa chính xác...',
                                 border: OutlineInputBorder(),

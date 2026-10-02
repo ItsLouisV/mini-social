@@ -373,6 +373,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     child: TextField(
                       controller: _commentController,
                       focusNode: _focusNode,
+                      textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
                         hintText: 'Viết bình luận...',
                         hintStyle: AppTextStyles.bodyMedium

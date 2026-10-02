@@ -767,6 +767,7 @@ class _ReportBottomSheetState extends ConsumerState<ReportBottomSheet> {
         TextField(
           controller: _descController,
           maxLines: 3,
+          textCapitalization: TextCapitalization.sentences,
           style: AppTextStyles.bodyMedium,
           decoration: InputDecoration(
             hintText: 'Bạn có thể mô tả chi tiết hơn để giúp chúng tôi xem xét báo cáo nhanh hơn...',

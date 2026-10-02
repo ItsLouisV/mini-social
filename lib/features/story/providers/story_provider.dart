@@ -11,3 +11,9 @@ final activeStoriesProvider = FutureProvider<List<StoryModel>>((ref) async {
   final repo = ref.watch(storyRepositoryProvider);
   return repo.getActiveStories();
 });
+
+final userStoriesProvider =
+    FutureProvider.family<List<StoryModel>, String>((ref, userId) async {
+  final repo = ref.watch(storyRepositoryProvider);
+  return repo.getUserStories(userId);
+});

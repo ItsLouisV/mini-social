@@ -171,6 +171,7 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen> {
             child: TextField(
               controller: _searchController,
               autofocus: false,
+              textCapitalization: TextCapitalization.words,
               onChanged: (value) {
                 setState(() {});
                 _onSearchChanged(value);

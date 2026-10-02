@@ -122,6 +122,7 @@ class _NewMessageModalState extends ConsumerState<NewMessageModal> {
                     controller: _searchController,
                     onChanged: _onSearchChanged,
                     autofocus: true,
+                    textCapitalization: TextCapitalization.words,
                     decoration: InputDecoration(
                       hintText: 'Tìm kiếm người dùng...',
                       hintStyle: TextStyle(color: theme.hintColor),

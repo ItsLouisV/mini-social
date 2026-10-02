@@ -144,7 +144,10 @@ Viora Core Platform
   - **Thông tin:** Tên hiển thị (Display Name), Tên định danh (`@username`), Tiểu sử (Bio), Huy hiệu tài khoản.
   - **Số liệu thống kê (Stats Bar):** Số bài viết, Số người theo dõi (Followers), Số người đang theo dõi (Following), Số bạn bè (Friends).
   - **Nhạc nền cá nhân:** Widget nghe thử bài hát yêu thích do chủ tài khoản cài đặt.
-  - **Lưới bài viết cá nhân:** Lưới ảnh 3 cột (Grid View) thể hiện toàn bộ ảnh/video các bài đăng của người dùng, phân trang cuộn mượt.
+  - **Thanh Tin nổi bật (Story Highlights):** Thanh cuộn ngang hiển thị các tin nổi bật và tin gần đây của người dùng với viền trạng thái (Gradient: Đang hoạt động, Xám mờ: Đã lưu trữ), tích hợp nút "+ Thêm tin" cho chủ tài khoản.
+  - **Hệ thống Tab kép linh hoạt (Persistent Header):**
+    - Tab 1: **Bài viết** (`ProfilePostsGrid`) - Lưới ảnh 3 cột thể hiện toàn bộ ảnh/video bài đăng, phân trang cuộn mượt.
+    - Tab 2: **Kho lưu trữ tin** (`ProfileStoriesGrid`) - Lưới dọc tỉ lệ 9:16 hiển thị toàn bộ tin người dùng đã đăng từ trước đến nay (kể cả tin quá 24h đã hết hạn trên Feed), kèm huy hiệu trạng thái và thời gian. Chạm vào để xem lại toàn màn hình.
   - **Nút hành động:**
     - Nếu là trang của mình: Nút "Chỉnh sửa hồ sơ", nút "Mã QR của tôi".
     - Nếu là người khác: Nút Theo dõi/Bỏ theo dõi (Follow/Unfollow), Nút Kết bạn (Add Friend / Pending / Friends), Nút Nhắn tin (mở phòng chat trực tiếp), Menu ba chấm (Báo cáo, Chặn).
@@ -348,11 +351,12 @@ Viora Core Platform
 
 ### 6.3 Trình xem Story toàn màn hình (Story Viewer Modal)
 - **Widget:** `StoryViewerModal`
-- **Mô tả:** Trình chiếu Story phong cách Instagram/Facebook toàn màn hình sống động.
+- **Mô tả:** Trình chiếu Story toàn màn hình với hiệu ứng chuyển đổi giữa các tác giả theo phong cách thẻ slide ngang chuẩn iOS (khi vuốt tay, trang rời đi thu nhỏ dần và bo góc, trang mới xuất hiện từ ngoài phóng to dần vào vùng chính, kết hợp bóng đổ và độ trong suốt mượt mà).
 - **Tính năng điều khiển:**
-  - Tự động chuyển Story kế tiếp sau 5 giây (Auto-advance progress bar).
+  - Tự động chuyển Story kế tiếp sau 25 giây (Auto-advance progress bar).
   - Chạm và giữ ngón tay vào màn hình để tạm dừng (Hold to pause).
   - Chạm mép trái để xem lại story trước, chạm mép phải để chuyển story tiếp theo.
+  - Vuốt sang trái/phải để chuyển qua lại giữa các user với hiệu ứng slide & scale tương tác trực tiếp theo ngón tay.
   - Vuốt xuống dưới để đóng trình xem story mượt mà.
 
 ### 6.4 Thống kê người xem Story (Story Views & Viewers List)
@@ -360,8 +364,24 @@ Viora Core Platform
 - **Mô tả:** Khi một người dùng mở xem story, hệ thống tự động ghi nhận bản ghi xem.
 - **Nghiệp vụ:** Chủ sở hữu Story có thể vuốt lên để xem danh sách chi tiết những ai đã xem story của mình và thời điểm xem. Người xem không phải là chủ sở hữu sẽ không thấy danh sách này.
 
-### 6.5 Phản hồi Story bằng tin nhắn (Story Direct Reply)
-- **Mô tả:** Thanh nhập tin nhắn nhanh ngay dưới đáy Story Viewer cho phép người xem gửi phản hồi hoặc biểu cảm cảm xúc (Emoji reactions). Nội dung phản hồi sẽ tự động được gửi thành một tin nhắn trực tiếp kèm ảnh trích dẫn Story vào phòng chat 1-1 của hai người.
+### 6.5 Thả biểu cảm Story & Hiệu ứng bay sống động (Story Reactions & Particles Effect)
+- **Bảng CSDL:** `story_reactions`
+- **Widget:** `StoryReactionBurstOverlay`, `_buildViewerBottomBar`, `_buildOwnerBottomBar`
+- **Mô tả:** 
+  - **Thanh biểu cảm nổi ở đáy Story:** Người xem có một thanh nổi viên nang glassmorphic đặt ở chính giữa đáy màn hình gồm các emoji phổ biến (`❤️`, `🔥`, `😂`, `😮`, `😢`, `👏`) cùng nút `+` để mở rộng bảng biểu cảm phong phú.
+  - **Hiệu ứng bay biểu cảm sống động (Floating Reaction Particles Effect):** Khi người xem chạm vào bất kỳ biểu cảm nào, một cụm hạt emoji (18 hạt) sẽ bùng nổ và bay uốn lượn hình sin lên phía trên màn hình với kích thước ngẫu nhiên, góc xoay rung lắc nhẹ và mờ dần khi chạm đỉnh màn hình kèm rung phản hồi xúc giác (`HapticFeedback`).
+  - **Cơ chế lưu trữ độc nhất (Unique Reaction per Type):** Hệ thống đảm bảo mỗi người dùng chỉ lưu duy nhất một bản ghi cho mỗi loại emoji trên một story (`UNIQUE (story_id, user_id, reaction)`). Khi người dùng chạm nhiều lần cùng một emoji (ví dụ thả tim liên tục), hiệu ứng bay vẫn kích hoạt liên tục cho trải nghiệm thị giác nhưng CSDL chỉ lưu đúng 1 bản ghi và tầng repository tự động chặn gửi request mạng dư thừa.
+  - **Thống kê dành cho tác giả:** Tác giả Story có nút "Xem người bày tỏ biểu cảm" ở đáy để mở danh sách chi tiết các bạn bè đã thả biểu cảm cho câu chuyện của mình kèm thời gian.
+
+### 6.6 Cơ chế hết hạn 24h & Kho lưu trữ tin trên trang cá nhân (Story Expiry & Profile Story Archive)
+- **Bảng CSDL:** `stories`, RLS Policy `Stories read access` (cho phép đọc tin công khai/lưu trữ)
+- **Widgets:** `ProfileStoriesHighlights`, `ProfileStoriesGrid`, `ProfileScreen`
+- **Cơ chế hoạt động:**
+  - **Tự động ẩn khỏi Bảng tin (Home Feed) sau 24h:** Truy vấn `getActiveStories()` tự động lọc điều kiện `.gt('expires_at', now())`. Khi một story quá 24h, nó sẽ lập tức không còn xuất hiện trên thanh Story ở đầu trang chủ, đảm bảo tính thời sự và khoảnh khắc ngắn của Bảng tin.
+  - **Lưu trữ trọn đời trong Kho lưu trữ trang cá nhân (Story Archive):** Dữ liệu tin không bị xóa khỏi cơ sở dữ liệu. Khi vào trang cá nhân của mình hoặc của người khác:
+    - **Thanh Tin nổi bật (Stories Highlights):** Nằm gọn gàng ngay dưới khu vực thông tin hồ sơ, cho phép lướt nhanh các tin gần đây với viền màu phân biệt (Gradient rực rỡ nếu tin vẫn còn hạn trong 24h, Viền xám mờ nếu là tin kỷ niệm đã lưu trữ).
+    - **Tab "Kho lưu trữ tin":** Chuyển đổi linh hoạt giữa Lưới bài viết và Lưới tin. Hiển thị toàn bộ tin từ trước đến nay của tài khoản dưới dạng lưới dọc 3 cột 9:16 chuẩn Story, có badge trạng thái "Đang hoạt động" / "Đã lưu trữ" và thời gian đăng.
+    - **Xem lại mượt mà:** Nhấn vào bất kỳ tin nào trong kho lưu trữ để mở trực tiếp trong `StoryViewerModal` với đầy đủ âm nhạc, media, văn bản và hiệu ứng lướt ngang iOS.
 
 ---
 

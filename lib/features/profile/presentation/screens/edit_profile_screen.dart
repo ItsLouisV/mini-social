@@ -334,6 +334,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 controller: _nameController,
                                 validator: Validators.fullName,
                                 prefixIcon: CupertinoIcons.person,
+                                textCapitalization: TextCapitalization.words,
                               ),
                               const SizedBox(height: 18),
                               AppTextField(
@@ -341,6 +342,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 controller: _usernameController,
                                 validator: Validators.username,
                                 prefixIcon: CupertinoIcons.at,
+                                textCapitalization: TextCapitalization.none,
                               ),
                               const SizedBox(height: 18),
                               AppTextField(
@@ -352,6 +354,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                  prefixIcon: CupertinoIcons.info,
                                  keyboardType: TextInputType.multiline,
                                  textInputAction: TextInputAction.newline,
+                                 textCapitalization: TextCapitalization.sentences,
                                ),
                              ],
                            ),

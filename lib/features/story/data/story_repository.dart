@@ -36,6 +36,25 @@ class StoryRepository {
     }
   }
 
+  /// Fetch all stories posted by a user from the past to present (including expired)
+  Future<List<StoryModel>> getUserStories(String userId) async {
+    try {
+      final data = await _client
+          .from('stories')
+          .select('*, profiles(*)')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      final list = (data as List)
+          .map((e) => StoryModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      return list;
+    } catch (e) {
+      debugPrint('Warning: Could not fetch user stories: $e');
+      return [];
+    }
+  }
+
   /// Create & Publish a new Story
   Future<StoryModel?> createStory({
     XFile? imageFile,
@@ -82,5 +101,53 @@ class StoryRepository {
   /// Delete a story
   Future<void> deleteStory(String storyId) async {
     await _client.from('stories').delete().eq('id', storyId);
+  }
+
+  final Set<String> _syncedReactions = {};
+
+  /// Send a reaction to a story (stores only one record per emoji type per user)
+  Future<void> sendStoryReaction({
+    required String storyId,
+    required String reaction,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) return;
+
+    final key = '$userId:$storyId:$reaction';
+    if (_syncedReactions.contains(key)) {
+      // Already saved this specific emoji for this story in current session
+      return;
+    }
+
+    _syncedReactions.add(key);
+
+    try {
+      await _client.from('story_reactions').upsert(
+        {
+          'story_id': storyId,
+          'user_id': userId,
+          'reaction': reaction,
+        },
+        onConflict: 'story_id,user_id,reaction',
+        ignoreDuplicates: true,
+      );
+    } catch (e) {
+      debugPrint('Warning: Could not save story reaction: $e');
+    }
+  }
+
+  /// Get reactions for a specific story
+  Future<List<Map<String, dynamic>>> getStoryReactions(String storyId) async {
+    try {
+      final res = await _client
+          .from('story_reactions')
+          .select('id, reaction, created_at, profiles(*)')
+          .eq('story_id', storyId)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(res as List);
+    } catch (e) {
+      debugPrint('Warning: Could not fetch story reactions: $e');
+      return [];
+    }
   }
 }

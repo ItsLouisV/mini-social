@@ -11,6 +11,9 @@ class StubAppAudioPlayer implements AppAudioPlayer {
   Future<void> pause() async {}
 
   @override
+  Future<void> resume() async {}
+
+  @override
   void dispose() {}
 }
 

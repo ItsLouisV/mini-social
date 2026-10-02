@@ -319,6 +319,7 @@ class _CreateGroupModalState extends ConsumerState<CreateGroupModal> {
                         controller: _nameController,
                         onChanged: (_) => setState(() {}),
                         maxLength: 40,
+                        textCapitalization: TextCapitalization.words,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                         placeholder: 'Đặt tên nhóm trò chuyện...',
                         placeholderStyle: TextStyle(

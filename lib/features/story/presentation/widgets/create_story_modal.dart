@@ -436,6 +436,7 @@ class _CreateStoryModalState extends ConsumerState<CreateStoryModal> {
                         textAlign: TextAlign.center,
                         maxLines: null,
                         autofocus: true,
+                        textCapitalization: TextCapitalization.sentences,
                         style: TextStyle(
                           color: effectiveTextColor,
                           fontSize: _fontSize,

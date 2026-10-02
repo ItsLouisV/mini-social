@@ -2408,6 +2408,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                     maxLines: null,
                     textInputAction: TextInputAction.newline,
+                    textCapitalization: TextCapitalization.sentences,
                     onChanged: (_) => _updateActiveMention(
                       _messageController.value,
                     ),
@@ -2922,29 +2923,12 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                 ),
               ),
             if (message.isImage && message.firstMediaUrl != null)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ImageBubble(
-                    url: message.firstMediaUrl!,
-                    isMine: isMine,
-                    hasCaption: hasCaption,
-                  ),
-                  if (hasCaption)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      child: Text(
-                        message.content!,
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: isMine ? myTextColor : theirTextColor,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                ],
+              _ImageBubble(
+                url: message.firstMediaUrl!,
+                isMine: isMine,
+                hasCaption: hasCaption,
+                caption: hasCaption ? message.content : null,
+                captionColor: isMine ? myTextColor : theirTextColor,
               )
             else if (message.isCall)
               _CallLogBubble(message: message, isMine: isMine)
@@ -3600,29 +3584,12 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                   ),
                 )
               else if (message.isImage && message.firstMediaUrl != null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _ImageBubble(
-                      url: message.firstMediaUrl!,
-                      isMine: isMine,
-                      hasCaption: hasCaption,
-                    ),
-                    if (hasCaption)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        child: Text(
-                          message.content!,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: isMine ? myTextColor : theirTextColor,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                  ],
+                _ImageBubble(
+                  url: message.firstMediaUrl!,
+                  isMine: isMine,
+                  hasCaption: hasCaption,
+                  caption: hasCaption ? message.content : null,
+                  captionColor: isMine ? myTextColor : theirTextColor,
                 )
               else if (message.isCall)
                 _CallLogBubble(message: message, isMine: isMine)
@@ -4015,77 +3982,198 @@ class _ReactionBar extends StatelessWidget {
 
 // ── Image Bubble ──────────────────────────────────────────────────────────────
 
-class _ImageBubble extends StatelessWidget {
+class _ImageBubble extends StatefulWidget {
   final String url;
   final bool isMine;
   final bool hasCaption;
+  final String? caption;
+  final Color? captionColor;
 
   const _ImageBubble({
     required this.url,
     required this.isMine,
     this.hasCaption = false,
+    this.caption,
+    this.captionColor,
   });
 
-  bool get _isLocalPath => !url.startsWith('http') && !url.startsWith('blob');
+  @override
+  State<_ImageBubble> createState() => _ImageBubbleState();
+}
+
+class _ImageBubbleState extends State<_ImageBubble> {
+  double? _aspectRatio;
+  ImageStream? _imageStream;
+  ImageStreamListener? _streamListener;
+
+  bool get _isLocalPath =>
+      !widget.url.startsWith('http') && !widget.url.startsWith('blob');
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveImageDimensions();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ImageBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _resolveImageDimensions();
+    }
+  }
+
+  void _resolveImageDimensions() {
+    try {
+      final ImageProvider provider = _isLocalPath && !kIsWeb
+          ? FileImage(io.File(widget.url))
+          : CachedNetworkImageProvider(widget.url) as ImageProvider;
+
+      final oldStream = _imageStream;
+      _imageStream = provider.resolve(const ImageConfiguration());
+      if (_streamListener != null && oldStream != null) {
+        oldStream.removeListener(_streamListener!);
+      }
+
+      _streamListener = ImageStreamListener(
+        (ImageInfo info, bool synchronousCall) {
+          if (mounted) {
+            final w = info.image.width;
+            final h = info.image.height;
+            if (w > 0 && h > 0) {
+              final ratio = w / h;
+              if (_aspectRatio != ratio) {
+                setState(() {
+                  _aspectRatio = ratio;
+                });
+              }
+            }
+          }
+        },
+        onError: (_, __) {},
+      );
+
+      _imageStream!.addListener(_streamListener!);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    if (_streamListener != null && _imageStream != null) {
+      _imageStream!.removeListener(_streamListener!);
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => FullScreenImageViewer.open(context, url),
-      child: Hero(
-        tag: url,
-        child: ClipRRect(
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(hasCaption ? 0 : (isMine ? 18 : 4)),
-            bottomRight: Radius.circular(hasCaption ? 0 : (isMine ? 4 : 18)),
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.65,
-              maxHeight: 300,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final maxBubbleWidth = screenWidth * 0.65;
+
+    final double bubbleWidth;
+    final double imageHeight;
+
+    if (_aspectRatio != null) {
+      if (_aspectRatio! < 0.75) {
+        // Ảnh dọc (screenshot điện thoại, chân dung)
+        imageHeight = 290.0;
+        bubbleWidth =
+            (imageHeight * _aspectRatio!).clamp(165.0, maxBubbleWidth);
+      } else if (_aspectRatio! > 1.35) {
+        // Ảnh ngang (landscape)
+        bubbleWidth = maxBubbleWidth;
+        imageHeight = (bubbleWidth / _aspectRatio!).clamp(140.0, 260.0);
+      } else {
+        // Ảnh vuông hoặc tỉ lệ thông thường
+        bubbleWidth = math.min(maxBubbleWidth, 250.0);
+        imageHeight = bubbleWidth / _aspectRatio!;
+      }
+    } else {
+      bubbleWidth = math.min(maxBubbleWidth, 220.0);
+      imageHeight = 200.0;
+    }
+
+    final hasCaption = widget.hasCaption &&
+        widget.caption != null &&
+        widget.caption!.trim().isNotEmpty;
+
+    return SizedBox(
+      width: bubbleWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: () => FullScreenImageViewer.open(context, widget.url),
+            child: Hero(
+              tag: widget.url,
+              child: ClipRRect(
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(
+                      hasCaption ? 0 : (widget.isMine ? 18 : 4)),
+                  bottomRight: Radius.circular(
+                      hasCaption ? 0 : (widget.isMine ? 4 : 18)),
+                ),
+                child: SizedBox(
+                  width: bubbleWidth,
+                  height: imageHeight,
+                  child: _buildImage(),
+                ),
+              ),
             ),
-            child: _isLocalPath && !kIsWeb
-                ? Image.file(io.File(url), fit: BoxFit.cover)
-                : (kIsWeb
-                    ? Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: 200,
-                          height: 160,
-                          color: Colors.grey.withValues(alpha: 0.2),
-                          child: const Icon(CupertinoIcons.photo, color: Colors.grey),
-                        ),
-                        loadingBuilder: (_, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            width: 200,
-                            height: 160,
-                            color: Colors.grey.withValues(alpha: 0.2),
-                            child: const Center(child: CupertinoActivityIndicator()),
-                          );
-                        },
-                      )
-                    : CachedNetworkImage(
-                        imageUrl: url,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
-                          width: 200,
-                          height: 160,
-                          color: Colors.grey.withValues(alpha: 0.2),
-                          child: const Center(child: CupertinoActivityIndicator()),
-                        ),
-                        errorWidget: (_, __, ___) => Container(
-                          width: 200,
-                          height: 160,
-                          color: Colors.grey.withValues(alpha: 0.2),
-                          child: const Icon(CupertinoIcons.photo, color: Colors.grey),
-                        ),
-                      )),
           ),
+          if (hasCaption)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
+              child: Text(
+                widget.caption!,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: widget.captionColor,
+                  height: 1.35,
+                ),
+                softWrap: true,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImage() {
+    if (_isLocalPath && !kIsWeb) {
+      return Image.file(io.File(widget.url), fit: BoxFit.cover);
+    }
+    if (kIsWeb) {
+      return Image.network(
+        widget.url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: Colors.grey.withValues(alpha: 0.2),
+          child: const Icon(CupertinoIcons.photo, color: Colors.grey),
         ),
+        loadingBuilder: (_, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            color: Colors.grey.withValues(alpha: 0.2),
+            child: const Center(child: CupertinoActivityIndicator()),
+          );
+        },
+      );
+    }
+    return CachedNetworkImage(
+      imageUrl: widget.url,
+      fit: BoxFit.cover,
+      placeholder: (_, __) => Container(
+        color: Colors.grey.withValues(alpha: 0.2),
+        child: const Center(child: CupertinoActivityIndicator()),
+      ),
+      errorWidget: (_, __, ___) => Container(
+        color: Colors.grey.withValues(alpha: 0.2),
+        child: const Icon(CupertinoIcons.photo, color: Colors.grey),
       ),
     );
   }

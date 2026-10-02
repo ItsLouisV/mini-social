@@ -9,6 +9,7 @@ import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../profile/providers/profile_provider.dart';
 import '../../domain/conversation_model.dart';
 import '../../providers/chat_provider.dart';
 import '../widgets/slidable_circular_action_button.dart';
@@ -222,6 +223,46 @@ class _HiddenConversationTileState
     final titleColor = theme.textTheme.titleMedium?.color;
     final hintColor = theme.hintColor;
 
+    // Resolve other user for direct chat if not preloaded
+    final String? otherUserId = !widget.conv.isGroup && widget.currentUserId != null
+        ? widget.conv.getOtherUserId(widget.currentUserId!)
+        : null;
+
+    final fallbackOtherUser = (otherUserId != null && otherUserId.isNotEmpty)
+        ? ref.watch(profileProvider(otherUserId)).valueOrNull
+        : null;
+
+    final effectiveOtherUser = widget.conv.otherUser ?? fallbackOtherUser;
+
+    final avatarUrl = widget.conv.isGroup
+        ? widget.conv.groupAvatarUrl
+        : effectiveOtherUser?.avatarUrl;
+
+    final displayName = widget.conv.isGroup
+        ? widget.conv.groupName
+        : (effectiveOtherUser?.displayName ?? 'Người dùng');
+
+    final lastSenderProfile = (widget.conv.isGroup &&
+            widget.conv.lastMessageSenderId != null &&
+            widget.conv.lastMessageSenderId != widget.currentUserId)
+        ? ref.watch(profileProvider(widget.conv.lastMessageSenderId!)).valueOrNull
+        : null;
+    final lastSenderName =
+        lastSenderProfile?.displayName ?? lastSenderProfile?.fullName;
+
+    String displayLastMessage;
+    if (widget.conv.lastMessage != null) {
+      if (widget.conv.lastMessageSenderId == widget.currentUserId) {
+        displayLastMessage = 'Bạn: ${widget.conv.lastMessage}';
+      } else if (widget.conv.isGroup && lastSenderName != null) {
+        displayLastMessage = '$lastSenderName: ${widget.conv.lastMessage}';
+      } else {
+        displayLastMessage = widget.conv.lastMessage!;
+      }
+    } else {
+      displayLastMessage = 'Chưa có tin nhắn';
+    }
+
     return IOSRubberbandSlidableTile(
       startActions: [
         SlidableActionItem(
@@ -312,8 +353,8 @@ class _HiddenConversationTileState
 
               // Avatar
               AppAvatar(
-                imageUrl: widget.conv.otherUser?.avatarUrl,
-                name: widget.conv.otherUser?.displayName,
+                imageUrl: avatarUrl,
+                name: displayName,
                 radius: 25, // Sleek 50px avatar
               ),
               const SizedBox(width: 12),
@@ -324,26 +365,44 @@ class _HiddenConversationTileState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      widget.conv.otherUser?.displayName ?? 'Người dùng',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight:
-                            hasUnread ? FontWeight.w600 : FontWeight.w500,
-                        color: titleColor,
-                        letterSpacing: -0.2,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            displayName,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight:
+                                  hasUnread ? FontWeight.w600 : FontWeight.w500,
+                              color: titleColor,
+                              letterSpacing: -0.2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (widget.conv.isPinned(widget.currentUserId ?? ''))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Icon(
+                              CupertinoIcons.pin_fill,
+                              size: 12,
+                              color: hintColor,
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Icon(
+                            CupertinoIcons.eye_slash_fill,
+                            size: 12,
+                            color: hintColor,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      (widget.conv.lastMessage != null)
-                          ? (widget.conv.lastMessageSenderId ==
-                                  widget.currentUserId
-                              ? 'Bạn: ${widget.conv.lastMessage}'
-                              : widget.conv.lastMessage!)
-                          : 'Chưa có tin nhắn',
+                      displayLastMessage,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

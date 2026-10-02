@@ -20,6 +20,7 @@ class AppTextField extends StatefulWidget {
   final FocusNode? focusNode;
   final bool readOnly;
   final VoidCallback? onTap;
+  final TextCapitalization? textCapitalization;
 
   const AppTextField({
     super.key,
@@ -40,6 +41,7 @@ class AppTextField extends StatefulWidget {
     this.focusNode,
     this.readOnly = false,
     this.onTap,
+    this.textCapitalization,
   });
 
   @override
@@ -77,6 +79,19 @@ class _AppTextFieldState extends State<AppTextField> {
     super.dispose();
   }
 
+  TextCapitalization get _effectiveCapitalization {
+    if (widget.textCapitalization != null) {
+      return widget.textCapitalization!;
+    }
+    if (widget.obscureText ||
+        widget.keyboardType == TextInputType.emailAddress ||
+        widget.keyboardType == TextInputType.url ||
+        widget.keyboardType == TextInputType.visiblePassword) {
+      return TextCapitalization.none;
+    }
+    return TextCapitalization.sentences;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -97,6 +112,7 @@ class _AppTextFieldState extends State<AppTextField> {
           obscureText: widget.obscureText ? _obscure : false,
           keyboardType: widget.keyboardType,
           textInputAction: widget.textInputAction,
+          textCapitalization: _effectiveCapitalization,
           onChanged: widget.onChanged,
           onEditingComplete: widget.onEditingComplete,
           autofocus: widget.autofocus,

@@ -45,6 +45,7 @@ class _ModernGlassInput extends StatefulWidget {
   final TextInputType keyboardType;
   final TextInputAction textInputAction;
   final VoidCallback? onEditingComplete;
+  final TextCapitalization? textCapitalization;
 
   const _ModernGlassInput({
     super.key,
@@ -57,6 +58,7 @@ class _ModernGlassInput extends StatefulWidget {
     this.keyboardType = TextInputType.text,
     this.textInputAction = TextInputAction.next,
     this.onEditingComplete,
+    this.textCapitalization,
   });
 
   @override
@@ -184,6 +186,14 @@ class _ModernGlassInputState extends State<_ModernGlassInput>
                       obscureText: widget.obscure ? _obscureText : false,
                       keyboardType: widget.keyboardType,
                       textInputAction: widget.textInputAction,
+                      textCapitalization: widget.textCapitalization ??
+                          (widget.obscure ||
+                                  widget.keyboardType ==
+                                      TextInputType.emailAddress ||
+                                  widget.keyboardType ==
+                                      TextInputType.visiblePassword
+                              ? TextCapitalization.none
+                              : TextCapitalization.sentences),
                       onEditingComplete: widget.onEditingComplete,
                       onChanged: (_) {
                         if (_errorMessage != null) {
@@ -755,6 +765,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                       icon: CupertinoIcons.person_fill,
                                       controller: _nameController,
                                       validator: Validators.fullName,
+                                      textCapitalization: TextCapitalization.words,
                                     ),
 
                                     const SizedBox(height: 16),

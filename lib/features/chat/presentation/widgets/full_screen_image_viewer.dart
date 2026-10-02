@@ -7,21 +7,30 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 class FullScreenImageViewer extends StatefulWidget {
   final String imageUrl;
+  final String? heroTag;
 
-  const FullScreenImageViewer({super.key, required this.imageUrl});
+  const FullScreenImageViewer({
+    super.key,
+    required this.imageUrl,
+    this.heroTag,
+  });
 
-  /// Phương thức mở Viewer với hiệu ứng FadeTransition nền mượt mà
-  static void open(BuildContext context, String imageUrl) {
+  String get effectiveHeroTag => heroTag ?? imageUrl;
+
+  /// Phương thức mở Viewer với hiệu ứng mượt mà và nền trong suốt khi kéo
+  static void open(BuildContext context, String imageUrl, {String? heroTag}) {
     Navigator.push(
       context,
       PageRouteBuilder(
-        // opaque: true (để Flutter vẽ lại màn hình bên dưới sau khi pop).
-        // opaque: false gây màn hình đen và ẩn avatar/ảnh sau khi đóng viewer.
-        opaque: true,
+        opaque: false, // Cho phép nhìn xuyên màn hình bên dưới khi kéo
         maintainState: true,
-        transitionDuration: const Duration(milliseconds: 280),
+        barrierColor: Colors.transparent,
+        transitionDuration: const Duration(milliseconds: 260),
         reverseTransitionDuration: const Duration(milliseconds: 220),
-        pageBuilder: (context, _, __) => FullScreenImageViewer(imageUrl: imageUrl),
+        pageBuilder: (context, _, __) => FullScreenImageViewer(
+          imageUrl: imageUrl,
+          heroTag: heroTag,
+        ),
         transitionsBuilder: (context, animation, _, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -51,12 +60,9 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
   // Quản lý vuốt chạm nâng cao (Bypass Gesture Arena Latency)
   int? _activePointerId;
   Offset _dragStartPoint = Offset.zero;
+  DateTime _dragStartTime = DateTime.now();
   bool _pointerDownInsideImage = false;
   bool _isZoomed = false;
-
-  // Lưu trữ vị trí và tỉ lệ kéo cuối cùng để truyền vào Hero Flight Shuttle
-  Offset _lastDragOffset = Offset.zero;
-  double _lastDragScale = 1.0;
 
   bool get _isLocalPath =>
       !widget.imageUrl.startsWith('http') && !widget.imageUrl.startsWith('blob');
@@ -172,7 +178,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     }
   }
 
-  // ── 3. Quản lý tương tác vuốt dọc 2D để đóng chuẩn iOS ───────────────────────────
+  // ── 3. Quản lý tương tác vuốt đa hướng (2D Drag) để đóng chuẩn iOS / Telegram ──
   void _handlePointerDown(PointerDownEvent event) {
     if (_isZoomed) return;
 
@@ -196,6 +202,7 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     _activePointerId = event.pointer;
     _pointerDownInsideImage = true;
     _dragStartPoint = event.position;
+    _dragStartTime = DateTime.now();
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
@@ -203,23 +210,17 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
 
     final delta = event.position - _dragStartPoint;
 
-    // Nhận diện kéo: Ưu tiên kéo dọc (dy) lớn hơn kéo ngang (dx) để tránh xung đột
+    // Nhận diện kéo theo mọi hướng (kéo xuống, sang trái, sang phải, kéo lên)
     if (!_isDragging.value) {
-      if (delta.dy.abs() > 10 && delta.dy.abs() > delta.dx.abs()) {
+      if (delta.distance > 8) {
         _isDragging.value = true;
-        // Triệt tiêu khoảng lệch ban đầu để tránh bị giật hình khi bắt đầu kéo
-        _dragStartPoint = event.position - Offset(delta.dx, delta.dy.sign * 10);
+        // Triệt tiêu khoảng lệch ban đầu để tránh bị giật khung hình
+        _dragStartPoint = event.position - (delta / delta.distance * 8);
       }
     }
 
     if (_isDragging.value) {
-      final currentDelta = event.position - _dragStartPoint;
-      double dy = currentDelta.dy;
-      // Damping (giảm chấn) khi kéo lên trên giống hệt iOS
-      if (dy < 0) {
-        dy = dy * 0.65;
-      }
-      _dragOffset.value = Offset(currentDelta.dx, dy);
+      _dragOffset.value = event.position - _dragStartPoint;
     }
   }
 
@@ -236,15 +237,21 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     _isDragging.value = false;
 
     final finalOffset = _dragOffset.value;
-    final size = MediaQuery.of(context).size;
+    final distance = finalOffset.distance;
+    final elapsedMs = DateTime.now().difference(_dragStartTime).inMilliseconds;
+    final isFastFlick = elapsedMs > 0 &&
+        elapsedMs < 350 &&
+        (distance / elapsedMs * 1000) > 600 &&
+        distance > 25;
 
-    // Nếu khoảng cách kéo theo trục dọc đủ lớn (> 100px) -> Tiến hành đóng
-    if (finalOffset.dy.abs() > 100) {
-      _lastDragOffset = finalOffset;
-      _lastDragScale = (1.0 - (finalOffset.dy.abs() / (size.height * 2.5))).clamp(0.75, 1.0);
+    // Ngưỡng đóng: kéo bất kỳ hướng nào (xuống, trái, phải, lên) > 75px HOẶC vuốt nhanh (flick)
+    if (distance > 75 ||
+        finalOffset.dx.abs() > 65 ||
+        finalOffset.dy.abs() > 65 ||
+        isFastFlick) {
       Navigator.pop(context);
     } else {
-      // Trả ảnh về vị trí tâm ban đầu với hiệu ứng Spring mượt mà
+      // Trả ảnh về vị trí tâm ban đầu với hiệu ứng nảy đàn hồi (Spring physics)
       _dismissAnimation = Tween<Offset>(
         begin: finalOffset,
         end: Offset.zero,
@@ -256,25 +263,43 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
     }
   }
 
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (event.pointer != _activePointerId) return;
+    _activePointerId = null;
+    if (_isDragging.value) {
+      _isDragging.value = false;
+      _dismissAnimation = Tween<Offset>(
+        begin: _dragOffset.value,
+        end: Offset.zero,
+      ).animate(CurvedAnimation(
+        parent: _dismissAnimationController,
+        curve: Curves.easeOutBack,
+      ));
+      _dismissAnimationController.forward(from: 0.0);
+    }
+    _pointerDownInsideImage = false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.transparent,
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
         child: Listener(
           onPointerDown: _handlePointerDown,
           onPointerMove: _handlePointerMove,
           onPointerUp: _handlePointerUp,
+          onPointerCancel: _handlePointerCancel,
           child: ValueListenableBuilder<Offset>(
             valueListenable: _dragOffset,
             builder: (context, dragOffset, child) {
-              final dragDistance = dragOffset.dy.abs();
-              // Tính toán độ mờ nền đen dựa trên biên độ kéo dọc
-              final opacity = (1.0 - (dragDistance / (size.height * 0.55))).clamp(0.0, 1.0);
-              // Tỉ lệ scale thu nhỏ ảnh khi kéo (chuẩn Instagram/iOS)
+              final dragDistance = dragOffset.distance;
+              // Tính toán độ mờ nền: bình thường đen hoàn toàn, khi kéo theo bất kỳ hướng nào thì trong suốt dần
+              final opacity = (1.0 - (dragDistance / (size.height * 0.42))).clamp(0.0, 1.0);
+              // Tỉ lệ scale thu nhỏ ảnh khi kéo (chuẩn Instagram/iOS/Telegram)
               final scale = (1.0 - (dragDistance / (size.height * 2.5))).clamp(0.75, 1.0);
 
               return Container(
@@ -302,9 +327,9 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
                             onInteractionEnd: _handleInteractionEnd,
                             child: Center(
                               child: Hero(
-                                tag: widget.imageUrl,
+                                tag: widget.effectiveHeroTag,
                                 createRectTween: (begin, end) {
-                                  // Chuyển động bay thẳng tuyến tính thay vì bay cong (Arc) giúp ảnh bay tự nhiên hơn
+                                  // Chuyển động bay thẳng tuyến tính giúp ảnh bay tự nhiên về đúng vị trí
                                   return RectTween(begin: begin, end: end);
                                 },
                                 flightShuttleBuilder: (flightContext, animation, flightDirection, fromHeroContext, toHeroContext) {
@@ -324,40 +349,25 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer>
                                     builder: (context, child) {
                                       final t = animation.value;
 
-                                      // Nội suy vị trí bay từ tọa độ kéo tay cuối cùng về vị trí ảnh gốc
-                                      final offset = (flightDirection == HeroFlightDirection.pop)
-                                          ? Offset.lerp(Offset.zero, _lastDragOffset, t)!
-                                          : Offset.zero;
-
-                                      final scaleVal = (flightDirection == HeroFlightDirection.pop)
-                                          ? 1.0 + (_lastDragScale - 1.0) * t
-                                          : 1.0;
-
-                                      return Transform.translate(
-                                        offset: offset,
-                                        child: Transform.scale(
-                                          scale: scaleVal,
-                                          child: Stack(
-                                            fit: StackFit.passthrough,
-                                            children: [
-                                              // Cross-fade mượt mà giữa ảnh thumbnail và ảnh phóng to để triệt tiêu hiện tượng vỡ tỉ lệ ảnh
-                                              Opacity(
-                                                opacity: (1.0 - t).clamp(0.0, 1.0),
-                                                child: thumbnailChild,
-                                              ),
-                                              Opacity(
-                                                opacity: t.clamp(0.0, 1.0),
-                                                child: fullscreenChild,
-                                              ),
-                                            ],
+                                      return Stack(
+                                        fit: StackFit.passthrough,
+                                        children: [
+                                          // Cross-fade mượt mà giữa ảnh thumbnail và ảnh phóng to
+                                          Opacity(
+                                            opacity: (1.0 - t).clamp(0.0, 1.0),
+                                            child: thumbnailChild,
                                           ),
-                                        ),
+                                          Opacity(
+                                            opacity: t.clamp(0.0, 1.0),
+                                            child: fullscreenChild,
+                                          ),
+                                        ],
                                       );
                                     },
                                   );
                                 },
                                 child: GestureDetector(
-                                  onTap: () {}, // Ngăn chặn sự kiện tap lan truyền ra GestureDetector ngoài gây đóng ảnh
+                                  onTap: () {}, // Ngăn chặn sự kiện tap lan truyền ra ngoài gây đóng ảnh
                                   onDoubleTapDown: _onDoubleTapDown,
                                   onDoubleTap: () {}, // Giữ block trống để kích hoạt Double Tap Down độc lập
                                   child: _buildImage(),
