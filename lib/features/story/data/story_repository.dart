@@ -98,8 +98,51 @@ class StoryRepository {
     return StoryModel.fromJson(Map<String, dynamic>.from(result));
   }
 
-  /// Delete a story
-  Future<void> deleteStory(String storyId) async {
+  /// Delete a story and purge its media file from Supabase Storage
+  Future<void> deleteStory(String storyId, {String? mediaUrl}) async {
+    try {
+      String? targetMediaUrl = mediaUrl;
+
+      // 1. If mediaUrl is not provided, fetch it before deleting row
+      if (targetMediaUrl == null || targetMediaUrl.isEmpty) {
+        final row = await _client
+            .from('stories')
+            .select('media_url')
+            .eq('id', storyId)
+            .maybeSingle();
+        if (row != null) {
+          targetMediaUrl = row['media_url'] as String?;
+        }
+      }
+
+      // 2. Remove file from 'posts' bucket if exists
+      if (targetMediaUrl != null && targetMediaUrl.isNotEmpty) {
+        String? storagePath;
+        if (targetMediaUrl.contains('/posts/')) {
+          storagePath = targetMediaUrl.split('/posts/').last;
+        } else {
+          final uri = Uri.tryParse(targetMediaUrl);
+          if (uri != null) {
+            final segments = uri.pathSegments;
+            final postsIdx = segments.indexOf('posts');
+            if (postsIdx != -1 && postsIdx + 1 < segments.length) {
+              storagePath = segments.sublist(postsIdx + 1).join('/');
+            }
+          }
+        }
+
+        if (storagePath != null && storagePath.isNotEmpty) {
+          // Remove query params if any
+          storagePath = storagePath.split('?').first;
+          debugPrint('[StoryRepository] Purging story media from Supabase storage: $storagePath');
+          await _client.storage.from('posts').remove([storagePath]);
+        }
+      }
+    } catch (e) {
+      debugPrint('Warning: Could not remove story media from storage: $e');
+    }
+
+    // 3. Delete database record
     await _client.from('stories').delete().eq('id', storyId);
   }
 

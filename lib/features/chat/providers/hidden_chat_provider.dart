@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../auth/providers/auth_provider.dart';
 import 'chat_provider.dart';
 
 final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
@@ -38,4 +39,19 @@ class HiddenChatNotifier extends AutoDisposeAsyncNotifier<bool> {
 
 final hiddenChatProvider = AutoDisposeAsyncNotifierProvider<HiddenChatNotifier, bool>(() {
   return HiddenChatNotifier();
+});
+
+/// Đếm tổng số tin nhắn chưa đọc từ các cuộc trò chuyện đang bị ẩn
+final unreadHiddenCountProvider = Provider.autoDispose<int>((ref) {
+  final convs = ref.watch(conversationsProvider).valueOrNull ?? [];
+  final currentUserId = ref.watch(currentUserIdProvider);
+  if (currentUserId == null) return 0;
+
+  int count = 0;
+  for (final c in convs) {
+    if (c.isHidden(currentUserId)) {
+      count += c.getUnreadCount(currentUserId);
+    }
+  }
+  return count;
 });

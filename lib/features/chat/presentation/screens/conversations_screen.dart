@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/localization/app_translations.dart';
@@ -49,6 +48,8 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
     final theme = Theme.of(context);
 
     final isOnline = ref.watch(isOnlineProvider);
+    final unreadHiddenCount = ref.watch(unreadHiddenCountProvider);
+    final hasHiddenUnread = unreadHiddenCount > 0;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -68,10 +69,23 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
         ),
         actions: [
           PopupMenuButton<String>(
-            icon: FaIcon(
-              FontAwesomeIcons.squarePlus,
-              size: 22,
-              color: theme.iconTheme.color,
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  Icons.add_circle_outline_rounded,
+                  size: 24,
+                  color: hasHiddenUnread
+                      ? const Color(0xFFFF3B30)
+                      : theme.iconTheme.color,
+                ),
+                if (hasHiddenUnread)
+                  const Positioned(
+                    top: -1,
+                    right: -1,
+                    child: _BlinkingDot(),
+                  ),
+              ],
             ),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -189,16 +203,55 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.15),
+                        color: hasHiddenUnread
+                            ? const Color(0xFFFF3B30).withValues(alpha: 0.15)
+                            : const Color(0xFF5856D6).withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(CupertinoIcons.eye_slash_fill,
-                          color: Colors.grey, size: 16),
+                      child: Icon(
+                        CupertinoIcons.eye_slash_fill,
+                        color: hasHiddenUnread
+                            ? const Color(0xFFFF3B30)
+                            : const Color(0xFF5856D6),
+                        size: 16,
+                      ),
                     ),
                     const SizedBox(width: 12),
-                    const Text('Cuộc trò chuyện ẩn',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14)),
+                    Text(
+                      'Cuộc trò chuyện ẩn',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: hasHiddenUnread ? const Color(0xFFFF3B30) : null,
+                      ),
+                    ),
+                    if (hasHiddenUnread) ...[
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF3B30),
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF3B30)
+                                  .withValues(alpha: 0.35),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          unreadHiddenCount > 99 ? '99+' : '$unreadHiddenCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -637,6 +690,72 @@ class _ConversationTile extends ConsumerWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BlinkingDot extends StatefulWidget {
+  const _BlinkingDot();
+
+  @override
+  State<_BlinkingDot> createState() => _BlinkingDotState();
+}
+
+class _BlinkingDotState extends State<_BlinkingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacityAnimation;
+  late final Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    )..repeat(reverse: true);
+
+    _opacityAnimation = Tween<double>(begin: 0.25, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.15).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return FadeTransition(
+      opacity: _opacityAnimation,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF3B30),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: theme.scaffoldBackgroundColor,
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFF3B30).withValues(alpha: 0.7),
+                blurRadius: 5,
+                spreadRadius: 1,
+              ),
+            ],
           ),
         ),
       ),

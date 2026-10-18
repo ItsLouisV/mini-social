@@ -294,6 +294,10 @@ class _CreateStoryModalState extends ConsumerState<CreateStoryModal> {
           );
 
       ref.invalidate(activeStoriesProvider);
+      final currentUserId = ref.read(currentUserIdProvider);
+      if (currentUserId != null) {
+        ref.invalidate(userStoriesProvider(currentUserId));
+      }
 
       if (mounted) {
         ToastService.showSuccess(context, 'Đã đăng tin mới!');

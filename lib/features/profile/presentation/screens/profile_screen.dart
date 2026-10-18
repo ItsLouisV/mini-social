@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
@@ -58,7 +59,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           if (canPop)
             Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
+              top: MediaQuery.of(context).padding.top + 7,
               left: 12,
               child: Material(
                 color: Colors.transparent,
@@ -98,6 +99,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final friendStatusAsync = ref.watch(friendStatusProvider(profile.id));
     final isFriend = friendStatusAsync.valueOrNull == FriendStatus.accepted;
     final isLocked = profile.isPrivateProfile && !isMine && !isFriend;
+    final canPop = context.canPop();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final topPadding = MediaQuery.of(context).padding.top;
 
     return MediaQuery.removePadding(
       context: context,
@@ -110,112 +115,116 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           SliverPersistentHeader(
             pinned: true,
             delegate: _SliverAppBarDelegate(
-              minHeight: 48.0,
-              maxHeight: 48.0,
+              minHeight: topPadding + 52.0,
+              maxHeight: topPadding + 52.0,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
+                  color: theme.scaffoldBackgroundColor,
                   border: Border(
                     bottom: BorderSide(
-                      color: Theme.of(context).dividerColor,
+                      color: theme.dividerColor.withValues(alpha: 0.15),
                       width: 0.5,
                     ),
                   ),
                 ),
+                padding: EdgeInsets.only(
+                  top: topPadding + 7,
+                  bottom: 7,
+                  left: 10,
+                  right: 10,
+                ),
                 child: Row(
                   children: [
+                    // Chừa khoảng trống đối xứng bên trái cho nút Back tròn
+                    if (canPop)
+                      const SizedBox(width: 48)
+                    else
+                      const SizedBox(width: 6),
+
+                    // iOS UISegmentedControl (CupertinoSlidingSegmentedControl) cân đối 100% ở giữa màn hình
                     Expanded(
-                      child: InkWell(
-                        onTap: () => setState(() => _selectedTab = 0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(
+                      child: CupertinoSlidingSegmentedControl<int>(
+                        groupValue: _selectedTab,
+                        backgroundColor: isDark
+                            ? const Color(0xFF242526)
+                            : const Color(0xFFE4E6EB),
+                        thumbColor: isDark
+                            ? const Color(0xFF3A3B3C)
+                            : Colors.white,
+                        children: {
+                          0: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   CupertinoIcons.square_grid_2x2,
-                                  size: 18,
+                                  size: 16,
                                   color: _selectedTab == 0
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).hintColor,
+                                      ? (isDark ? Colors.white : Colors.black87)
+                                      : (isDark ? Colors.white60 : Colors.black54),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   'Bài viết',
                                   style: TextStyle(
+                                    fontSize: 13.5,
                                     fontWeight: _selectedTab == 0
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
                                     color: _selectedTab == 0
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).hintColor,
-                                    fontSize: 14,
+                                        ? (isDark ? Colors.white : Colors.black87)
+                                        : (isDark ? Colors.white60 : Colors.black54),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
-                            Container(
-                              height: 2.5,
-                              width: 60,
-                              decoration: BoxDecoration(
-                                color: _selectedTab == 0
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () => setState(() => _selectedTab = 1),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(
+                          ),
+                          1: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   CupertinoIcons.clock,
-                                  size: 18,
+                                  size: 16,
                                   color: _selectedTab == 1
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).hintColor,
+                                      ? (isDark ? Colors.white : Colors.black87)
+                                      : (isDark ? Colors.white60 : Colors.black54),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   'Kho lưu trữ tin',
                                   style: TextStyle(
+                                    fontSize: 13.5,
                                     fontWeight: _selectedTab == 1
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
                                     color: _selectedTab == 1
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).hintColor,
-                                    fontSize: 14,
+                                        ? (isDark ? Colors.white : Colors.black87)
+                                        : (isDark ? Colors.white60 : Colors.black54),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
-                            Container(
-                              height: 2.5,
-                              width: 80,
-                              decoration: BoxDecoration(
-                                color: _selectedTab == 1
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        },
+                        onValueChanged: (int? value) {
+                          if (value != null && value != _selectedTab) {
+                            HapticFeedback.selectionClick();
+                            setState(() => _selectedTab = value);
+                          }
+                        },
                       ),
                     ),
+
+                    // Spacer đối xứng hoàn hảo bên phải
+                    if (canPop)
+                      const SizedBox(width: 48)
+                    else
+                      const SizedBox(width: 6),
                   ],
                 ),
               ),

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/extensions/date_extension.dart';
+import '../../../../core/services/toast_service.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../../story/domain/story_model.dart';
 import '../../../story/presentation/widgets/story_viewer_modal.dart';
 import '../../../story/providers/story_provider.dart';
@@ -26,6 +28,8 @@ class ProfileStoriesGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final storiesAsync = ref.watch(userStoriesProvider(userId));
+    final currentUserId = ref.watch(currentUserIdProvider);
+    final isMine = currentUserId != null && currentUserId == userId;
 
     return storiesAsync.when(
       data: (stories) {
@@ -92,7 +96,8 @@ class ProfileStoriesGrid extends ConsumerWidget {
             delegate: SliverChildBuilderDelegate(
               (context, index) {
                 final story = stories[index];
-                return _buildStoryCard(context, story, stories, index);
+                return _buildStoryCard(
+                    context, ref, story, stories, index, isMine);
               },
               childCount: stories.length,
             ),
@@ -119,8 +124,8 @@ class ProfileStoriesGrid extends ConsumerWidget {
     );
   }
 
-  Widget _buildStoryCard(BuildContext context, StoryModel story,
-      List<StoryModel> allStories, int index) {
+  Widget _buildStoryCard(BuildContext context, WidgetRef ref, StoryModel story,
+      List<StoryModel> allStories, int index, bool isMine) {
     final bgColor = _hexToColor(story.backgroundColor);
     final hasMedia = story.mediaUrl != null && story.mediaUrl!.isNotEmpty;
     final isStillActive = !story.isExpired;
@@ -133,6 +138,7 @@ class ProfileStoriesGrid extends ConsumerWidget {
           initialStoryIndex: index,
         );
       },
+      onLongPress: isMine ? () => _showStoryOptions(context, ref, story) : null,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: Container(
@@ -260,5 +266,74 @@ class ProfileStoriesGrid extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showStoryOptions(
+      BuildContext context, WidgetRef ref, StoryModel story) async {
+    final action = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text('Tin ngày ${story.createdAt.chatTimestamp}'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx, 'view'),
+            child: const Text('Xem tin'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, 'delete'),
+            child: const Text('Xóa tin vĩnh viễn'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Hủy'),
+        ),
+      ),
+    );
+
+    if (action == 'view') {
+      if (context.mounted) {
+        StoryViewerModal.show(context, stories: [story], initialStoryIndex: 0);
+      }
+    } else if (action == 'delete') {
+      if (!context.mounted) return;
+      final confirm = await showCupertinoDialog<bool>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('Xóa tin vĩnh viễn?'),
+          content: const Text(
+              'Tin này và toàn bộ ảnh/video đính kèm sẽ bị xóa hoàn toàn khỏi máy chủ và kho lưu trữ.'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Hủy'),
+            ),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Xóa'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true) {
+        try {
+          await ref
+              .read(storyRepositoryProvider)
+              .deleteStory(story.id, mediaUrl: story.mediaUrl);
+          ref.invalidate(userStoriesProvider(userId));
+          ref.invalidate(activeStoriesProvider);
+          if (context.mounted) {
+            ToastService.showSuccess(context, 'Đã xóa tin thành công');
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ToastService.showError(context, 'Lỗi khi xóa tin: $e');
+          }
+        }
+      }
+    }
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../core/services/audio_player/app_audio_player.dart';
+import '../../../../core/services/toast_service.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../domain/story_model.dart';
@@ -783,10 +784,50 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
                               icon: const Icon(CupertinoIcons.trash,
                                   color: Colors.white70, size: 20),
                               onPressed: () async {
-                                await ref
-                                    .read(storyRepositoryProvider)
-                                    .deleteStory(story.id);
-                                ref.invalidate(activeStoriesProvider);
+                                _pauseTimer();
+                                final confirm = await showCupertinoDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => CupertinoAlertDialog(
+                                    title: const Text('Xóa tin vĩnh viễn?'),
+                                    content: const Text(
+                                        'Tin này và toàn bộ ảnh/video đính kèm sẽ bị xóa hoàn toàn khỏi hệ thống lưu trữ.'),
+                                    actions: [
+                                      CupertinoDialogAction(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Hủy'),
+                                      ),
+                                      CupertinoDialogAction(
+                                        isDestructiveAction: true,
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Xóa'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirm != true) {
+                                  _resumeTimer();
+                                  return;
+                                }
+
+                                try {
+                                  await ref
+                                      .read(storyRepositoryProvider)
+                                      .deleteStory(story.id, mediaUrl: story.mediaUrl);
+                                  ref.invalidate(activeStoriesProvider);
+                                  ref.invalidate(userStoriesProvider(story.userId));
+                                  final currentUserId = ref.read(currentUserIdProvider);
+                                  if (currentUserId != null && currentUserId != story.userId) {
+                                    ref.invalidate(userStoriesProvider(currentUserId));
+                                  }
+                                  if (context.mounted) {
+                                    ToastService.showSuccess(context, 'Đã xóa tin thành công');
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ToastService.showError(context, 'Lỗi khi xóa tin: $e');
+                                  }
+                                }
                                 _closeViewer();
                               },
                             ),

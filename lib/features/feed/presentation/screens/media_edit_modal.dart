@@ -2,7 +2,6 @@ import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/image_utils.dart';
@@ -314,10 +313,10 @@ class _MediaEditModalState extends State<MediaEditModal> {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                FaIcon(
-                  FontAwesomeIcons.squarePlus,
+                Icon(
+                  Icons.add_circle_outline_rounded,
                   color: AppColors.primary,
-                  size: 16,
+                  size: 18,
                 ),
                 SizedBox(width: 8),
                 Text(

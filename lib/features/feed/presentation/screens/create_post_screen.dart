@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -832,7 +831,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 children: [
                   // 1. AI gợi ý ✨ (giữ nguyên nút action)
                   _buildOptionCard(
-                    iconWidget: const FaIcon(FontAwesomeIcons.wandMagicSparkles, size: 14, color: Colors.purpleAccent),
+                    iconWidget: const Icon(Icons.auto_awesome, size: 16, color: Colors.purpleAccent),
                     label: _isGeneratingAICaption ? 'Đang tạo...' : 'AI gợi ý ✨',
                     bgColor: Colors.purple.withValues(alpha: 0.15),
                     textColor: Colors.purpleAccent,
@@ -841,9 +840,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
                   const SizedBox(width: 4),
 
-                  // 2. Icon Thư viện (FontAwesome image)
+                  // 2. Icon Thư viện (Material photo_library_outlined)
                   IconButton(
-                    icon: const FaIcon(FontAwesomeIcons.image, color: AppColors.primary, size: 20),
+                    icon: const Icon(Icons.photo_library_outlined, color: AppColors.primary, size: 22),
                     tooltip: 'Thư viện ảnh & video',
                     onPressed: () {
                       if (_existingMedia.isNotEmpty || _media.isNotEmpty) {
@@ -866,7 +865,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       },
                     ),
                     IconButton(
-                      icon: const FaIcon(FontAwesomeIcons.ghost, color: Colors.purple, size: 19),
+                      icon: const Icon(Icons.flag_outlined, color: Colors.purple, size: 22),
                       tooltip: 'Cột mốc đáng nhớ',
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -875,7 +874,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       },
                     ),
                     IconButton(
-                      icon: const FaIcon(FontAwesomeIcons.video, color: Colors.redAccent, size: 19),
+                      icon: const Icon(Icons.videocam_outlined, color: Colors.redAccent, size: 22),
                       tooltip: 'Trực tiếp / Video',
                       onPressed: _pickVideo,
                     ),
