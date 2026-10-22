@@ -103,8 +103,8 @@ class _MyQrCodeScreenState extends ConsumerState<MyQrCodeScreen> {
                         onPressed: () => context.pop(),
                         icon: Icon(
                           CupertinoIcons.chevron_back,
-                          color: colorScheme.onSurface,
-                          size: 22,
+                          color: colorScheme.primary,
+                          size: 24,
                         ),
                       ),
                       const SizedBox(width: 4),

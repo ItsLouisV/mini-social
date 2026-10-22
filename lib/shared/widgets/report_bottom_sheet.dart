@@ -593,7 +593,8 @@ class _ReportBottomSheetState extends ConsumerState<ReportBottomSheet> {
               children: [
                 if (_history.isNotEmpty || _showSummary)
                   IconButton(
-                    icon: const Icon(CupertinoIcons.left_chevron),
+                    icon: Icon(CupertinoIcons.chevron_back,
+                        color: theme.colorScheme.primary, size: 24),
                     onPressed: _goBack,
                   )
                 else

@@ -1074,10 +1074,20 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          bubbleContent,
+          if (hasReactions)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment:
+                  isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [bubbleContent, const SizedBox(height: 16)],
+            )
+          else
+            bubbleContent,
           if (hasReactions)
             Positioned(
-              bottom: -15,
+              // Keep the visually overlapping pill inside the Stack's hit-test
+              // bounds so its emoji and overflow count are all tappable.
+              bottom: 1,
               right: isMine ? 28 : null,
               left: isMine ? null : 33,
               child: _ReactionBar(
@@ -1092,7 +1102,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
     );
 
     return Padding(
-      padding: EdgeInsets.only(bottom: hasReactions ? 16 : 2),
+      padding: EdgeInsets.only(bottom: hasReactions ? 0 : 2),
       child: Column(
         crossAxisAlignment:
             isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,

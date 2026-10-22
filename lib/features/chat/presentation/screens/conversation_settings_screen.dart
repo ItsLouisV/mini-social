@@ -81,8 +81,8 @@ class _ConversationSettingsScreenState
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: Icon(CupertinoIcons.left_chevron,
-              color: theme.colorScheme.primary),
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -320,7 +320,7 @@ class _ConversationSettingsScreenState
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Ảnh & Video (${mediaMessages.length})',
+                                'Ảnh & Video, File/Link',
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold, fontSize: 14),
                               ),
@@ -412,6 +412,7 @@ class _ConversationSettingsScreenState
                     cardBgColor, dividerColor, isGroupAdmin, isOwner, perms),
                 const SizedBox(height: 24),
               ],
+              const SizedBox(height: 24),
 
               // ── Group 2: Personalizations ────────────────────────────────────────
               _buildSectionHeader('TÙY CHỈNH CHAT'),

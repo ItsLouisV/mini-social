@@ -36,35 +36,45 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
     final cardBg = theme.colorScheme.surface;
     final labelColor = isDark ? const Color(0xFF8E8E93) : const Color(0xFF6C6C70);
 
-    return Scaffold(
+    return CupertinoPageScaffold(
       backgroundColor: groupedBg,
-      body: CustomScrollView(
-        slivers: [
-          // ── App Bar ───────────────────────────────────────────
-          CupertinoSliverNavigationBar(
-            transitionBetweenRoutes: false,
-            leading: CupertinoNavigationBarBackButton(
-              color: theme.colorScheme.primary,
-              previousPageTitle: 'Cài đặt',
-              onPressed: () => context.pop(),
-            ),
-            largeTitle: const Text(
-              'Quyền riêng tư',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: groupedBg.withValues(alpha: 0.92),
-            border: Border(
-              bottom: BorderSide(
-                color: theme.dividerColor.withValues(alpha: 0.0),
-                width: 0,
-              ),
-            ),
+      navigationBar: CupertinoNavigationBar(
+        transitionBetweenRoutes: false,
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => context.pop(),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(CupertinoIcons.chevron_back,
+                  color: theme.colorScheme.primary, size: 24),
+              const SizedBox(width: 4),
+              Text('Cài đặt',
+                  style: TextStyle(
+                      color: theme.colorScheme.primary, fontSize: 16)),
+            ],
           ),
-
-          SliverSafeArea(
-            top: false,
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
+        ),
+        middle: const Text(
+          'Quyền riêng tư',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: groupedBg.withValues(alpha: 0.92),
+        border: Border(
+          bottom: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.0),
+            width: 0,
+          ),
+        ),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: CustomScrollView(
+          slivers: [
+            SliverSafeArea(
+              top: false,
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
                 // ── Section 1: Chế độ tài khoản ────────────────────
                 _SectionLabel(label: 'CHẾ ĐỘ TÀI KHOẢN', color: labelColor),
                 _SectionCard(
@@ -141,6 +151,7 @@ class _PrivacySettingsScreenState extends ConsumerState<PrivacySettingsScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -196,7 +207,8 @@ class _BlockedUsersPage extends ConsumerWidget {
         title: const Text('Danh sách chặn tin nhắn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(CupertinoIcons.chevron_left),
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -271,7 +283,8 @@ class _MutedUsersPage extends ConsumerWidget {
         title: const Text('Tài khoản đã ẩn bài', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(CupertinoIcons.chevron_left),
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
           onPressed: () => Navigator.pop(context),
         ),
       ),

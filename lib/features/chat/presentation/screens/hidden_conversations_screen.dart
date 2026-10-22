@@ -33,7 +33,7 @@ class HiddenConversationsScreen extends ConsumerWidget {
           padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
           child: Icon(CupertinoIcons.chevron_back,
-              color: theme.colorScheme.primary),
+              color: theme.colorScheme.primary, size: 24),
         ),
         title: Text(
           'Đoạn chat bị ẩn',

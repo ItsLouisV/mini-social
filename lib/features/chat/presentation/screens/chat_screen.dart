@@ -202,8 +202,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   ChatMentionMatch? _activeMention;
   // Track if + menu is expanded
   bool _isPlusMenuOpen = false;
-  // The quick actions can stay visible with the keyboard open, as in Messenger.
   bool _areQuickActionsExpanded = true;
+  // Quick actions are shown only while the message field is unfocused.
 
   // Cache kết quả grouping để không tính lại trong mỗi build()
   List<MessageModel> _cachedMessages = [];
@@ -537,7 +537,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _focusNode.addListener(() {
       if (!mounted) return;
-      setState(() {});
+      setState(() {
+        if (_focusNode.hasFocus) {
+          _areQuickActionsExpanded = false;
+        } else if (_messageController.text.trim().isEmpty) {
+          _areQuickActionsExpanded = true;
+        }
+      });
     });
   }
 
@@ -1469,8 +1475,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         width: 32,
         height: 32,
         margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 8),
-        decoration: const BoxDecoration(
-          color: Colors.black38,
+                decoration: const BoxDecoration(
+                color: Colors.black38,
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,
@@ -1508,10 +1514,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               alignment: Alignment.center,
               child: IconButton(
-                icon: const Icon(
+                icon: Icon(
                   CupertinoIcons.chevron_back,
-                  color: Colors.white,
-                  size: 20,
+                  color: theme.colorScheme.primary,
+                  size: 24,
                 ),
                 onPressed: () => context.pop(),
                 padding: EdgeInsets.zero,
@@ -2475,9 +2481,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             bottom: MediaQuery.of(context).padding.bottom + 8,
           ),
           decoration: BoxDecoration(
-            color: hasWallpaper
-                ? theme.scaffoldBackgroundColor.withValues(alpha: 0.7)
-                : theme.scaffoldBackgroundColor,
+            color: Colors.transparent,
             border: Border(
               top: BorderSide(
                 color: theme.dividerColor.withValues(alpha: 0.3),
@@ -2486,9 +2490,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // ── Left icons: collapsed (>) or expanded (+, gallery, mic)
+              // Keep actions at the bottom while the input is collapsed.
               AnimatedSize(
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeInOut,
@@ -2502,93 +2506,84 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       child: child,
                     ),
                   ),
-                  // Text uses the full row until the user expands actions with >.
-                  child: _messageController.text.trim().isNotEmpty &&
-                          !_areQuickActionsExpanded
-                          // Text present and shortcuts collapsed → show >
-                          ? Row(
-                              key: const ValueKey('chevron'),
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                GestureDetector(
-                                  onTap: () => setState(() =>
-                                      _areQuickActionsExpanded = true),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 4, vertical: 6),
-                                    child: Icon(
-                                      CupertinoIcons.chevron_right,
-                                      color: chatThemeColor,
-                                      size: 22,
-                                    ),
-                                  ),
+                  child: _focusNode.hasFocus && !_areQuickActionsExpanded
+                      ? Row(
+                          key: const ValueKey('chevron'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: () => setState(
+                                  () => _areQuickActionsExpanded = true),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 6),
+                                child: Icon(
+                                  CupertinoIcons.chevron_right,
+                                  color: chatThemeColor,
+                                  size: 22,
                                 ),
-                                const SizedBox(width: 2),
-                              ],
-                            )
-                          // Show [+] [gallery] [mic] when actions are expanded.
-                          : Row(
-                              key: const ValueKey('icons'),
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // + button
-                                GestureDetector(
-                                  onTap: _sending
-                                      ? null
-                                      : () {
-                                          if (_focusNode.hasFocus) {
-                                            FocusScope.of(context).unfocus();
-                                          }
-                                          setState(() =>
-                                              _areQuickActionsExpanded = true);
-                                          _openPlusMenu(
-                                            theme,
-                                            hasWallpaper,
-                                            chatThemeColor,
-                                            isDark,
-                                          );
-                                        },
-                                  child: Icon(
-                                    _isPlusMenuOpen
-                                        ? CupertinoIcons.xmark
-                                        : CupertinoIcons.add,
-                                    color: chatThemeColor,
-                                    size: 27,
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                // Gallery
-                                _buildMediaIcon(
-                                  icon: CupertinoIcons.photo_fill,
-                                  color: _isPlusMenuOpen
-                                      ? theme.disabledColor
-                                      : chatThemeColor,
-                                  onTap: _sending || _isPlusMenuOpen
-                                      ? null
-                                      : _pickImageFromGallery,
-                                ),
-                                const SizedBox(width: 14),
-                                // Mic
-                                _buildMediaIcon(
-                                  icon: CupertinoIcons.mic_fill,
-                                  color: _isPlusMenuOpen
-                                      ? theme.disabledColor
-                                      : chatThemeColor,
-                                  onTap: _sending || _isPlusMenuOpen
-                                      ? null
-                                      : () => setState(
-                                          () => _isRecordingVoice = true),
-                                ),
-                                const SizedBox(width: 10),
-                              ],
+                              ),
                             ),
+                            const SizedBox(width: 2),
+                          ],
+                        )
+                      : _focusNode.hasFocus
+                      ? const SizedBox.shrink(
+                          key: ValueKey('hidden-actions'))
+                      : Row(
+                          key: const ValueKey('icons'),
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            GestureDetector(
+                              onTap: _sending
+                                  ? null
+                                  : () => _openPlusMenu(
+                                        theme,
+                                        hasWallpaper,
+                                        chatThemeColor,
+                                        isDark,
+                                      ),
+                              child: Icon(
+                                _isPlusMenuOpen
+                                    ? CupertinoIcons.xmark
+                                    : CupertinoIcons.add,
+                                color: chatThemeColor,
+                                size: 27,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            _buildMediaIcon(
+                              icon: CupertinoIcons.photo_fill,
+                              color: _isPlusMenuOpen
+                                  ? theme.disabledColor
+                                  : chatThemeColor,
+                              onTap: _sending || _isPlusMenuOpen
+                                  ? null
+                                  : _pickImageFromGallery,
+                            ),
+                            const SizedBox(width: 14),
+                            _buildMediaIcon(
+                              icon: CupertinoIcons.mic_fill,
+                              color: _isPlusMenuOpen
+                                  ? theme.disabledColor
+                                  : chatThemeColor,
+                              onTap: _sending || _isPlusMenuOpen
+                                  ? null
+                                  : () => setState(
+                                      () => _isRecordingVoice = true),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                        ),
                 ),
               ),
 
               // ── TextField ─────────────────────────────────────────────
               Expanded(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 120),
+                  constraints: BoxConstraints(
+                    maxHeight: _focusNode.hasFocus ? 120 : 48,
+                  ),
                   child: TextField(
                     controller: _messageController,
                     focusNode: _focusNode,
@@ -2625,22 +2620,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ),
                       filled: true,
                       fillColor: isDark
-                          ? theme.colorScheme.surface
-                          : theme.scaffoldBackgroundColor,
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : Colors.black.withValues(alpha: 0.07),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       isDense: true,
-                      suffixIcon: IconButton(
-                        tooltip: 'Emoji',
-                        onPressed:
-                            _isPlusMenuOpen ? null : _showEmojiPicker,
-                        icon: Icon(CupertinoIcons.smiley_fill,
-                            color: _isPlusMenuOpen
-                                ? theme.disabledColor
-                                : chatThemeColor,
-                            size: 22),
-                      ),
                     ),
+                    // Keep the editable configuration stable across focus changes.
+                    // The height constraint below keeps unfocused text to one line.
                     maxLines: null,
                     textInputAction: TextInputAction.newline,
                     textCapitalization: TextCapitalization.sentences,
@@ -2700,43 +2687,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Future<void> _showEmojiPicker() async {
-    const emojis = [
-      '😀', '😃', '😄', '😁', '😆', '😊', '🙂', '😉', '😍', '🥰',
-      '😘', '😎', '🤔', '😢', '😭', '😡', '👍', '👎', '❤️', '🎉',
-      '🔥', '🙏', '👏', '💯', '😂', '🤣', '🥳', '😴', '🤗', '✨',
-    ];
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: emojis.map((emoji) => InkWell(
-              onTap: () {
-                final value = _messageController.value;
-                final selection = value.selection;
-                final start = selection.isValid ? selection.start : value.text.length;
-                final end = selection.isValid ? selection.end : value.text.length;
-                final text = value.text.replaceRange(start, end, emoji);
-                _messageController.value = TextEditingValue(
-                  text: text,
-                  selection: TextSelection.collapsed(offset: start + emoji.length),
-                );
-                Navigator.of(sheetContext).pop();
-                _focusNode.requestFocus();
-              },
-              child: Text(emoji, style: const TextStyle(fontSize: 28)),
-            )).toList(),
-          ),
-        ),
-      ),
     );
   }
 
@@ -4349,10 +4299,20 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          bubbleContent,
+          if (hasReactions)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment:
+                  isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [bubbleContent, const SizedBox(height: 16)],
+            )
+          else
+            bubbleContent,
           if (hasReactions)
             Positioned(
-              bottom: -15,
+              // Reserve this space in the Stack so the whole pill participates
+              // in hit testing, even though it visually overlaps the bubble.
+              bottom: 1,
               right: isMine ? 28 : null,
               left: isMine ? null : 33,
               child: _ReactionBar(
@@ -4367,7 +4327,7 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
     );
 
     return Padding(
-      padding: EdgeInsets.only(bottom: hasReactions ? 16 : 2),
+      padding: EdgeInsets.only(bottom: hasReactions ? 0 : 2),
       child: Column(
         crossAxisAlignment:
             isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,

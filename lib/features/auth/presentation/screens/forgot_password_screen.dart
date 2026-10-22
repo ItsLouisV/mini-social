@@ -58,7 +58,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(CupertinoIcons.chevron_back),
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: Theme.of(context).colorScheme.primary, size: 24),
           onPressed: () => context.pop(),
         ),
       ),

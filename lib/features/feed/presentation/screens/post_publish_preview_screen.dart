@@ -405,7 +405,7 @@ class _PostPublishPreviewScreenState
         elevation: 0.5,
         leading: IconButton(
           icon: Icon(CupertinoIcons.chevron_back,
-              color: theme.textTheme.bodyLarge?.color),
+              color: theme.colorScheme.primary, size: 24),
           onPressed: () => context.pop(),
         ),
         title: const Text(

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../social/data/ai_repository.dart';
@@ -94,6 +95,11 @@ class _AppealsScreenState extends ConsumerState<AppealsScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: const Text('Lịch sử vi phạm & Kháng cáo'),
       ),
       body: _isLoading

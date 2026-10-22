@@ -34,6 +34,7 @@ import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/account_settings_screen.dart';
 import '../../features/profile/presentation/screens/settings_screen.dart';
+import '../../features/profile/presentation/screens/app_settings_pages.dart';
 import '../../features/profile/presentation/screens/privacy_settings_screen.dart';
 import '../../features/profile/presentation/screens/language_settings_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
@@ -226,6 +227,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, __) =>
             const CupertinoPage(child: LanguageSettingsScreen()),
+      ),
+      GoRoute(
+        path: '/settings/notifications',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: NotificationSettingsScreen()),
+      ),
+      GoRoute(
+        path: '/settings/about',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, __) =>
+            const CupertinoPage(child: VioraAboutScreen()),
       ),
       GoRoute(
         path: '/my-qr',

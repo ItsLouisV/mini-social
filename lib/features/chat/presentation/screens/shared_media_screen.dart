@@ -77,8 +77,8 @@ class _SharedMediaScreenState extends ConsumerState<SharedMediaScreen>
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: Icon(CupertinoIcons.left_chevron,
-              color: theme.colorScheme.primary),
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
           onPressed: () => Navigator.pop(context),
         ),
         bottom: PreferredSize(

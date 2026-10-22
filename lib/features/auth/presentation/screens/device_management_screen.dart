@@ -144,7 +144,8 @@ class _DeviceManagementScreenState extends ConsumerState<DeviceManagementScreen>
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(CupertinoIcons.chevron_left),
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
           onPressed: () => context.pop(),
         ),
         title: const Text('Quản lý thiết bị', style: TextStyle(fontWeight: FontWeight.bold)),

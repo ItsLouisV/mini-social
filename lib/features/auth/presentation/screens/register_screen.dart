@@ -893,10 +893,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                       ),
                       child: IconButton(
                         padding: EdgeInsets.zero,
-                        icon: const Icon(
+                        icon: Icon(
                           CupertinoIcons.chevron_back,
-                          color: Colors.white,
-                          size: 20,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24,
                         ),
                         onPressed: () {
                           if (context.canPop()) {

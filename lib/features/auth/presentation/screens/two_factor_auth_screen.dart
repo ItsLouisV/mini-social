@@ -131,7 +131,8 @@ class _TwoFactorAuthScreenState extends ConsumerState<TwoFactorAuthScreen> {
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
-          child: const Icon(CupertinoIcons.chevron_back, color: _buttonBlue),
+          child: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
         ),
       ),
       child: Material(

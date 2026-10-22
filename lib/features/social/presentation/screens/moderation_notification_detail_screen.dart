@@ -27,7 +27,16 @@ class _ModerationNotificationDetailScreenState extends ConsumerState<ModerationN
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(leading:CupertinoButton(padding:const EdgeInsets.only(left:8),onPressed:()=>Navigator.of(context).maybePop(),child:const Icon(CupertinoIcons.chevron_back,size:22)),title: const Text('Chi tiết thông báo'), centerTitle: false),
+      appBar: AppBar(
+        leading: CupertinoButton(
+          padding: const EdgeInsets.only(left: 8),
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
+        ),
+        title: const Text('Chi tiết thông báo'),
+        centerTitle: false,
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null

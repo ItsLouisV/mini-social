@@ -92,7 +92,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
         elevation: 0,
         backgroundColor: theme.scaffoldBackgroundColor,
         leading: IconButton(
-          icon: const Icon(CupertinoIcons.chevron_back, size: 22),
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
           onPressed: () => context.pop(),
         ),
         titleSpacing: 0,

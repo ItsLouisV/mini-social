@@ -138,7 +138,7 @@ class SettingsScreen extends ConsumerWidget {
                         iconBg: Colors.redAccent,
                         icon: CupertinoIcons.bell_fill,
                         title: AppTranslations.tr(ref, 'notifications'),
-                        onTap: () {},
+                        onTap: () => context.push('/settings/notifications'),
                       ),
                       _Divider(color: theme.dividerColor),
                       _IosRow(
@@ -164,26 +164,15 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
 
-                // ── HỖ TRỢ ──────────────────────────────────────────────
-                _SectionLabel(label: AppTranslations.tr(ref, 'settings').toUpperCase(), color: labelColor),
+                // ── GIỚI THIỆU ──────────────────────────────────────────
+                _SectionLabel(label: 'GIỚI THIỆU', color: labelColor),
                 _SectionCard(
                   bg: cardBg,
-                  child: Column(
-                    children: [
-                      _IosRow(
-                        iconBg: Colors.lightBlue,
-                        customIcon: const FaIcon(FontAwesomeIcons.gear, color: Colors.white, size: 15),
-                        title: AppTranslations.tr(ref, 'settings'),
-                        onTap: () {},
-                      ),
-                      _Divider(color: theme.dividerColor),
-                      _IosRow(
-                        iconBg: Colors.teal,
-                        icon: CupertinoIcons.info_circle_fill,
-                        title: 'Viora',
-                        onTap: () {},
-                      ),
-                    ],
+                  child: _IosRow(
+                    iconBg: Colors.teal,
+                    icon: CupertinoIcons.info_circle_fill,
+                    title: 'Viora',
+                    onTap: () => context.push('/settings/about'),
                   ),
                 ),
 
@@ -211,14 +200,14 @@ class SettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 32),
                 Center(
                   child: Text(
-                    'Viora • Phiên bản 2.1.1',
+                    'Viora • Phiên bản 1.0.0',
                     style: TextStyle(
                       color: labelColor,
                       fontSize: 12,
                     ),
                   ),
                 ),
-                const SizedBox(height: 40),
+                SizedBox(height: 112 + MediaQuery.of(context).padding.bottom),
               ]),
             ),
           ),

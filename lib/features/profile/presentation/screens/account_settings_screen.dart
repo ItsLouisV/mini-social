@@ -58,7 +58,7 @@ class AccountSettingsScreen extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(CupertinoIcons.chevron_back,
-                  color: theme.colorScheme.primary, size: 18),
+                  color: theme.colorScheme.primary, size: 24),
               const SizedBox(width: 4),
               Text(
                 AppTranslations.tr(ref, 'settings'),

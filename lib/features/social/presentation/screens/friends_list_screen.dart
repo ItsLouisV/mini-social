@@ -29,7 +29,8 @@ class FriendsListScreen extends ConsumerWidget {
           leading: CupertinoButton(
             padding: const EdgeInsets.only(left: 8),
             onPressed: () => context.pop(),
-            child: const Icon(CupertinoIcons.chevron_back, size: 22),
+            child: Icon(CupertinoIcons.chevron_back,
+                color: Theme.of(context).colorScheme.primary, size: 24),
           ),
           title: const Text(
             'Bạn bè',

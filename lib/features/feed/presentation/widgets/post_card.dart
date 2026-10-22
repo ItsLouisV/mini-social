@@ -705,7 +705,8 @@ class _FacebookOptionsBottomSheetState
         Row(
           children: [
             IconButton(
-              icon: const Icon(CupertinoIcons.left_chevron, size: 16),
+              icon: Icon(CupertinoIcons.chevron_back,
+                  color: theme.colorScheme.primary, size: 24),
               onPressed: () => setState(() => _currentPage = 0),
             ),
             const Text(

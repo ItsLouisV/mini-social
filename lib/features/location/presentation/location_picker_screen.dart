@@ -158,6 +158,11 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen> {
     final isSearching = query.length >= 2;
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: Theme.of(context).colorScheme.primary, size: 24),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: const Text('Thêm vị trí'),
         actions: [
           if (_locationMessage?.contains('Cài đặt') == true)

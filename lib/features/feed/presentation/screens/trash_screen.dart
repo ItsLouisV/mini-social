@@ -62,7 +62,7 @@ class _TrashScreenState extends ConsumerState<TrashScreen> {
           padding: EdgeInsets.zero,
           onPressed: () => context.pop(),
           child: Icon(CupertinoIcons.chevron_back,
-              color: theme.colorScheme.primary),
+              color: theme.colorScheme.primary, size: 24),
         ),
         middle: Text(AppTranslations.tr(ref, 'trash'),
             style: const TextStyle(fontWeight: FontWeight.w700)),

@@ -121,7 +121,8 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _isSaving ? null : () => context.pop(),
-          child: Icon(CupertinoIcons.chevron_back, color: theme.colorScheme.primary, size: 20),
+          child: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
         ),
         middle: Text(pageTitle, style: const TextStyle(fontWeight: FontWeight.w600)),
       ),

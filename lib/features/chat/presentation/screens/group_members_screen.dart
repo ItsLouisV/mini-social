@@ -942,8 +942,9 @@ class _GroupMembersScreenState extends ConsumerState<GroupMembersScreen> {
           onPressed: () {
             Navigator.of(context).pop();
           },
-          icon: const Icon(
-            CupertinoIcons.back,
+          icon: Icon(
+            CupertinoIcons.chevron_back,
+            color: Theme.of(context).colorScheme.primary,
             size: 24,
           ),
         ),

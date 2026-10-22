@@ -109,8 +109,9 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
         centerTitle: true,
         leading: IconButton(
           icon: Icon(
-            _selectMode ? CupertinoIcons.xmark : CupertinoIcons.left_chevron,
+            _selectMode ? CupertinoIcons.xmark : CupertinoIcons.chevron_back,
             color: theme.colorScheme.primary,
+            size: 24,
           ),
           onPressed: () {
             if (_selectMode) {
@@ -126,7 +127,17 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
         actions: [
           if (!_selectMode)
             PopupMenuButton<String>(
-              icon: Icon(CupertinoIcons.ellipsis_vertical, color: theme.colorScheme.primary),
+              icon: Icon(CupertinoIcons.ellipsis, color: theme.colorScheme.primary),
+              position: PopupMenuPosition.under,
+              offset: const Offset(0, 8),
+              color: cardBgColor,
+              surfaceTintColor: Colors.transparent,
+              elevation: 8,
+              shadowColor: Colors.black.withValues(alpha: 0.18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              menuPadding: const EdgeInsets.symmetric(vertical: 6),
               onSelected: (val) {
                 if (val == 'select') {
                   setState(() {

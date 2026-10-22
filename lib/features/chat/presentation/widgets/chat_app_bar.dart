@@ -88,8 +88,9 @@ class ChatAppBar extends ConsumerWidget implements PreferredSizeWidget {
           : (isDark ? theme.colorScheme.surface : Colors.white),
       leading: IconButton(
         icon: Icon(
-          CupertinoIcons.back,
-          color: isDark ? Colors.white : Colors.black87,
+          CupertinoIcons.chevron_back,
+          color: theme.colorScheme.primary,
+          size: 24,
         ),
         onPressed: () => context.pop(),
       ),

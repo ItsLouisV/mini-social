@@ -232,7 +232,9 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
                         color: Colors.black.withValues(alpha: 0.5),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(CupertinoIcons.chevron_back, color: Colors.white, size: 20),
+                      child: Icon(CupertinoIcons.chevron_back,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 24),
                     ),
                   ),
 

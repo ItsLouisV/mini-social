@@ -112,6 +112,11 @@ class LanguageSettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(CupertinoIcons.chevron_back,
+              color: theme.colorScheme.primary, size: 24),
+          onPressed: () => context.pop(),
+        ),
         title: Text(
           AppTranslations.tr(ref, 'language'),
           style: const TextStyle(fontWeight: FontWeight.bold),
