@@ -10,6 +10,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/toast_service.dart';
 import '../../../../core/localization/app_language.dart';
 import '../../../../core/localization/locale_provider.dart';
 import '../../../profile/providers/profile_provider.dart';
@@ -111,12 +112,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
     } catch (error) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Không thể dịch tin nhắn này'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      ToastService.showError(context, 'Không thể dịch tin nhắn này');
     } finally {
       if (mounted) {
         setState(() {
@@ -200,12 +196,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
               child: const Text('Gửi báo cáo'),
               onPressed: () {
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Đã gửi báo cáo. Cảm ơn bạn!'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+                ToastService.showSuccess(context, 'Đã gửi báo cáo. Cảm ơn bạn!');
               },
             ),
           ],
@@ -505,10 +496,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
               ? () {
                   Navigator.pop(context);
                   Clipboard.setData(ClipboardData(text: message.content!));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Đã sao chép tin nhắn vào bộ nhớ tạm'),
-                    duration: Duration(seconds: 1),
-                  ));
+                  ToastService.showSuccess(context, 'Đã sao chép tin nhắn vào bộ nhớ tạm', duration: const Duration(seconds: 1));
                 }
               : () {},
           onForward: () {},
@@ -538,11 +526,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                                         message.conversationId)
                                     .notifier)
                                 .recallMessage(message.id);
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(const SnackBar(
-                              content: Text('Đã thu hồi tin nhắn'),
-                              duration: Duration(seconds: 1),
-                            ));
+                            ToastService.showSuccess(context, 'Đã thu hồi tin nhắn', duration: const Duration(seconds: 1));
                           },
                         ),
                       ],
@@ -591,12 +575,13 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                       } else {
                         await notifier.deleteMessageLocally(message.id);
                       }
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(deletePermanently
+                      ToastService.showSuccess(
+                        context,
+                        deletePermanently
                             ? 'Đã xóa tin nhắn vĩnh viễn'
-                            : 'Đã xóa tin nhắn phía bạn'),
+                            : 'Đã xóa tin nhắn phía bạn',
                         duration: const Duration(seconds: 1),
-                      ));
+                      );
                     },
                   ),
                 ],
@@ -605,11 +590,11 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
           },
           onInfo: () {
             Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content:
-                  Text('Gửi lúc: ${message.createdAt.toLocal().toString()}'),
+            ToastService.showInfo(
+              context,
+              'Gửi lúc: ${message.createdAt.toLocal()}',
               duration: const Duration(seconds: 2),
-            ));
+            );
           },
           onReact: (emoji) {
             Navigator.pop(context);

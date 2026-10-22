@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/supabase_constants.dart';
+import '../../../../core/services/toast_service.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 
@@ -297,12 +298,7 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
                 if (!mounted) return;
 
                 if (url == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Lỗi tải ảnh lên. Vui lòng thử lại.'),
-                      backgroundColor: Colors.redAccent,
-                    ),
-                  );
+                  ToastService.showError(context, 'Lỗi tải ảnh lên. Vui lòng thử lại.');
                   return;
                 }
 
@@ -710,12 +706,7 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
           .setWallpaper(widget.conversationId, path, otherUserId: otherUserId);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã cập nhật hình nền cuộc trò chuyện'),
-            duration: Duration(seconds: 1),
-          ),
-        );
+        ToastService.showSuccess(context, 'Đã cập nhật hình nền cuộc trò chuyện', duration: const Duration(seconds: 1));
         Navigator.pop(context);
       }
     }
@@ -736,12 +727,7 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
       _selectMode = false;
       _selectedPaths.clear();
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Đã xóa hình nền được chọn khỏi lịch sử'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+    ToastService.showSuccess(context, 'Đã xóa hình nền được chọn khỏi lịch sử', duration: const Duration(seconds: 1));
   }
 
   void _confirmClearAll(BuildContext context) {
@@ -768,12 +754,7 @@ class _WallpaperHistoryScreenState extends ConsumerState<WallpaperHistoryScreen>
                   .read(chatWallpaperProvider.notifier)
                   .setWallpaper(widget.conversationId, '');
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Đã xóa sạch lịch sử hình nền'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
+                ToastService.showSuccess(context, 'Đã xóa sạch lịch sử hình nền', duration: const Duration(seconds: 1));
               }
             },
             child: const Text('Xóa tất cả'),

@@ -232,6 +232,28 @@ flowchart LR
     UC1_5 -.->|"<<include>>"| UC1_Sub2
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 1
+Sơ đồ biểu diễn toàn bộ vòng đời tài khoản và các cơ chế bảo vệ danh tính của người dùng trên nền tảng Viora. Hệ thống áp dụng nguyên tắc **100% người dùng định danh (No Guest)** — mọi người dùng đều phải có tài khoản hợp lệ để đảm bảo an toàn không gian mạng và truy vết trách nhiệm cộng đồng.
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC1.1 - Đăng ký tài khoản mới`:** Người dùng nhập Email, Mật khẩu và Tên hiển thị. Quan hệ `<<include>>` tự động kích hoạt `UC1_Sub1 - Tự động khởi tạo Hồ sơ cá nhân` thông qua Database Trigger PostgreSQL để tạo ngay bản ghi thông tin tương ứng trong bảng `profiles`.
+- **`UC1.2 - Đăng nhập bằng Email hoặc Tên định danh`:** Hỗ trợ đăng nhập linh hoạt. Nếu người dùng nhập Tên định danh (Username), hệ thống sẽ phân giải sang Email qua hàm máy chủ RPC trước khi xác thực với Supabase Auth. Khi tài khoản đã kích hoạt bảo vệ 2FA, quan hệ `<<extend>>` sẽ bắt buộc chuyển sang `UC1_Sub2 - Xác minh mã OTP 6 số`.
+- **`UC1.3 - Khôi phục mật khẩu qua Email`:** Gửi thư điện tử chứa đường dẫn an toàn (Magic Link/Token) để người dùng đặt lại mật khẩu mới khi quên.
+- **`UC1.4 - Đổi mật khẩu cá nhân`:** Dành cho người dùng đang đăng nhập muốn cập nhật mật khẩu định kỳ, yêu cầu kiểm tra mật khẩu hiện tại trước khi lưu mật khẩu mới.
+- **`UC1.5 - Bật / Tắt xác thực hai lớp (2FA)`:** Tích hợp phương thức bảo mật chuẩn TOTP (Google Authenticator, Apple Keychain, Authy). Quan hệ `<<include>>` đòi hỏi người dùng phải quét mã QR và nhập đúng mã OTP 6 số (`UC1_Sub2`) để nâng cấp cấp độ đảm bảo từ `aal1` lên `aal2`.
+- **`UC1.6 - Xem thiết bị đăng nhập & Thu hồi phiên từ xa`:** Liệt kê các phiên làm việc (Tên thiết bị, Hệ điều hành, Trình duyệt, Địa chỉ IP, Thời điểm hoạt động). Cho phép bấm "Đăng xuất" từng thiết bị lạ hoặc "Đăng xuất khỏi tất cả thiết bị khác".
+- **`UC1.7 - Đăng xuất tài khoản`:** Hủy phiên làm việc hiện tại, thu hồi JWT token, đóng tất cả các kênh WebSocket Realtime và xóa dữ liệu cache phiên tạm thời.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Khởi tạo dữ liệu tức thì (Database Trigger):** Khi người dùng gọi API đăng ký `supabase.auth.signUp()`, bản ghi được tạo trong schema riêng biệt `auth.users`. Ngay lập tức, Trigger máy chủ `on_auth_user_created` được kích hoạt tự động sinh bản ghi trong bảng công khai `public.profiles` chứa mã định danh người dùng (`user_id`), tên đầy đủ và trạng thái khởi tạo.
+2. **Đăng nhập phân giải Username (Server-side RPC):** Nếu chuỗi nhập liệu tại màn hình đăng nhập không chứa ký tự `@`, ứng dụng hiểu đây là Username và gọi hàm RPC `get_email_by_username` được bảo mật bằng `SECURITY DEFINER` để truy vấn địa chỉ email đích, sau đó tiến hành xác thực `signInWithPassword()`.
+3. **Bộ lọc Điều hướng Đa tầng (Router Guards & 2FA Enforcement):** Trình điều hướng `GoRouter` liên tục lắng nghe `authSubscription`. Khi người dùng đăng nhập tài khoản có 2FA, hệ thống nhận diện cấp độ đảm bảo hiện thời là `aal1`. Router Guard sẽ ngay lập tức chuyển hướng bắt buộc về màn hình `/mfa-verify`. Chỉ khi người dùng nhập đúng mã TOTP qua hàm `supabase.auth.mfa.challengeAndVerify()`, phiên làm việc mới nâng lên `aal2` và mở quyền truy cập ứng dụng.
+4. **Bảo mật phiên cục bộ:** Token phiên (JWT và Refresh Token) được lưu trữ an toàn trong vùng nhớ mã hóa phần cứng của thiết bị thông qua `flutter_secure_storage` (Keystore trên Android và Keychain trên iOS).
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Mật khẩu phải có độ dài tối thiểu 6 ký tự; Email phải tuân thủ chuẩn RFC 5322.
+- Tài khoản đang chịu án phạt vi phạm (bị Quản trị viên khóa tạm thời hoặc vĩnh viễn) sẽ bị chặn ngay tại bước đăng nhập kèm thông báo lý do xử phạt và thời hạn mở khóa.
+
 ---
 
 ### 2.5 Use Case Phân hệ 2: Hồ sơ Cá nhân, Kết nối Xã hội & Mã QR
@@ -267,6 +289,30 @@ flowchart LR
     UC2_7 -.->|"<<include>>"| UC2_Sub
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 2
+Sơ đồ quản lý toàn bộ không gian danh tính kỹ thuật số, mạng lưới liên kết xã hội đa chiều (Theo dõi 1 chiều & Bạn bè 2 chiều), thiết lập ranh giới riêng tư và tính năng quét định danh kết nối siêu tốc thông qua Mã QR.
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC2.1 - Xem trang cá nhân & Thống kê tương tác`:** Trình diễn ảnh đại diện, ảnh bìa gradient, tiểu sử, nhạc nền cá nhân và thanh số liệu (Bài viết, Người theo dõi, Đang theo dõi, Bạn bè). Trang cá nhân tích hợp cấu trúc Header cố định cùng hệ thống **Tab kép độc đáo**: Tab 1 là Lưới bài viết (Lưới 3 cột) và Tab 2 là Kho lưu trữ tin ngắn cá nhân (Lưới 9:16).
+- **`UC2.2 - Chỉnh sửa Hồ sơ`:** Cho phép cập nhật ảnh đại diện, ảnh bìa (tải lên Supabase Storage CDN), thay đổi tên hiển thị và viết tiểu sử cá nhân.
+- **`UC2.3 - Cài đặt nhạc nền trang cá nhân`:** Tìm kiếm bài hát qua iTunes API và chọn đoạn phát thử (Preview 30 giây) làm giai điệu đại diện cho trang cá nhân.
+- **`UC2.4 - Theo dõi / Bỏ theo dõi người dùng`:** Thiết lập liên kết quan tâm một chiều được lưu trong bảng `follows`.
+- **`UC2.5 - Gửi, Chấp nhận, Từ chối hoặc Thu hồi kết bạn`:** Quản lý mối quan hệ bạn bè hai chiều với vòng đời trạng thái (`pending`, `accepted`, `rejected`) trong bảng `friend_requests`.
+- **`UC2.6 - Tạo, Lưu & Chia sẻ mã QR cá nhân`:** Sinh mã QR vector định danh động chứa đường dẫn liên kết sâu (`viora://profile/:userId`) kèm biểu tượng Viora trung tâm, hỗ trợ lưu ảnh vào máy hoặc chia sẻ qua ứng dụng khác.
+- **`UC2.7 - Quét mã QR từ Camera hoặc Thư viện ảnh`:** Sử dụng camera thời gian thực hoặc tải tệp ảnh từ bộ sưu tập để giải mã QR; quan hệ `<<include>>` tự động mở `UC2_Sub - Xem nhanh thẻ hồ sơ từ mã QR` dưới dạng Modal BottomSheet mà không cần chuyển màn hình.
+- **`UC2.8 - Cấu hình quyền riêng tư (Tài khoản riêng tư)`:** Bật/tắt chế độ `is_private`. Khi kích hoạt, chỉ những người theo dõi đã được chủ tài khoản phê duyệt mới được quyền xem bài viết và tin ngắn.
+- **`UC2.9 - Chặn & Bỏ chặn người dùng hai chiều`:** Cắt đứt hoàn toàn mọi tương tác qua lại giữa hai tài khoản, bảo vệ người dùng khỏi quấy rối.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Tải và Đồng bộ Dữ liệu Hồ sơ:** Ứng dụng truy vấn bảng `profiles` thông qua Riverpod StateNotifier. Các chỉ số thống kê (Followers, Following, Friends) được tính toán tức thì bằng các truy vấn đếm có đánh chỉ mục (Indexed Count Queries).
+2. **Xử lý Kết bạn Hai chiều & Cập nhật Xã hội:** Khi gửi lời mời kết bạn, bản ghi mới được thêm vào `friend_requests` với trạng thái `pending`. Một thông báo thời gian thực được tự động gửi đến người nhận. Khi người nhận bấm "Chấp nhận", trạng thái cập nhật thành `accepted` và quan hệ bạn bè có hiệu lực ngay lập tức, tác động trực tiếp lên thuật toán gợi ý bảng tin.
+3. **Nhận diện Mã QR Đa nguồn:** Sử dụng thư viện `mobile_scanner` để xử lý luồng khung hình từ camera và `google_mlkit_barcode_scanning` để xử lý quét ảnh tĩnh. Khi trích xuất được `userId`, hệ thống gọi hàm tải nhanh thông tin tóm tắt và hiển thị thẻ Profile Card tương tác (cho phép bấm Theo dõi / Nhắn tin trực tiếp).
+4. **Cơ chế Chặn Hai chiều (Bidirectional Blocking):** Khi kích hoạt chặn trong bảng `blocked_users`, hệ thống tự động: hủy kết bạn, hủy theo dõi giữa hai bên, và áp dụng bộ lọc loại trừ (`NOT IN`) trên toàn bộ các truy vấn Bảng tin, Khám phá, Tìm kiếm và Phòng chat.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Người dùng không thể tự gửi kết bạn hoặc tự theo dõi chính mình (`CHECK (follower_id != following_id)`).
+- Khi tài khoản ở chế độ Riêng tư (`is_private = true`), người lạ truy cập trang cá nhân chỉ nhìn thấy thông tin cơ bản và số liệu, toàn bộ danh sách bài viết và tin ngắn đều bị ẩn.
+
 ---
 
 ### 2.6 Use Case Phân hệ 3A: Soạn thảo, Xuất bản Bài viết & Thùng rác
@@ -301,6 +347,28 @@ flowchart LR
     UC3_Sub2 --- AI
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 3A
+Sơ đồ biểu diễn toàn bộ tiến trình sáng tạo và xuất bản nội dung của người dùng, tích hợp sâu trí tuệ nhân tạo (Google Gemini AI) hỗ trợ người sáng tạo, cơ chế gắn nhãn minh bạch nội dung và quy trình bảo vệ dữ liệu với Thùng rác 30 ngày (Soft Delete).
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC3.1 - Tạo bài viết mới`:** Người dùng soạn thảo nội dung văn bản, đính kèm tối đa 10 tệp ảnh hoặc video (lưu vào Supabase Storage), lựa chọn trạng thái cảm xúc (Mood/Activity) và gắn thẻ bạn bè (@tag).
+- **`UC3.2 - Đính kèm vị trí địa lý`:** Tự động lấy tọa độ GPS từ cảm biến vị trí thiết bị (`geolocator`) hoặc trích xuất siêu dữ liệu địa lý lưu trong thẻ EXIF của ảnh chụp (`exif`) để gắn thẻ địa điểm check-in.
+- **`UC3.3 - Đính kèm nhạc nền bài viết`:** Tìm kiếm kho nhạc trực tuyến và nhúng đoạn nghe thử 30 giây làm giai điệu nền phát khi người khác xem bài viết.
+- **`UC3.4 - Gắn nhãn nội dung tạo bởi AI`:** Bật công tắc khai báo bắt buộc (`is_ai_generated = true`) khi sử dụng hình ảnh hoặc văn bản do các công cụ Generative AI tạo ra, đảm bảo tính minh bạch cộng đồng.
+- **`UC3.5 - Chuyển bài viết vào Thùng rác (Lưu giữ 30 ngày)`:** Cơ chế xóa an toàn (Soft Delete). Hệ thống cập nhật trường `deleted_at = now()`, bài viết ngay lập tức ẩn khỏi Bảng tin và Hồ sơ cá nhân nhưng được lưu trữ an toàn trong giao diện Thùng rác.
+- **`UC3.6 - Khôi phục hoặc Xóa vĩnh viễn bài viết`:** Trong vòng 30 ngày, người dùng có thể khôi phục lại bài viết về trạng thái ban đầu (`deleted_at = null`) hoặc chọn xóa vĩnh viễn (xóa sạch bản ghi cơ sở dữ liệu và tệp media trên Storage CDN).
+- **`UC3_Sub1 - Gợi ý lời dẫn & Hashtag tự động bằng AI (<<extend>>)`:** Người dùng chạm vào nút "Gợi ý AI", hệ thống gửi ảnh sang Gemini Vision phân tích bối cảnh để tự động sinh 3 phiên bản Caption giàu cảm xúc kèm bộ Hashtag thịnh hành.
+- **`UC3_Sub2 - Xem trước & Quét kiểm duyệt trước xuất bản (<<include>>)`:** Trước khi bài viết được công bố, hệ thống tự động quét kiểm duyệt nội dung văn bản và ảnh qua bộ lọc an toàn để ngăn chặn phát tán hình ảnh bạo lực, phản cảm hoặc mã độc.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Nén Đa phương tiện & Lưu trữ Phân tán:** Trước khi tải lên, hình ảnh được nén tối ưu dung lượng phía Client. Ứng dụng tải media trực tiếp lên Supabase Storage CDN qua Presigned URL, sau đó lưu danh sách URL vào bảng `post_media` kèm số thứ tự hiển thị `order_index`.
+2. **Xử lý AI với Supabase Edge Functions:** Khi người dùng yêu cầu gợi ý caption, Edge Function `generate-caption` được gọi với ảnh định dạng Base64. Mô hình Gemini 1.5 Flash nhận diện các chủ thể chính trong ảnh, phân tích tâm trạng và trả về chuỗi JSON gồm: tiêu đề đề xuất, nội dung chi tiết và 5 hashtag phù hợp nhất.
+3. **Vòng đời Thùng rác & Cron Job Tự động:** Các câu lệnh truy vấn dữ liệu thông thường luôn gắn điều kiện ràng buộc `WHERE deleted_at IS NULL`. Một tác vụ tự động Cron Job trên máy chủ cơ sở dữ liệu sẽ chạy định kỳ hàng đêm, thực thi lệnh quét các bài viết có `deleted_at < now() - INTERVAL '30 days'` để xóa cứng vĩnh viễn khỏi hệ thống.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Mỗi bài viết cho phép đính kèm tối đa 10 ảnh/video. Dung lượng ảnh tối đa 15MB, video tối đa 50MB và thời lượng không quá 60 giây.
+- Sau thời hạn 30 ngày trong Thùng rác, bài viết cùng toàn bộ lượt thích, bình luận liên đới sẽ bị xóa vĩnh viễn và không thể khôi phục.
+
 ---
 
 ### 2.7 Use Case Phân hệ 3B: Bảng tin Đề xuất & Tương tác Bài viết
@@ -332,6 +400,33 @@ flowchart LR
     UC3_14 --- AI
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 3B
+Sơ đồ biểu diễn trung tâm phân phối nội dung của mạng xã hội Viora: vận hành Thuật toán Gợi ý Bảng tin v2 thông minh nhằm giữ chân người dùng, kết hợp đầy đủ các kênh tương tác xã hội tức thì (Thích, Bình luận đa tầng, Dịch thuật đa ngôn ngữ và Lan tỏa nội dung).
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC3.9 - Lướt xem Bảng tin đề xuất cá nhân hóa`:** Tải dòng thời gian bài viết kết hợp hài hòa giữa bạn bè, người theo dõi và các bài viết khám phá được chấm điểm cao bởi thuật toán đề xuất.
+- **`UC3.10 - Xem băng chuyền Những người bạn có thể biết`:** Thanh cuộn ngang xen kẽ giữa bảng tin gợi ý các tài khoản có khả năng quen biết dựa trên mạng lưới bạn chung (Friends-of-Friends) và tương đồng sở thích.
+- **`UC3.11 - Thích / Bỏ thích bài viết`:** Thả tim bài viết với hoạt ảnh nảy tim Cupertino sống động, tự động cập nhật số lượng thích và gửi tín hiệu phản hồi đến thuật toán gợi ý.
+- **`UC3.12 - Bình luận & Trả lời bình luận nhiều cấp`:** Bình luận dạng chuỗi phân nhánh hình cây (Threaded Comments) với trường `parent_id`, hỗ trợ nhắc tên thành viên `@username` và hiển thị ảnh đại diện người phản hồi.
+- **`UC3.13 - Thích bình luận`:** Cho phép thả tim tương tác cho từng câu bình luận cụ thể, lưu vào bảng `comment_likes`.
+- **`UC3.14 - Dịch tự động nội dung bài viết & bình luận`:** Bấm nút "Xem bản dịch" để kích hoạt Gemini AI dịch tức thì bài viết hoặc bình luận từ ngôn ngữ nước ngoài sang tiếng Việt hoặc ngược lại.
+- **`UC3.15 - Chia sẻ bài viết hoặc Sao chép liên kết`:** Sinh liên kết sâu (Deep Link) hoặc tạo ảnh chia sẻ để gửi nhanh qua Zalo, Messenger, Facebook hoặc sao chép vào bộ nhớ tạm.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Thuật toán Đề xuất Bảng tin v2 (5 Trọng số Động):** Thứ tự bài viết được máy chủ tính toán dựa trên công thức chấm điểm đa nhân tố:
+   $$\text{FinalScore} = (w_1 \cdot \text{Connection}) + (w_2 \cdot \text{Affinity}_{90d}) + (w_3 \cdot \text{Topic}) + (w_4 \cdot \text{Quality}) \times \text{Decay}(t)$$
+   - *Mức độ kết nối:* Bạn bè thân thiết (trọng số 1.0), Đang theo dõi (0.8), Người lạ trong cộng đồng (0.2).
+   - *Mức độ thân thiết (Affinity 90 ngày):* Tổng hợp tần suất thả tim, bình luận và xem hồ sơ giữa người dùng và tác giả trong 3 tháng gần nhất.
+   - *Chủ đề quan tâm (Topic Affinity):* Đối chiếu thể loại bài viết với các chủ đề người dùng thường xuyên tương tác.
+   - *Chất lượng bài viết (Quality):* Đánh giá tỷ lệ bài viết nhận được nhiều bình luận dài và lưu trữ.
+   - *Hàm suy giảm thời gian (Half-life Decay 24h):* Điểm số bài viết giảm dần theo hàm số mũ thời gian, giúp bảng tin luôn tràn ngập nội dung mới.
+2. **Cập nhật Giao diện Lạc quan (Optimistic UI Updates):** Khi bấm Thích, giao diện đổi trạng thái tim đỏ và tăng biến đếm tức thời (độ trễ 0ms) để mang lại cảm giác mượt mà tuyệt đối. Sau đó, ứng dụng gửi lệnh ghi bất đồng bộ (Debounced Network Request) vào bảng `likes`. Database Trigger trên Supabase sẽ tự động cập nhật lại trường `likes_count` trong bảng `posts`.
+3. **Bình luận Cấu trúc Cây Đệ quy:** Bảng `comments` sử dụng kỹ thuật Adjacency List với cột `parent_id` trỏ về khóa chính của bình luận cha. Ứng dụng Flutter tổ chức dữ liệu thành cây phân cấp và hiển thị dạng thụt đầu dòng Cupertino thanh lịch.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Ràng buộc duy nhất `UNIQUE(post_id, user_id)` và `UNIQUE(comment_id, user_id)` ngăn chặn hoàn toàn tình trạng một người dùng thích trùng lặp nhiều lần cho một bài viết hoặc bình luận.
+- Chủ bài viết có toàn quyền xóa mọi bình luận nằm dưới bài viết của mình; người bình luận chỉ có quyền xóa bình luận do chính mình viết.
+
 ---
 
 ### 2.8 Use Case Phân hệ 4: Tin ngắn 24 Giờ (Stories) & Kho Lưu trữ
@@ -361,6 +456,27 @@ flowchart LR
     UC4_1 -.->|"<<include>>"| UC4_Sub
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 4
+Sơ đồ quản lý tính năng chia sẻ khoảnh khắc tạm thời (Stories 24 giờ) — định dạng nội dung ngắn thịnh hành, trực quan và giàu cảm xúc. Sơ đồ kết hợp giữa trải nghiệm trình chiếu toàn màn hình tức thì, cơ chế tương tác thả biểu cảm chùm hạt bay (Particle Burst) và mô hình lưu trữ vĩnh viễn trên trang cá nhân (Profile Archive).
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC4.1 - Đăng tin ngắn 24h`:** Chọn ảnh hoặc quay video ngắn (dưới 15 giây), tự do chèn văn bản đa dạng kiểu chữ/màu sắc và lồng ghép nhạc nền iTunes. Quan hệ `<<include>>` tự động kích hoạt `UC4_Sub - Tự động ẩn khỏi Bảng tin sau 24 giờ` bằng cách thiết lập mốc thời gian hết hạn `expires_at = created_at + interval '24 hours'`.
+- **`UC4.2 - Xem trình chiếu tin ngắn toàn màn hình`:** Trình xem Story toàn màn hình tỷ lệ 9:16 có thanh thời gian chạy tự động (5 giây cho ảnh, hoặc khớp thời lượng video). Hỗ trợ chạm nửa trái/phải để lùi/tiến tin, và chạm giữ màn hình để tạm dừng khung hình.
+- **`UC4.3 - Thả biểu cảm với hiệu ứng chùm hạt bay`:** Khi xem tin, người dùng chạm vào các biểu tượng cảm xúc để kích hoạt hiệu ứng hoạt họa `StoryReactionBurstOverlay` phun hạt emoji bay tràn ngập màn hình và lưu biểu cảm vào bảng `story_reactions`.
+- **`UC4.4 - Xem thống kê người đã xem & thả biểu cảm`:** Dành riêng cho chủ nhân tin ngắn: vuốt mở bảng điều khiển phía dưới để theo dõi chi tiết danh sách tài khoản đã xem tin (`story_views`), thời điểm xem và danh sách emoji mà từng người đã thả.
+- **`UC4.5 - Xem Tin nổi bật & Kho lưu trữ tin trên Hồ sơ`:** Người dùng có thể xem lại toàn bộ các tin ngắn mình từng đăng từ trước đến nay trong Tab Kho lưu trữ (Archive Grid) trên trang cá nhân, đồng thời gom các tin đặc sắc vào thanh "Tin nổi bật" (Story Highlights).
+- **`UC4.6 - Xóa tin ngắn của bản thân`:** Chủ nhân tin ngắn có quyền chủ động xóa tin bất kỳ lúc nào mà không cần đợi hết thời hạn 24 giờ.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Truy vấn Tin Đang Hoạt động (Active Stories Feed):** Trên Bảng tin chính, ứng dụng thực thi truy vấn có điều kiện lọc thời gian thực: `WHERE expires_at > now()`, nhóm theo từng người dùng và xếp theo tin mới nhất.
+2. **Kiến trúc Không Mất Dữ Liệu (Zero Data Loss Archive):** Khác với tư duy xóa cứng thông thường, Viora **không bao giờ xóa bản ghi Story khi hết hạn 24 giờ**. Khi thời gian `expires_at` trôi qua, tin ngắn chỉ tự động biến mất khỏi Bảng tin chung, nhưng bản ghi vẫn tồn tại nguyên vẹn trong cơ sở dữ liệu để phục vụ Tab Kho lưu trữ (Archive) của chính tác giả.
+3. **Chống Trùng lặp Lượt Xem (Unique Viewer Tracking):** Bảng `story_views` áp dụng ràng buộc `UNIQUE(story_id, user_id)`. Khi người dùng xem một Story, ứng dụng gọi lệnh ghi nhận `viewed_at`. Nhờ ràng buộc này, một người xem lại nhiều lần chỉ được tính là 1 lượt xem duy nhất.
+4. **Hỗ trợ Đa Biểu cảm Linh hoạt:** Bảng `story_reactions` áp dụng ràng buộc `UNIQUE(story_id, user_id, reaction)`. Nhờ vậy, một người xem có thể thả nhiều loại cảm xúc khác nhau trên cùng một tin (vừa thả Tim ❤️ vừa thả Cười 😂) nhưng hệ thống không cho phép spam trùng lặp cùng một biểu cảm.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Tin ngắn chỉ xuất hiện công khai trên Bảng tin trong đúng 24 giờ tính từ thời điểm đăng bài.
+- Danh sách người xem tin và biểu cảm là dữ liệu riêng tư tuyệt đối, chỉ hiển thị cho chính tác giả đăng tin (được kiểm soát chặt chẽ bởi Row Level Security - RLS).
+
 ---
 
 ### 2.9 Use Case Phân hệ 5A: Nhắn tin Thời gian thực & Tiện ích Phòng Chat
@@ -389,6 +505,31 @@ flowchart LR
     User --> UC5_7
     User --> UC5_8
 ```
+
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 5A
+Sơ đồ biểu diễn không gian hội thoại cá nhân và nhóm thời gian thực với độ trễ cực thấp. Đáp ứng nhu cầu giao tiếp đa phương tiện phong phú (Chữ, Hình ảnh chất lượng cao, Tin nhắn thoại có dạng sóng âm) cùng các tiện ích tương tác hiện đại như trích dẫn, thả biểu cảm, ghim tin nhắn và thu hồi tin hai chiều.
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC5.1 - Xem danh sách hội thoại & Trạng thái trực tuyến / Đang gõ`:** Hiển thị danh sách các cuộc trò chuyện sắp xếp theo tin mới nhất, huy hiệu đếm tin chưa đọc, dấu chấm xanh hiển thị trạng thái Online (Presence) và chỉ báo "đang soạn tin..." tức thì.
+- **`UC5.2 - Nhắn tin văn bản & Nhắc tên thành viên (@mention)`:** Gửi tin nhắn văn bản tức thời, gõ ký tự `@` để mở danh sách thành viên trong nhóm và gắn thẻ nhắc tên.
+- **`UC5.3 - Gửi hình ảnh kèm chú thích & Xem ảnh phóng to`:** Chọn nhiều ảnh từ bộ sưu tập hoặc camera, thêm chú thích và gửi; hỗ trợ trình xem ảnh toàn màn hình có thể phóng to / thu nhỏ linh hoạt.
+- **`UC5.4 - Ghi âm & Gửi tin nhắn thoại có sóng âm`:** Nhấn giữ phím ghi âm để thu giọng nói với hiển thị biểu đồ sóng âm dao động thời gian thực (`record`), hỗ trợ nghe lại và điều chỉnh tốc độ phát lại.
+- **`UC5.5 - Thả cảm xúc, Trả lời trích dẫn, Sao chép & Chuyển tiếp`:** Nhấn giữ bóng tin nhắn để mở menu tương tác: thả 6 loại biểu cảm emoji, trích dẫn nội dung để trả lời, sao chép văn bản hoặc chuyển tiếp tin nhắn sang phòng chat khác.
+- **`UC5.6 - Thu hồi tin nhắn hai chiều`:** Cho phép người gửi thu hồi tin nhắn đã gửi nhầm; giao diện của cả hai bên lập tức chuyển thành *"Tin nhắn đã bị thu hồi"* và xóa bỏ tệp đính kèm.
+- **`UC5.7 - Ghim / Bỏ ghim tin nhắn & Nhảy đến vị trí tin ghim`:** Ghim tối đa 3 tin nhắn quan trọng lên đầu cuộc trò chuyện; chạm vào thanh ghim sẽ tự động cuộn màn hình đến đúng vị trí tin nhắn gốc trong lịch sử trò chuyện.
+- **`UC5.8 - Đổi hình nền phòng chat & Xem kho phương tiện chung`:** Tùy biến hình nền riêng biệt cho từng phòng trò chuyện; mở kho lưu trữ chung phân loại thành 4 mục: Hình ảnh, Video, Tệp tin và Liên kết đã gửi.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Kênh WebSocket Thời gian thực (Supabase Realtime):** Mỗi cuộc trò chuyện lắng nghe một kênh Realtime riêng biệt `conversation:{id}`. Khi một tin nhắn được chèn vào bảng `messages`, Supabase Realtime broadcast ngay lập tức payload tin nhắn đến tất cả các thành viên tham gia với độ trễ dưới 100ms.
+2. **Tự động Cập nhật Trạng thái Hội thoại (Database Triggers):** Ngay khi một dòng dữ liệu mới xuất hiện trong bảng `messages`, Trigger máy chủ `update_last_message` sẽ tự động:
+   - Cập nhật trường `last_message` và `last_message_at` của bảng `conversations`.
+   - Tự động tăng bộ đếm số tin chưa đọc (`p1_unread_count` hoặc `p2_unread_count`) cho thành viên nhận tin.
+3. **Cơ chế Đánh dấu Đã xem (Read Receipts):** Khi người dùng mở phòng chat, ứng dụng gọi lệnh cập nhật `is_seen = true` và `seen_at = now()` cho các tin nhắn của đối phương. Sự kiện cập nhật này kích hoạt tín hiệu Realtime hiển thị trạng thái "Đã xem" bên cạnh tin nhắn của người gửi.
+4. **Presence & Chỉ báo Đang gõ Không tốn Tài nguyên:** Trạng thái trực tuyến và chỉ báo "đang gõ..." hoạt động hoàn toàn trên bộ nhớ đệm RAM thông qua kênh Supabase Presence, không thực hiện ghi xuống ổ đĩa cơ sở dữ liệu, đảm bảo tốc độ tối đa và tối ưu chi phí hạ tầng.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Ràng buộc chống tạo phòng chat 1-1 trùng lặp: Bảng `conversations` áp dụng quy tắc chuẩn hóa `CHECK (participant_1 < participant_2)`, ngăn ngừa hoàn toàn tình trạng sinh ra hai phòng chat riêng biệt giữa cặp người dùng (A, B) và (B, A).
+- Chỉ người gửi mới có quyền thực hiện thu hồi tin nhắn của mình. Tin nhắn sau khi thu hồi sẽ không thể xem lại nội dung cũ.
 
 ---
 
@@ -441,6 +582,28 @@ flowchart LR
 | Chuyển giao toàn quyền Trưởng nhóm | ❌ | ❌ | ✅ |
 | Giải tán nhóm trò chuyện (Xóa vĩnh viễn nhóm) | ❌ | ❌ | ✅ |
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 5B
+Sơ đồ quản lý giải pháp bảo mật hộp thư cá nhân (Ẩn đoạn chat nhạy cảm bằng mã PIN) và quy chế vận hành phòng trò chuyện nhóm đa thành viên. Mô hình phân cấp 3 bậc: **Thành viên (`member`)**, **Phó nhóm (`admin`)** và **Trưởng nhóm (`owner`)** đảm bảo nhóm hoạt động có kỷ luật, ngăn chặn phá hoại và phân quyền quản trị mạch lạc.
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC5.9 - Vuốt Ghim hoặc Xóa cuộc trò chuyện`:** Thao tác vuốt ngón tay nhanh (Cupertino Swipe Actions) trên danh sách: vuốt phải để Ghim cuộc trò chuyện quan trọng lên đầu, vuốt trái để hiển thị nút Xóa hoặc Đánh dấu chưa đọc.
+- **`UC5.10 - Ẩn cuộc trò chuyện & Khóa bằng mã PIN 6 số`:** Tách cuộc trò chuyện ra khỏi danh sách hiển thị thông thường và đưa vào khu vực ẩn. Người dùng chỉ có thể mở ra khi nhập đúng mã PIN bí mật 6 số trên thanh tìm kiếm.
+- **`UC5.11 - Khôi phục mã PIN đoạn chat ẩn qua Email`:** Cung cấp cơ chế dự phòng khi quên mã PIN: hệ thống gửi mã xác thực OTP về hòm thư điện tử chính chủ để thiết lập lại mã PIN mới mà không làm mất dữ liệu hội thoại.
+- **`UC5.12 - Tạo nhóm trò chuyện nhiều thành viên`:** Chọn bạn bè (tối thiểu 2 người), đặt tên nhóm và tải lên ảnh đại diện để lập phòng chat nhóm mới. Người tạo nhóm tự động được gán vai trò Trưởng nhóm (`owner`).
+- **`UC5.13 - Thêm thành viên hoặc Rời khỏi nhóm`:** Thành viên được quyền mời thêm bạn bè vào nhóm (nếu nhóm cho phép) hoặc tự ý rời khỏi nhóm khi không còn nhu cầu tham gia.
+- **`UC5.14 - Cấu hình quyền nhóm, Duyệt & Xóa thành viên thường`:** Quyền quản trị dùng chung cho Phó nhóm và Trưởng nhóm: bật/tắt chế độ chỉ Quản trị viên gửi tin (chế độ nhóm thông báo), phân quyền ai được đổi tên/ảnh nhóm, xét duyệt thành viên mới xin gia nhập và xóa thành viên vi phạm khỏi nhóm.
+- **`UC5.15A - Bổ nhiệm / Bãi nhiệm Phó nhóm`:** Quyền tối cao dành riêng cho Trưởng nhóm: phong chức Phó nhóm cho thành viên tích cực hoặc giáng chức Phó nhóm trở lại làm thành viên thường.
+- **`UC5.15B - Giải tán nhóm trò chuyện vĩnh viễn`:** Quyền tối cao dành riêng cho Trưởng nhóm: xóa sổ vĩnh viễn nhóm chat, xóa toàn bộ lịch sử tin nhắn và tệp tin phương tiện của nhóm khỏi cơ sở dữ liệu máy chủ.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Kiến trúc Hộp thư Ẩn (Hidden Chat Engine):** Bảng `conversation_settings` lưu trữ trạng thái `is_hidden = true` riêng cho từng tài khoản người dùng và từng phòng chat. Truy vấn danh sách chat thông thường luôn có điều kiện `WHERE is_hidden = false`. Khi người dùng nhập chuỗi mã PIN 6 số trên thanh tìm kiếm, ứng dụng mới kích hoạt truy vấn lấy danh sách các cuộc trò chuyện bị ẩn này.
+2. **Bảo mật Mã PIN Cục bộ:** Mã PIN không bao giờ lưu dưới dạng văn bản thô (Plain Text). Mã được băm một chiều (Salted Hash) và lưu trong vùng nhớ an toàn phần cứng `flutter_secure_storage`.
+3. **Phân quyền Nghiệp vụ Đa tầng (Row Level Security & RPC):** Quyền hạn nhóm được bảo vệ 2 lớp: Client kiểm tra vai trò để ẩn/hiện nút bấm, và Backend kiểm tra bằng Supabase RLS Policies kết hợp các hàm RPC máy chủ `admin-group-management`. Nếu một người dùng không phải Owner cố tình gửi lệnh giải tán nhóm, Database sẽ lập tức trả về lỗi từ chối quyền truy cập (Permission Denied).
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Trưởng nhóm (`owner`) muốn rời khỏi nhóm bắt buộc phải thực hiện thủ tục chuyển giao vai trò Trưởng nhóm cho một thành viên khác trước.
+- Phó nhóm (`admin`) không có quyền xóa hoặc bãi nhiệm Trưởng nhóm, và không có quyền giải tán nhóm trò chuyện.
+
 ---
 
 ### 2.11 Use Case Phân hệ 6: Cuộc gọi Thoại & Video Call WebRTC
@@ -469,6 +632,26 @@ flowchart LR
     UC6_Sub --- LiveKit
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 6
+Sơ đồ quản lý toàn bộ quy trình liên lạc thoại (Voice Call) và hình ảnh (Video Call) thời gian thực chất lượng cao theo chuẩn WebRTC, vận hành trên nền tảng máy chủ LiveKit Cloud SFU. Đảm bảo kết nối thông suốt giữa các nền tảng khác nhau (Web ↔ Android ↔ iOS), xử lý đầy đủ các kịch bản đổ chuông, từ chối, đàm thoại và ghi nhận nhật ký cuộc gọi.
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC6.1 - Khởi tạo cuộc gọi Thoại hoặc Video`:** Người gọi bấm biểu tượng gọi trong phòng chat. Hệ thống tạo bản ghi cuộc gọi mới trong bảng `calls` với trạng thái `calling`, tạo mã phòng hội nghị ngẫu nhiên (UUID) và kích hoạt quan hệ `<<include>> UC6_Sub - Cấp phát mã truy cập & Kết nối phòng gọi`.
+- **`UC6.2 - Tiếp nhận hoặc Từ chối cuộc gọi đến`:** Phía người nhận hiển thị màn hình chuông cuộc gọi đến (`IncomingCallOverlay`) kèm nhạc chuông và hiệu ứng rung. Người dùng có thể bấm "Từ chối" (cập nhật trạng thái cuộc gọi thành `rejected`) hoặc "Trả lời" (kích hoạt `<<include>> UC6_Sub`) để bắt đầu đàm thoại.
+- **`UC6.3 - Điều khiển Micrô, Camera, Đổi Camera & Loa ngoài`:** Trong phòng gọi, người dùng tùy ý bật/tắt mic (Mute), bật/tắt camera, đảo chiều camera trước/sau, chuyển đổi đầu ra âm thanh giữa Loa thoại và Loa ngoài (Speakerphone), hoặc thu nhỏ cuộc gọi thành cửa sổ nổi (Picture-in-Picture).
+- **`UC6.4 - Kết thúc cuộc gọi & Lưu nhật ký vào phòng chat`:** Khi một trong hai bên cúp máy, hệ thống tính toán thời lượng đàm thoại (`duration_sec`), cập nhật trạng thái `ended` và tự động ghi một tin nhắn nhật ký cuộc gọi vào phòng chat.
+- **`UC6_Sub - Cấp phát mã truy cập & Kết nối phòng gọi`:** Gọi Supabase Edge Function `livekit-token` để sinh chuỗi mã truy cập JWT an toàn và kết nối thiết bị vào phòng họp đám mây LiveKit SFU.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Báo hiệu Cuộc gọi Thời gian thực (WebRTC Signaling):** Khi cuộc gọi được khởi tạo, một sự kiện Realtime Event được bắn qua kênh Supabase WebSocket đến thiết bị người nhận. Giao diện nhận cuộc gọi lập tức xuất hiện ngay cả khi người dùng đang lướt Bảng tin hay xem Story.
+2. **Cấp Token LiveKit An Toàn (Secure JWT Generation):** Client Flutter không trực tiếp lưu trữ khóa bí mật của LiveKit. Thay vào đó, Client gọi hàm Edge Function `livekit-token`. Hàm này xác thực token người dùng, khởi tạo mã phòng họp trên LiveKit Cloud và cấp quyền truy cập âm thanh/video với thời hạn cụ thể.
+3. **Truyền dẫn Đa phương tiện qua SFU (Selective Forwarding Unit):** Giao thức WebRTC truyền dữ liệu trực tiếp qua LiveKit SFU server. Server này thực hiện định tuyến các gói tin âm thanh (Opus Codec) và video (VP8/H.264 Codec) với khả năng tự động thích ứng băng thông (Adaptive Bitrate), đảm bảo chất lượng cuộc gọi luôn mượt mà ngay cả khi mạng yếu.
+4. **Xử lý Cuộc gọi Nhỡ Tự động (Timeout 60 giây):** Nếu sau 60 giây đổ chuông mà người nhận không nhấc máy, hệ thống tự động ngắt chuông, chuyển trạng thái cuộc gọi thành `missed` và tạo thông báo cuộc gọi nhỡ trên thiết bị người nhận.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Người dùng đang trong một cuộc gọi không thể thực hiện thêm cuộc gọi mới hoặc nhận cuộc gọi khác (báo máy bận).
+- Tin nhắn nhật ký cuộc gọi được lưu vĩnh viễn trong phòng chat để làm bằng chứng lịch sử liên lạc, thể hiện rõ: thời lượng gọi hoặc trạng thái cuộc gọi nhỡ.
+
 ---
 
 ### 2.12 Use Case Phân hệ 7: Tìm kiếm & Khám phá Trí tuệ Nhân tạo
@@ -493,6 +676,28 @@ flowchart LR
     UC7_3 --- AI
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 7
+Sơ đồ biểu diễn công cụ tìm kiếm hợp nhất thông minh (Hybrid Search Engine) kết hợp giữa tìm kiếm từ khóa truyền thống và tìm kiếm ngữ nghĩa theo ngữ cảnh bằng mô hình ngôn ngữ lớn (Gemini AI Embeddings qua giải thuật RRF), cùng không gian Khám phá (Explore Grid) bài viết thịnh hành với cơ chế phản hồi sở thích người dùng.
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC7.1 - Tìm kiếm người dùng theo Tên / Tên định danh`:** Nhập ký tự để tìm kiếm tài khoản theo Full Name hoặc `@username`. Tự động ưu tiên hiển thị bạn bè, người đang theo dõi và các tài khoản có lượng tương tác cao.
+- **`UC7.2 - Xem lại & Xóa lịch sử từ khóa tìm kiếm`:** Hiển thị danh sách các từ khóa vừa tìm gần đây, cho phép xóa từng từ khóa riêng lẻ hoặc bấm "Xóa tất cả".
+- **`UC7.3 - Tìm kiếm bài viết theo ngữ nghĩa bằng AI`:** Cho phép người dùng tìm kiếm bài viết bằng câu văn tự nhiên (ví dụ: *"những chuyến du lịch biển mùa hè"* hay *"quán cà phê yên tĩnh đọc sách"*), hệ thống hiểu được ý nghĩa câu hỏi mà không bắt buộc bài viết phải chứa đúng từng từ khóa.
+- **`UC7.4 - Khám phá bài viết thịnh hành & Ẩn bài không quan tâm`:** Lưới ảnh/video thịnh hành (Explore Grid); người dùng có thể chạm giữ bài viết và chọn "Không quan tâm" để hệ thống ghi nhận và giảm gợi ý các chủ đề tương tự.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Tìm kiếm Lai Hợp (Hybrid RRF Search):** Kết hợp giữa hai cơ chế tìm kiếm trong PostgreSQL:
+   - *Full-Text Search (tsvector / tsquery):* Tìm kiếm chính xác từ khóa và cụm từ ngữ pháp tiếng Việt.
+   - *Semantic Vector Search (pgvector):* Chuyển câu truy vấn thành Vector Embeddings qua Gemini Text Embedding API và tính toán khoảng cách cosine với vector ngữ nghĩa của bài viết.
+   - *Thuật toán RRF (Reciprocal Rank Fusion):* Tổng hợp thứ hạng từ hai nguồn theo công thức chuẩn:
+     $$RRF\_Score(d) = \sum_{m \in M} \frac{1}{k + r_m(d)} \quad (\text{với } k = 60)$$
+     Nhờ vậy, bài viết vừa khớp từ khóa vừa đúng ngữ cảnh sẽ được ưu tiên đưa lên hàng đầu.
+2. **Bộ nhớ đệm Lịch sử Cục bộ:** Danh sách lịch sử tìm kiếm được lưu trữ an toàn trong cơ sở dữ liệu cục bộ của thiết bị, giúp tốc độ phản hồi tức thì (0ms) và không phụ thuộc vào kết nối mạng.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Kết quả tìm kiếm tự động loại bỏ các tài khoản nằm trong danh sách chặn hai chiều.
+- Bài viết bị đánh dấu vi phạm hoặc đang ở chế độ Riêng tư (Private) sẽ không xuất hiện trên kết quả tìm kiếm công cộng.
+
 ---
 
 ### 2.13 Use Case Phân hệ 8: Thông báo Thời gian thực & Điều hướng
@@ -513,6 +718,23 @@ flowchart LR
     User --> UC8_3
     User --> UC8_4
 ```
+
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 8
+Sơ đồ quản lý trung tâm tiếp nhận thông tin phản hồi của người dùng: cập nhật tức thì mọi biến động tương tác (Lượt thích, Bình luận mới, Lời mời kết bạn, Lượt nhắc tên `@mention`, Cảnh báo hệ thống) thông qua kênh WebSocket Realtime, đồng thời cung cấp các nút tương tác nhanh và cơ chế điều hướng sâu (Deep Linking).
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC8.1 - Nhận thông báo tức thời & Hiển thị huy hiệu chưa đọc`:** Thông báo xuất hiện ngay lập tức khi có tương tác mới; cập nhật số lượng thông báo chưa đọc (Badge count) trên biểu tượng quả chuông và thanh điều hướng dưới đáy màn hình.
+- **`UC8.2 - Xem danh sách thông báo theo từng nhóm tương tác`:** Bộ lọc tab thông minh: "Tất cả", "Tương tác" (thích, bình luận), "Kết bạn" (lời mời, theo dõi), và "Hệ thống" (cảnh báo bảo mật, kiểm duyệt).
+- **`UC8.3 - Chấp nhận kết bạn / Theo dõi lại ngay trên thông báo`:** Cho phép người dùng bấm trực tiếp nút "Chấp nhận" hoặc "Theo dõi lại" ngay trên thẻ thông báo mà không cần phải truy cập vào trang cá nhân của đối phương.
+- **`UC8.4 - Đánh dấu đã đọc & Điều hướng đến nội dung gốc`:** Bấm vào thông báo sẽ tự động cập nhật trường `is_read = true`, đồng thời điều hướng chính xác đến vị trí bài viết, cuộn đến đúng bình luận hoặc mở trang cá nhân liên quan.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Lắng nghe Kênh Thông báo Cá nhân (Supabase CDC):** Mỗi khi có một hành động tương tác thành công (ví dụ một người khác bình luận vào bài viết của bạn), Database Trigger máy chủ tự động chèn một bản ghi vào bảng `notifications`. Sự kiện `INSERT` này lập tức được Supabase Realtime đẩy qua WebSocket đến thiết bị đang mở ứng dụng.
+2. **Điều hướng Sâu (Smart Deep Linking):** Mỗi bản ghi thông báo lưu trữ kèm các trường tham chiếu (`post_id`, `comment_id`, `sender_id`). Khi người dùng chạm vào thông báo, bộ định tuyến `GoRouter` giải mã các khóa ngoại này và điều hướng chính xác đến màn hình chi tiết đích tương ứng.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Hệ thống không gửi thông báo nếu người thực hiện hành động chính là chủ bài viết/bình luận (tự thích bài của mình thì không gửi thông báo cho chính mình).
+- Tự động gom nhóm thông báo (Aggregation) nếu có nhiều người cùng thích một bài viết trong khoảng thời gian ngắn (ví dụ: *"Nguyễn Văn A và 5 người khác đã thích bài viết của bạn"*).
 
 ---
 
@@ -547,6 +769,34 @@ flowchart LR
     UC9_Sub --- AI
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 9
+Sơ đồ quản lý hệ sinh thái bảo vệ cộng đồng Viora: kết hợp giữa quy trình báo cáo chủ động từ người dùng, hàng rào kiểm duyệt tự động 6 tầng của Gemini AI, cơ chế cảnh báo làm mờ (Blur Warning Overlay), hệ thống xử phạt lũy tiến 3 gậy (3 Strikes Penalty System) và quy trình xét duyệt đơn kháng cáo công bằng bởi Quản trị viên.
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC9.1 - Báo cáo vi phạm`:** Người dùng gắn cờ báo cáo bài viết, bình luận, tin nhắn hoặc tài khoản với các lý do cụ thể: Khiêu dâm, Bạo lực, Quấy rối/Đe dọa, Lừa đảo, Thông tin sai lệch, Bản quyền.
+- **`UC9.2 - Mở xem nội dung nhạy cảm sau lớp cảnh báo che mờ`:** Đối với các nội dung bị xếp loại nhạy cảm nhẹ hoặc bạo lực vừa phải, hệ thống áp một lớp kính mờ che khuất hình ảnh kèm cảnh báo; người dùng có thể chủ động bấm "Xem nội dung" nếu vẫn muốn tiếp tục xem.
+- **`UC9.3 - Xem chi tiết thông báo xử phạt & Điểm phạt (Strike)`:** Khi bị kỷ luật, người dùng nhận được thông báo rõ ràng về: bài viết vi phạm, điều khoản tiêu chuẩn cộng đồng bị vi phạm, số điểm phạt hiện tại (Strike 1, 2 hoặc 3) và thời hạn áp dụng chế tài.
+- **`UC9.4 - Gửi đơn giải trình kháng cáo quyết định xử phạt`:** Người dùng có quyền viết đơn giải trình kèm hình ảnh/bằng chứng chứng minh mình không vi phạm để yêu cầu xem xét lại án phạt trong bảng `appeals`.
+- **`UC9.5 - Thẩm định báo cáo & Xét duyệt đơn kháng cáo`:** Dành cho Quản trị viên (`System Admin`) tại trang quản trị: xem xét hồ sơ báo cáo, đối soát nội dung gốc, phân tích điểm rủi ro AI và phê duyệt hoặc bác bỏ đơn kháng cáo.
+- **`UC9.6 - Áp dụng điểm phạt hoặc Khóa / Mở khóa tài khoản`:** Quản trị viên ra quyết định gỡ bài viết vi phạm, tăng số gậy phạt, hoặc kích hoạt lệnh mở khóa tài khoản khi đơn kháng cáo được chấp thuận.
+- **`UC9_Sub - Chấm điểm rủi ro & Phân loại mức độ vi phạm tự động`:** Pipeline AI 6 tầng tự động phân tích văn bản và hình ảnh để chấm chỉ số Risk Score từ 0.0 đến 1.0.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Quy trình Kiểm duyệt Đa tầng Gemini 6 Cấp (Risk Scoring Pipeline):**
+   - *Mức 1 ($\text{Score} < 0.20$):* **ALLOW** — Nội dung an toàn, xuất bản bình thường.
+   - *Mức 2 ($0.20 \le \text{Score} < 0.50$):* **FLAG_WARNING** — Cảnh báo nhẹ, gắn lớp kính che mờ (Blur Overlay).
+   - *Mức 3 ($0.50 \le \text{Score} < 0.80$):* **SHADOW_LIMIT** — Giảm phân phối ngầm, loại bỏ khỏi Bảng tin Khám phá.
+   - *Mức 4 ($0.80 \le \text{Score} < 0.95$):* **UNDER_REVIEW** — Tạm ẩn bài viết, đưa vào hàng đợi chờ Quản trị viên duyệt thủ công.
+   - *Mức 5 ($\text{Score} \ge 0.95$):* **REMOVE** — Gỡ bỏ tự động lập tức, tự động ghi nhận 1 gậy vi phạm cho tác giả.
+2. **Hệ thống Chế tài 3 Gậy (3 Strikes Escalation):**
+   - *Gậy 1:* Cảnh cáo bằng thông báo trong 7 ngày, bài viết vi phạm bị gỡ.
+   - *Gậy 2:* Cấm đăng bài viết, cấm đăng tin ngắn và cấm bình luận trong 14 ngày.
+   - *Gậy 3:* Khóa tài khoản tạm thời 30 ngày hoặc khóa vĩnh viễn tùy theo mức độ nghiêm trọng do Admin quyết định.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Mỗi biên bản vi phạm chỉ được gửi duy nhất 1 đơn kháng cáo giải trình (`UNIQUE(violation_id)`).
+- Quyết định của Quản trị viên sau khi xét duyệt đơn kháng cáo là phán quyết cuối cùng của hệ thống.
+
 ---
 
 ### 2.15 Use Case Phân hệ 10: Cài đặt Hệ thống, Giao diện & Đa ngôn ngữ
@@ -567,6 +817,23 @@ flowchart LR
     User --> UC10_3
     User --> UC10_4
 ```
+
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ Phân hệ 10
+Sơ đồ quản lý trung tâm cấu hình trải nghiệm cá nhân hóa của người dùng (Chế độ giao diện Cupertino Sáng/Tối, Ngôn ngữ hiển thị Tiếng Việt/Tiếng Anh), truy cập nhanh thông tin bảo mật và cơ chế tự động ghi nhận báo cáo sự cố (Crash Analytics) bảo vệ sự ổn định của hệ thống.
+
+#### 📋 Chi tiết Chức năng các Use Case:
+- **`UC10.1 - Chuyển đổi chế độ giao diện Sáng / Tối`:** Lựa chọn Giao diện Sáng (Light Mode), Giao diện Tối (Dark Mode) hoặc Tự động theo cài đặt hệ điều hành thiết bị (System Default). Toàn bộ bảng màu tuân thủ chuẩn bảng màu động Cupertino iOS.
+- **`UC10.2 - Chuyển đổi ngôn ngữ hiển thị`:** Hỗ trợ đầy đủ hai ngôn ngữ chính: Tiếng Việt và Tiếng Anh (English). Chuyển đổi tức thì toàn bộ nhãn giao diện, thông báo lỗi và định dạng ngày tháng mà không cần khởi động lại ứng dụng.
+- **`UC10.3 - Truy cập nhanh biểu ngữ Tài khoản & Mã QR`:** Phần đầu trang Cài đặt hiển thị thẻ danh thiếp thu nhỏ (Ảnh đại diện, Tên, Username) kèm nút bấm 1 chạm để mở ngay mã QR định danh cá nhân phục vụ kết bạn ngoài đời thực.
+- **`UC10.4 - Tự động ghi nhận & Gửi báo cáo lỗi hệ thống`:** Tích hợp Sentry SDK (`sentry_flutter`) tự động bắt các lỗi crash, lỗi ngoại lệ mạng hoặc lỗi tràn giao diện (UI overflow), đóng gói thông tin thiết bị và gửi về trung tâm giám sát kỹ thuật mà không làm gián đoạn người dùng.
+
+#### ⚙️ Cơ chế Hoạt động & Luồng xử lý Kỹ thuật (How it works):
+1. **Quản trị Trạng thái Toàn cục (Riverpod SettingsNotifier):** Cấu hình giao diện và ngôn ngữ được quản lý bằng StateNotifier của Riverpod. Mỗi khi người dùng đổi tùy chọn, giá trị mới được lưu vào `SharedPreferences` cục bộ để duy trì trạng thái cho các lần mở ứng dụng tiếp theo.
+2. **Quốc tế hóa Ứng dụng (Flutter i18n):** Sử dụng tệp định nghĩa tài nguyên ngôn ngữ `.arb`. Toàn bộ văn bản trên giao diện đều được gọi qua `AppLocalizations.of(context)` giúp việc mở rộng thêm ngôn ngữ mới trong tương lai cực kỳ đơn giản và đồng bộ.
+3. **Giám sát Ngoại lệ Tự động (Crash Analytics):** Sentry SDK chạy dưới dạng một `Zone` bao bọc toàn bộ hàm `runApp()`. Bất kỳ lỗi bất đồng bộ nào phát sinh trong quá trình sử dụng đều được ghi lại vết ngăn xếp (Stacktrace) kèm mã định danh phiên người dùng (đã ẩn danh thông tin nhạy cảm) để đội ngũ kỹ sư xử lý kịp thời.
+
+#### 🔒 Quy tắc Nghiệp vụ & Ràng buộc:
+- Cấu hình giao diện và ngôn ngữ có hiệu lực ngay lập tức (Hot Re-render) trên tất cả các màn hình đang mở.
 
 ---
 
@@ -596,6 +863,26 @@ flowchart TD
     Viora -- "Yêu cầu khởi tạo phiên phòng gọi" --> LiveKit
     LiveKit -- "Mã truy cập phòng & Luồng âm thanh / hình ảnh" --> Viora
 ```
+
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ DFD Mức 0
+Sơ đồ DFD Mức Ngữ cảnh (Context Diagram) xác lập ranh giới cao nhất của toàn bộ hệ thống phần mềm Viora. Sơ đồ làm rõ: hệ thống tiếp nhận những nguồn dữ liệu nào từ bên ngoài, chuyển giao những thông tin gì ra môi trường xung quanh, và tương tác với những thực thể ngoại vi (External Entities) nào để hoàn thành sứ mệnh mạng xã hội an toàn, tức thì và thông minh.
+
+#### 🔄 Các Thực thể Ngoại vi & Luồng Dữ liệu Trao đổi:
+1. **Người dùng (`User` - Thành viên đã xác thực):**
+   - *Luồng dữ liệu đưa vào hệ thống:* Thông tin đăng ký/đăng nhập, dữ liệu bài viết (văn bản, ảnh/video, nhạc nền, vị trí check-in), tin ngắn Story 24h, tin nhắn tức thời, tín hiệu yêu cầu cuộc gọi thoại/video, tương tác thích/bình luận, và các báo cáo vi phạm tiêu chuẩn cộng đồng.
+   - *Luồng dữ liệu nhận về từ hệ thống:* Dòng thời gian Bảng tin được cá nhân hóa theo thuật toán đề xuất v2, thông tin hồ sơ cá nhân và bạn bè, tin nhắn thời gian thực kèm trạng thái đã xem, các thông báo tương tác tức thời (Push/Realtime Notifications), kết quả tìm kiếm ngữ nghĩa, và luồng âm thanh/video cuộc gọi.
+2. **Quản trị viên (`System Admin`):**
+   - *Luồng dữ liệu đưa vào hệ thống:* Phán quyết phê duyệt/từ chối báo cáo vi phạm, kết quả xét duyệt đơn kháng cáo giải trình, lệnh áp dụng điểm phạt (Strike), và quyết định khóa hoặc mở khóa tài khoản người dùng.
+   - *Luồng dữ liệu nhận về từ hệ thống:* Hàng đợi danh sách bài viết/bình luận bị báo cáo đã được AI chấm điểm ưu tiên, hồ sơ chi tiết các đơn kháng cáo, nhật ký kiểm duyệt hệ thống, và các báo cáo thống kê chỉ số an toàn cộng đồng.
+3. **Dịch vụ Trí tuệ Nhân tạo Google Gemini (`AI Cloud`):**
+   - *Luồng dữ liệu gửi sang AI:* Nội dung văn bản bài viết/bình luận, tệp tin hình ảnh đa phương tiện cần phân tích, câu truy vấn tìm kiếm bằng ngôn ngữ tự nhiên của người dùng.
+   - *Luồng dữ liệu nhận về từ AI:* Điểm số rủi ro an toàn (Risk Score), 3 phiên bản gợi ý Caption sáng tạo kèm Hashtags, kết quả dịch thuật đa ngôn ngữ thời gian thực, và các vector đặc trưng (Embeddings 768 chiều) phục vụ tìm kiếm ngữ nghĩa.
+4. **Máy chủ LiveKit Cloud WebRTC (`LiveKit SFU`):**
+   - *Luồng dữ liệu gửi sang:* Yêu cầu cấp phòng đàm thoại (Room ID) kèm danh sách token xác thực người tham gia.
+   - *Luồng dữ liệu nhận về:* Tín hiệu đồng bộ trạng thái phòng họp, các gói tin âm thanh nén chuẩn Opus và hình ảnh nén chuẩn VP8/H.264 với độ trễ thấp dưới 150ms.
+
+#### ⚙️ Cơ chế Vận hành Kỹ thuật:
+Hệ thống Viora đóng vai trò là Trung tâm Điều phối Dữ liệu (Central Data Hub). Toàn bộ dữ liệu vào/ra đều phải đi qua cổng xác thực bảo mật Supabase Auth (JWT), áp dụng hàng rào chính sách bảo mật cấp dòng (Row Level Security - RLS) trên PostgreSQL trước khi được ghi nhận vào cơ sở dữ liệu hoặc chuyển tiếp tới các dịch vụ AI / WebRTC.
 
 ---
 
@@ -652,6 +939,43 @@ flowchart TD
     P7 --> D7
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ DFD Mức 1
+Sơ đồ phân rã tiến trình toàn diện (0) thành **7 tiến trình nghiệp vụ chức năng độc lập (Processes 1.0 đến 7.0)** và ánh xạ luồng dữ liệu tương tác 2 chiều với **7 kho lưu trữ dữ liệu trung tâm (Data Stores D1 đến D7)** trên nền tảng Supabase PostgreSQL 15.
+
+#### 🔄 Phân tích Chi tiết 7 Tiến trình Nghiệp vụ & Kho Dữ liệu:
+1. **Tiến trình (1.0) Quản lý Xác thực & Bảo mật:**
+   - *Đầu vào:* Thông tin đăng ký, thông tin đăng nhập (Email / Username / Mật khẩu), mã OTP 6 số TOTP, yêu cầu thu hồi phiên từ xa.
+   - *Xử lý:* Kiểm tra hợp lệ dữ liệu, gọi RPC phân giải Username, xác thực chữ ký mật khẩu, nâng cấp cấp độ đảm bảo `aal1` -> `aal2`.
+   - *Đầu ra & Kho dữ liệu:* Tạo bản ghi người dùng mới và cập nhật trạng thái hoạt động vào **Kho D1 (Hồ sơ & Quan hệ)**.
+2. **Tiến trình (2.0) Quản lý Hồ sơ & Quan hệ:**
+   - *Đầu vào:* Dữ liệu chỉnh sửa hồ sơ (Avatar, Ảnh bìa, Tiểu sử, Nhạc nền), yêu cầu theo dõi (`follows`), lời mời kết bạn (`friend_requests`), và danh sách chặn (`blocked_users`).
+   - *Xử lý:* Cập nhật thông tin cá nhân, tính toán số liệu thống kê (Followers, Following, Friends), đối soát quan hệ bạn bè 2 chiều.
+   - *Đầu ra & Kho dữ liệu:* Lưu trữ dữ liệu quan hệ vào **Kho D1**; đồng thời tự động phát sinh thông báo kết bạn/theo dõi vào **Kho D7 (Thông báo Thời gian thực)**.
+3. **Tiến trình (3.0) Xử lý Bài viết & Bảng tin:**
+   - *Đầu vào:* Nội dung bài viết đa phương tiện, tọa độ vị trí, lượt thích, nội dung bình luận phân cấp, yêu cầu chuyển vào thùng rác.
+   - *Xử lý:* Tối ưu media, điều phối qua Tiến trình (7.0) để kiểm duyệt trước khi xuất bản. Chạy Thuật toán Gợi ý Bảng tin v2 dựa trên 5 trọng số để phân phối bài viết cá nhân hóa cho từng người dùng.
+   - *Đầu ra & Kho dữ liệu:* Đọc/ghi bài viết, bình luận, lượt thích trong **Kho D2 (Bài viết, Bình luận & Lượt thích)**; kích hoạt thông báo tương tác mới vào **Kho D7**.
+4. **Tiến trình (4.0) Quản lý Tin ngắn 24 Giờ:**
+   - *Đầu vào:* Ảnh/video Story 9:16, nhạc nền, văn bản trang trí, lượt xem Story, biểu cảm emoji hạt bay.
+   - *Xử lý:* Thiết lập thời hạn tự động `expires_at = created_at + 24 hours`. Lọc tin đang hoạt động cho Bảng tin, lưu vĩnh viễn cho Tab Kho lưu trữ (Archive Grid) trên trang cá nhân.
+   - *Đầu ra & Kho dữ liệu:* Đọc/ghi danh sách tin ngắn, lượt xem và biểu cảm tương tác vào **Kho D3 (Tin ngắn & Biểu cảm)**.
+5. **Tiến trình (5.0) Nhắn tin & Quản lý Nhóm:**
+   - *Đầu vào:* Tin nhắn văn bản, tệp âm thanh ghi âm, ảnh kèm chú thích, trích dẫn, phản ứng emoji, tín hiệu gõ phím, thao tác quản trị nhóm (thêm/xóa thành viên, phân quyền, giải tán nhóm), và cấu hình ẩn đoạn chat mã PIN 6 số.
+   - *Xử lý:* Ghi nhận tin nhắn mới, tự động cập nhật tin nhắn cuối cùng của hội thoại, tăng biến đếm tin chưa đọc, xử lý trạng thái đã xem (Read Receipts), kiểm tra quyền Trưởng nhóm/Phó nhóm qua RPC.
+   - *Đầu ra & Kho dữ liệu:* Đọc/ghi dữ liệu vào **Kho D4 (Hội thoại & Tin nhắn)**; phát thông báo tin nhắn mới vào **Kho D7**.
+6. **Tiến trình (6.0) Điều phối Cuộc gọi WebRTC:**
+   - *Đầu vào:* Lệnh bấm gọi Thoại/Video, phản hồi Chấp nhận/Từ chối cuộc gọi, tín hiệu ngắt kết nối.
+   - *Xử lý:* Phát tín hiệu báo hiệu (Signaling), tạo mã phòng họp ngẫu nhiên, cấp mã JWT Access Token tham gia phòng LiveKit Cloud, tính toán tổng thời lượng đàm thoại khi kết thúc.
+   - *Đầu ra & Kho dữ liệu:* Lưu trữ lịch sử cuộc gọi, trạng thái (thành công / nhỡ / từ chối) và thời lượng vào **Kho D5 (Nhật ký Cuộc gọi)**; chèn tin nhắn nhật ký vào Kho D4.
+7. **Tiến trình (7.0) Kiểm duyệt AI & Kháng cáo:**
+   - *Đầu vào:* Cờ báo cáo vi phạm từ người dùng, nội dung bài viết mới cần quét kiểm duyệt tự động, quyết định xử phạt của Quản trị viên, và đơn giải trình kháng cáo từ tác giả.
+   - *Xử lý:* Gửi nội dung sang Gemini AI chấm điểm rủi ro Risk Score (Pipeline 6 mức), phân loại mức độ nghiêm trọng, áp dụng điểm phạt (Strike), tạm khóa tài khoản hoặc khôi phục nội dung sau khi duyệt kháng cáo.
+   - *Đầu ra & Kho dữ liệu:* Đọc/ghi các bản ghi báo cáo, quyết định xử phạt và đơn kháng cáo vào **Kho D6 (Báo cáo, Vi phạm & Kháng cáo)**; gửi thông báo kỷ luật hoặc kết quả kháng cáo vào **Kho D7**.
+
+#### ⚙️ Cơ chế Vận hành Dữ liệu & Tính Toàn vẹn:
+- **Kiến trúc Hướng Sự kiện (Event-Driven Data Pipeline):** Các kho dữ liệu D1 đến D6 khi có thay đổi trạng thái (Insert/Update) sẽ tự động kích hoạt Database Triggers để cập nhật dữ liệu liên quan và phát sinh thông báo tức thời vào Kho D7.
+- **Tối ưu Hóa Truy vấn:** Các bảng dữ liệu đều được đánh chỉ mục chuyên biệt (B-Tree cho khóa ngoại/thời gian, GIN cho tìm kiếm toàn văn Full-Text và HNSW/IVFFlat cho vector embeddings), đảm bảo các tiến trình đọc/ghi hoạt động trơn tru với hàng triệu bản ghi.
+
 ---
 
 ### 3.3 Sơ đồ DFD Mức 2.1: Luồng Đăng bài, Xử lý Đa phương tiện & Kiểm duyệt AI
@@ -683,6 +1007,23 @@ flowchart TD
     P3_5 -->|"8. Gửi cảnh báo lý do từ chối bài đăng"| Author
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ DFD Mức 2.1
+Sơ đồ mô tả chi tiết đường đi của dữ liệu trong tiến trình con (3.0) — từ lúc người dùng bắt đầu nhập bài viết, nén và tải tệp media lên kho lưu trữ đám mây, kích hoạt mô hình Gemini AI phân tích an toàn, đến lúc rẽ nhánh phê duyệt hoặc chặn xuất bản và đẩy thông báo thời gian thực đến người theo dõi.
+
+#### 🔄 Phân tích Chi tiết Các Luồng Dữ liệu (1 -> 8):
+- **Luồng 1 (Tác giả ➔ Tiến trình 3.1):** Người dùng nhập nội dung văn bản, đính kèm tối đa 10 ảnh hoặc video, chọn vị trí GPS và gắn nhạc nền.
+- **Luồng 2 & 3 (Tiến trình 3.1 ➔ Kho CDN ➔ Tiến trình 3.2):** Hình ảnh được nén dung lượng ở Client rồi tải lên Supabase Storage bucket `post_media`. CDN cấp phát đường dẫn truy cập công khai (Public URL) trả về cho tiến trình kiểm duyệt.
+- **Luồng 4 & 5 (Tiến trình 3.2 ➔ Gemini AI ➔ Tiến trình 3.3):** Hệ thống gửi chuỗi văn bản và ảnh dạng Base64/URL sang Google Gemini 1.5 Flash. Mô hình AI quét văn bản độc hại, bạo lực, ngôn từ thù địch và nhận diện vật thể nhạy cảm, trả về chỉ số rủi ro Risk Score (0.0 đến 1.0) và nhãn an toàn.
+- **Luồng rẽ nhánh Quyết định (Tiến trình 3.3):**
+  - *Nếu an toàn hoặc nhạy cảm nhẹ (Risk Score < 0.8):* Chuyển sang Tiến trình (3.4). Nếu thuộc mức cảnh báo (0.2 - 0.5), bài viết được đánh dấu cờ che mờ (`is_blurred = true`).
+  - *Nếu vi phạm nghiêm trọng (Risk Score ≥ 0.8):* Chuyển sang Tiến trình (3.5).
+- **Luồng 6 (Tiến trình 3.4 ➔ Kho D2):** Ghi nhận bản ghi bài viết mới vào bảng `posts` và danh sách liên kết tệp vào bảng `post_media`.
+- **Luồng 7 (Kho D2 ➔ Kho D7):** Database Trigger trên PostgreSQL phát hiện bản ghi bài viết mới được thêm, tự động tạo các bản ghi thông báo mới trong bảng `notifications` tương ứng với toàn bộ danh sách bạn bè và người theo dõi của tác giả.
+- **Luồng 8 (Tiến trình 3.5 ➔ Tác giả):** Chặn lưu bản ghi, từ chối xuất bản bài viết và gửi cảnh báo trực tiếp về màn hình của tác giả kèm lý do vi phạm tiêu chuẩn cộng đồng.
+
+#### ⚙️ Cơ chế Kỹ thuật & Ràng buộc:
+Quá trình phân tích AI được xử lý bất đồng bộ thông qua Supabase Edge Functions (`moderate-content`), đảm bảo giao diện Client không bị đơ giật. Ràng buộc toàn vẹn cơ sở dữ liệu CASCADE đảm bảo nếu bài viết bị xóa vĩnh viễn, toàn bộ liên kết media trong `post_media` cũng tự động được dọn dẹp.
+
 ---
 
 ### 3.4 Sơ đồ DFD Mức 2.2: Luồng Nhắn tin Thời gian thực & Xác nhận Đã xem
@@ -711,6 +1052,21 @@ flowchart TD
     D_Chat -->|"11. Phát sự kiện cập nhật trạng thái"| Realtime
     Realtime -->|"12. Hiển thị biểu tượng Đã xem cho người gửi"| Sender
 ```
+
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ DFD Mức 2.2
+Sơ đồ mô tả quy trình lưu chuyển dữ liệu khép kín tốc độ cao của tiến trình con (5.0): từ khi Người gửi soạn và gửi tin nhắn, hệ thống lưu trữ đồng bộ, phát sự kiện WebSocket đẩy tin nhắn đến Người nhận, cho đến khi Người nhận mở phòng chat và phản hồi tín hiệu "Đã xem" (Read Receipts) trở lại cho Người gửi.
+
+#### 🔄 Phân tích Chi tiết Các Luồng Dữ liệu (1 -> 12):
+- **Luồng 1, 2, 3 (Người gửi ➔ Tiến trình 5.1 ➔ Kho CDN):** Người gửi nhập văn bản, ghi âm giọng nói hoặc chọn ảnh. Nếu có tệp đa phương tiện, ứng dụng tải lên kho lưu trữ đám mây `chat_media` và nhận lại URL tệp đính kèm.
+- **Luồng 4 (Tiến trình 5.1 ➔ Kho D4):** Bản ghi tin nhắn mới được chèn vào bảng `messages` với trạng thái ban đầu `is_seen = false`.
+- **Luồng 5 (Cập nhật Hội thoại Nội bộ Kho D4):** Database Trigger `update_last_message` tự động ghi nhận nội dung tóm tắt và thời gian của tin nhắn cuối vào bảng `conversations`, đồng thời tăng biến đếm số tin chưa đọc (`unread_count`) của người nhận lên 1 đơn vị.
+- **Luồng 6 & 7 (Kho D4 ➔ Kênh Realtime ➔ Người nhận):** Cơ chế Change Data Capture (CDC) của PostgreSQL phát hiện bản ghi mới trên bảng `messages` và broadcast ngay lập tức payload tin nhắn qua WebSocket Channel đến thiết bị Người nhận trong vòng dưới 100ms.
+- **Luồng 8 (Người nhận ➔ Tiến trình 5.2):** Người nhận mở phòng trò chuyện, kích hoạt tiến trình xử lý xác nhận đã đọc.
+- **Luồng 9 & 10 (Tiến trình 5.2 ➔ Kho D4):** Lệnh cập nhật thực thi trên bảng `messages`: gán `is_seen = true` và `seen_at = now()`. Đồng thời, biến đếm `unread_count` của người nhận trong bảng `conversations` được đặt lại về 0.
+- **Luồng 11 & 12 (Kho D4 ➔ Kênh Realtime ➔ Người gửi):** Sự kiện `UPDATE` được kênh Realtime đẩy ngược về cho thiết bị Người gửi. Giao diện tin nhắn của Người gửi lập tức chuyển đổi biểu tượng thành dấu tích xanh hoặc ảnh đại diện nhỏ báo hiệu đối phương đã đọc tin.
+
+#### ⚙️ Cơ chế Kỹ thuật & Ràng buộc:
+Sử dụng kết nối WebSocket thường trực qua Supabase Realtime Channels. Ràng buộc cơ sở dữ liệu `CHECK (participant_1 < participant_2)` bảo đảm mỗi cặp người dùng chỉ có duy nhất một phòng chat 1-1, tránh phân mảnh lịch sử tin nhắn.
 
 ---
 
@@ -742,6 +1098,20 @@ flowchart TD
     P6_3 -->|"10. Tính tổng thời gian đàm thoại & lưu lịch sử"| D_Calls
 ```
 
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ DFD Mức 2.3
+Sơ đồ phân tích sự tách biệt rõ ràng và phối hợp nhịp nhàng giữa **Tầng Báo hiệu (Signaling Layer)** qua Supabase Realtime và **Tầng Đàm thoại Ngang hàng (Media Streaming Layer)** qua máy chủ LiveKit Cloud SFU của tiến trình con (6.0).
+
+#### 🔄 Phân tích Chi tiết Các Luồng Dữ liệu (1 -> 10):
+- **Luồng 1 & 2 (Người gọi ➔ Tiến trình 6.1 ➔ Kho D5):** Người gọi bấm biểu tượng gọi Thoại hoặc Video. Tiến trình tạo một bản ghi cuộc gọi mới trong bảng `calls` với trạng thái `calling`, khởi tạo một chuỗi mã phòng họp duy nhất (UUID) và lưu thời điểm bắt đầu `started_at = now()`.
+- **Luồng 3 & 4 (Kho D5 ➔ Kênh Tín hiệu Realtime ➔ Người nhận):** Sự kiện tạo cuộc gọi mới được truyền qua kênh WebSocket tín hiệu đến thiết bị Người nhận, kích hoạt giao diện chuông cuộc gọi đến (`IncomingCallOverlay`) kèm nhạc chuông và rung.
+- **Luồng 5 & 6 (Người nhận ➔ Tiến trình 6.2 ➔ Kho D5):** Người nhận bấm nút Chấp nhận. Tiến trình cập nhật trạng thái cuộc gọi trong bảng `calls` từ `calling` thành `connected`, đồng thời ghi nhận mốc thời gian bắt đầu đàm thoại `connected_at = now()`.
+- **Luồng 7 (Tiến trình 6.2 ➔ LiveKit SFU):** Hệ thống gọi Supabase Edge Function `livekit-token` để cấp Access Token JWT cho cả Người gọi và Người nhận kết nối vào phòng họp LiveKit.
+- **Luồng 8 (Đàm thoại Hai chiều qua LiveKit SFU):** Cả hai bên trao đổi trực tiếp các luồng dữ liệu âm thanh (mã hóa Opus) và hình ảnh (mã hóa VP8/H.264) thông qua LiveKit Cloud SFU với độ trễ thấp dưới 150ms và khả năng tự động thích ứng với chất lượng mạng.
+- **Luồng 9 & 10 (Người gọi/Người nhận ➔ Tiến trình 6.3 ➔ Kho D5):** Khi một trong hai bên bấm nút Cúp máy, phòng họp trên LiveKit được đóng lại. Tiến trình tính toán tổng thời lượng đàm thoại thực tế (`duration_sec = ended_at - connected_at`), cập nhật trạng thái `ended` vào Kho D5 và chèn một tin nhắn lịch sử cuộc gọi vào bảng `messages`.
+
+#### ⚙️ Cơ chế Kỹ thuật & Ràng buộc:
+Nếu người nhận không phản hồi sau 60 giây đổ chuông, hệ thống tự động kích hoạt tiến trình hết hạn (Timeout), cập nhật trạng thái thành `missed` (cuộc gọi nhỡ), hủy phòng LiveKit và gửi thông báo cuộc gọi nhỡ đến người nhận.
+
 ---
 
 ### 3.6 Sơ đồ DFD Mức 2.4: Luồng Báo cáo Vi phạm, Đánh giá Rủi ro & Kháng cáo
@@ -770,6 +1140,20 @@ flowchart TD
     Admin -->|"9. Xem xét bằng chứng kháng cáo"| P7_3
     P7_3 -->|"10. Cập nhật kết quả: Khôi phục nội dung hoặc Giữ nguyên"| D_Safety
 ```
+
+#### 🎯 Mục đích & Ý nghĩa Sơ đồ DFD Mức 2.4
+Sơ đồ mô tả quy trình xử lý khép kín các tranh chấp và nội dung vi phạm của tiến trình con (7.0): từ lúc nhận diện báo cáo vi phạm, qua khâu phân loại ưu tiên tự động bằng AI, sự thẩm định công bằng của Quản trị viên, đến cơ chế bảo vệ quyền lợi người dùng qua nộp đơn giải trình và giải quyết kháng cáo.
+
+#### 🔄 Phân tích Chi tiết Các Luồng Dữ liệu (1 -> 10):
+- **Luồng 1 (Người báo cáo ➔ Tiến trình 7.1):** Người dùng phát hiện nội dung độc hại (khiêu dâm, bạo lực, lừa đảo, quấy rối) và gửi biểu mẫu báo cáo kèm lý do cụ thể.
+- **Luồng 2 & 3 (Tiến trình 7.1 ➔ Gemini AI ➔ Kho D6):** Tiến trình gửi nội dung bị báo cáo sang Google Gemini AI để quét và chấm điểm mức độ nghiêm trọng. Kết hợp giữa lý do báo cáo và điểm AI, hệ thống tính toán Chỉ số Ưu tiên (Priority Score), sau đó lưu bản ghi vào bảng `reports` thuộc Kho D6.
+- **Luồng 4 (Kho D6 ➔ Quản trị viên):** Danh sách các vụ việc cần xử lý được sắp xếp theo mức độ ưu tiên (nội dung nguy hiểm, bạo lực được đẩy lên đầu) hiển thị trực tiếp trên giao diện Admin Moderation Dashboard.
+- **Luồng 5, 6, 7 (Quản trị viên ➔ Tiến trình 7.2 ➔ Kho D6 & Tác giả):** Quản trị viên xem xét nội dung gốc và ra quyết định. Nếu xác nhận vi phạm: tiến trình cập nhật trạng thái bài viết thành `removed`, ghi nhận 1 bản ghi vi phạm mới vào bảng `user_violations`, tăng số gậy phạt (Strike 1, 2 hoặc 3), đồng thời gửi thông báo kỷ luật chi tiết về thiết bị của Tác giả (Luồng 7).
+- **Luồng 8 (Tác giả ➔ Kho D6):** Nếu cho rằng nội dung của mình không vi phạm, Tác giả viết đơn giải trình kèm hình ảnh/bằng chứng chứng minh gửi vào bảng `appeals` trong Kho D6.
+- **Luồng 9 & 10 (Quản trị viên ➔ Tiến trình 7.3 ➔ Kho D6):** Quản trị viên mở hồ sơ kháng cáo, đối chiếu bằng chứng giải trình với quy chuẩn cộng đồng. Nếu chấp thuận kháng cáo: hệ thống khôi phục lại trạng thái bài viết (`moderation_status = 'published'`), xóa điểm phạt của tác giả và cập nhật trạng thái đơn thành `approved`. Nếu từ chối: trạng thái đơn chuyển thành `rejected` và giữ nguyên án phạt.
+
+#### ⚙️ Cơ chế Kỹ thuật & Ràng buộc:
+Ràng buộc cơ sở dữ liệu `UNIQUE(violation_id)` đảm bảo mỗi án phạt vi phạm chỉ được phép gửi duy nhất 1 đơn kháng cáo giải trình, tránh tình trạng spam đơn gây quá tải cho bộ phận quản trị. Quyết định thẩm định của Quản trị viên tại Bước 10 là phán quyết cuối cùng của hệ thống.
 
 ---
 

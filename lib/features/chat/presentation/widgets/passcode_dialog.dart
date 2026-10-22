@@ -7,6 +7,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/services/toast_service.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../providers/hidden_chat_provider.dart';
 
@@ -360,9 +361,7 @@ class _PasscodeDialogState extends ConsumerState<PasscodeDialog> with SingleTick
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Xác thực thành công. Vui lòng thiết lập mã PIN mới.')),
-        );
+        ToastService.showSuccess(context, 'Xác thực thành công. Vui lòng thiết lập mã PIN mới.');
       }
     }
   }

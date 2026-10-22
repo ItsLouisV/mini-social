@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../search/providers/search_provider.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../core/services/supabase_service.dart';
+import '../../../../core/services/toast_service.dart';
 import '../../providers/chat_provider.dart';
 
 class NewMessageModal extends ConsumerStatefulWidget {
@@ -48,9 +49,7 @@ class _NewMessageModalState extends ConsumerState<NewMessageModal> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể bắt đầu trò chuyện: $e')),
-        );
+        ToastService.showError(context, 'Không thể bắt đầu trò chuyện. Vui lòng thử lại.');
         debugPrint(e.toString());
       }
     }

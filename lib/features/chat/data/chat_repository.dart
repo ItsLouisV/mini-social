@@ -1260,6 +1260,103 @@ class ChatRepository {
     return MessageModel.fromJson(data);
   }
 
+  /// Gửi file (PDF, Word, Excel, v.v.) lên Supabase Storage và lưu tin nhắn
+  Future<MessageModel> sendFileMessage(
+    String conversationId,
+    Uint8List fileBytes,
+    String fileName, {
+    String? mimeType,
+    String? replyToMessageId,
+    int? fileSize,
+  }) async {
+    final rawExt = fileName.contains('.')
+        ? fileName.split('.').last.toLowerCase()
+        : 'bin';
+    // Keep storage object keys ASCII-safe; preserve the original filename in
+    // the messages row, where it is shown to users and used when saving.
+    final ext = RegExp(r'^[a-z0-9]{1,10}$').hasMatch(rawExt) ? rawExt : 'bin';
+    final storageName = '$currentUserId/files/${_uuid.v4()}.$ext';
+    final contentType = mimeType ?? _mimeTypeFromExt(ext);
+
+    await _client.storage.from(SupabaseConstants.messagesBucket).uploadBinary(
+          storageName,
+          fileBytes,
+          fileOptions: FileOptions(
+            contentType: contentType,
+            cacheControl: '31536000',
+          ),
+        );
+
+    final url = _client.storage
+        .from(SupabaseConstants.messagesBucket)
+        .getPublicUrl(storageName);
+
+    final data = await _client
+        .from(SupabaseConstants.messagesTable)
+        .insert({
+          'conversation_id': conversationId,
+          'sender_id': currentUserId,
+          'content': fileName,
+          'media_urls': [url],
+          'message_type': 'file',
+          if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        })
+        .select()
+        .single();
+
+    await _client.from(SupabaseConstants.conversationsTable).update({
+      'last_message': '📎 $fileName',
+      'last_message_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', conversationId);
+
+    if (_upstashRedis != null) {
+      _upstashRedis.invalidateMessagesCache(conversationId).catchError((err) {
+        debugPrint('⚠️ [ChatRepository] Lỗi invalidate Redis cache (file): $err');
+      });
+    }
+
+    return MessageModel.fromJson(data);
+  }
+
+  String _mimeTypeFromExt(String ext) {
+    const map = {
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'txt': 'text/plain',
+      'csv': 'text/csv',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'webp': 'image/webp',
+      'gif': 'image/gif',
+      'mp4': 'video/mp4',
+      'mov': 'video/quicktime',
+      'mp3': 'audio/mpeg',
+      'm4a': 'audio/m4a',
+      'aac': 'audio/aac',
+      'ogg': 'audio/ogg',
+      'oga': 'audio/ogg',
+      'opus': 'audio/opus',
+      'wav': 'audio/wav',
+      'wave': 'audio/wav',
+      'flac': 'audio/flac',
+      'aiff': 'audio/aiff',
+      'aif': 'audio/aiff',
+      'wma': 'audio/x-ms-wma',
+      'amr': 'audio/amr',
+      '3gp': 'video/3gpp',
+      'mid': 'audio/midi',
+      'midi': 'audio/midi',
+      'caf': 'audio/x-caf',
+    };
+    return map[ext] ?? 'application/octet-stream';
+  }
+
   Future<MessageModel> sendVoiceMessage(
     String conversationId,
     List<int> audioBytes, {

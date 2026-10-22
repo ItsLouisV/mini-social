@@ -11,6 +11,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -194,8 +196,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _sending = false;
   XFile? _pendingImage;
   Uint8List? _pendingImagePreviewBytes;
+  // Pending file (non-image)
+  PlatformFile? _pendingFile;
   MessageModel? _replyingToMessage;
   ChatMentionMatch? _activeMention;
+  // Track if + menu is expanded
+  bool _isPlusMenuOpen = false;
+  // The quick actions can stay visible with the keyboard open, as in Messenger.
+  bool _areQuickActionsExpanded = true;
 
   // Cache kết quả grouping để không tính lại trong mỗi build()
   List<MessageModel> _cachedMessages = [];
@@ -528,7 +536,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _itemPositionsListener.itemPositions.addListener(_onPositionChange);
 
     _focusNode.addListener(() {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {});
     });
   }
 
@@ -933,16 +942,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // Fetch window và để notifier set pendingScrollToId
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(children: [
-            CupertinoActivityIndicator(color: Colors.white),
-            SizedBox(width: 12),
-            Text('Đang tải tin nhắn...'),
-          ]),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      ToastService.showInfo(context, 'Đang tải tin nhắn...',
+          duration: const Duration(seconds: 1));
     }
 
     await ref
@@ -984,17 +985,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } else {
       // Vẫn không tìm thấy sau khi fetch → báo user
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tin nhắn gốc đã cũ hoặc không tìm thấy'),
-            duration: Duration(seconds: 1),
-          ),
-        );
+        ToastService.showWarning(context, 'Tin nhắn gốc không còn khả dụng.');
       }
     }
   }
 
   // ── Gửi tin nhắn ─────────────────────────────────────────────────────────────
+
+  void _showChatError(String message, [Object? error]) {
+    if (error != null) debugPrint('[ChatScreen] $message: $error');
+    if (mounted) ToastService.showError(context, message);
+  }
 
   Future<void> _send() async {
     final text = _messageController.text.trim();
@@ -1101,20 +1102,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         debugPrint('Failed to save offline message: $err');
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Gửi thất bại. Tin nhắn đã lưu ngoại tuyến.'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+      _showChatError(
+        'Gửi tin nhắn thất bại. Tin nhắn đã được lưu để gửi lại khi có mạng.',
+        e,
+      );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImageFromGallery() async {
+    setState(() => _isPlusMenuOpen = false);
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
@@ -1128,7 +1126,226 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     setState(() {
       _pendingImage = picked;
       _pendingImagePreviewBytes = previewBytes;
+      _pendingFile = null;
     });
+  }
+
+  // ── Allowed file extensions ───────────────────────────────────────────────
+  static const _allowedExtensions = [
+    // Required
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt',
+    'jpg', 'jpeg', 'png', 'webp', 'mp4', 'mp3',
+    // Recommended
+    'gif', 'mov', 'm4a', 'csv',
+    // Common audio
+    'aac', 'ogg', 'oga', 'opus', 'wav', 'wave', 'flac', 'aiff', 'aif',
+    'wma', 'amr', '3gp', 'mid', 'midi', 'caf',
+  ];
+  static const _documentExtensions = [
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv',
+  ];
+  static const _videoExtensions = ['mp4', 'mov', '3gp'];
+  static const _audioExtensions = [
+    'mp3', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'wav', 'wave', 'flac',
+    'aiff', 'aif', 'wma', 'amr', 'mid', 'midi', 'caf',
+  ];
+
+  Future<void> _pickFile() async {
+    await _pickFileWithExtensions(_allowedExtensions);
+  }
+
+  Future<void> _pickFileWithExtensions(List<String> extensions) async {
+    await _closePlusMenu();
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        withData: true,
+        allowedExtensions: extensions,
+        type: FileType.custom,
+      );
+      if (result == null || result.files.isEmpty || !mounted) return;
+      final file = result.files.first;
+      if (file.bytes == null) return;
+
+      setState(() {
+        _pendingFile = file;
+        _pendingImage = null;
+        _pendingImagePreviewBytes = null;
+      });
+    } catch (e) {
+      _showChatError('Không thể mở trình chọn tệp. Vui lòng thử lại.', e);
+    }
+  }
+
+  Future<void> _sendFile() async {
+    final file = _pendingFile;
+    if (file == null || file.bytes == null) return;
+    if (_sending) return;
+
+    setState(() {
+      _sending = true;
+      _pendingFile = null;
+    });
+
+    try {
+      await ref.read(chatRepositoryProvider).sendFileMessage(
+            widget.conversationId,
+            file.bytes!,
+            file.name,
+            mimeType: file.extension != null
+                ? _mimeTypeFromExt(file.extension!)
+                : null,
+            replyToMessageId: _replyingToMessage?.id,
+            fileSize: file.size,
+          );
+      if (mounted) setState(() => _replyingToMessage = null);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    } catch (e) {
+      _showChatError('Không thể gửi tệp. Vui lòng thử lại.', e);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  String _mimeTypeFromExt(String ext) {
+    const map = {
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'txt': 'text/plain',
+      'csv': 'text/csv',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'mp4': 'video/mp4',
+      'mov': 'video/quicktime',
+      'mp3': 'audio/mpeg',
+      'm4a': 'audio/m4a',
+      'webp': 'image/webp',
+      'aac': 'audio/aac',
+      'ogg': 'audio/ogg',
+      'oga': 'audio/ogg',
+      'opus': 'audio/opus',
+      'wav': 'audio/wav',
+      'wave': 'audio/wav',
+      'flac': 'audio/flac',
+      'aiff': 'audio/aiff',
+      'aif': 'audio/aiff',
+      'wma': 'audio/x-ms-wma',
+      'amr': 'audio/amr',
+      '3gp': 'video/3gpp',
+      'mid': 'audio/midi',
+      'midi': 'audio/midi',
+      'caf': 'audio/x-caf',
+    };
+    return map[ext.toLowerCase()] ?? 'application/octet-stream';
+  }
+
+  Future<void> _shareCurrentLocation() async {
+    await _closePlusMenu();
+    setState(() => _sending = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Chưa được cấp quyền truy cập vị trí.');
+      }
+      final position = await Geolocator.getCurrentPosition();
+      final mapUrl =
+          'https://maps.google.com/?q=${position.latitude},${position.longitude}';
+      await ref.read(chatRepositoryProvider).sendMessage(
+            widget.conversationId,
+            'Vị trí của tôi: $mapUrl',
+          );
+      if (mounted) {
+        ref.invalidate(realtimeMessagesProvider(widget.conversationId));
+        ref.invalidate(conversationsProvider);
+      }
+    } catch (error) {
+      _showChatError('Không thể gửi vị trí. Vui lòng thử lại.', error);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _openPlusMenu(
+    ThemeData theme,
+    bool hasWallpaper,
+    Color chatThemeColor,
+    bool isDark,
+  ) async {
+    if (_isPlusMenuOpen) {
+      await _closePlusMenu();
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() => _isPlusMenuOpen = true);
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Đóng menu đính kèm',
+      barrierColor: Colors.black.withValues(alpha: 0.18),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.of(dialogContext).pop(),
+                  ),
+                ),
+                Positioned(
+                  left: 8,
+                  bottom: 72,
+                  child: _buildPlusMenu(
+                    theme,
+                    hasWallpaper,
+                    chatThemeColor,
+                    isDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final scale = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.65, end: 1).animate(scale),
+            alignment: Alignment.bottomLeft,
+            child: child,
+          ),
+        );
+      },
+    );
+    if (mounted) setState(() => _isPlusMenuOpen = false);
+  }
+
+  Future<void> _closePlusMenu() async {
+    if (!_isPlusMenuOpen) return;
+    await Navigator.of(context, rootNavigator: true).maybePop();
+    await Future.delayed(const Duration(milliseconds: 240));
+    if (mounted) setState(() => _isPlusMenuOpen = false);
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────────
@@ -1610,11 +1827,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ref.invalidate(
                           pinnedMessagesProvider(widget.conversationId));
                     } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Bỏ ghim thất bại: $e')),
-                        );
-                      }
+                      _showChatError('Không thể bỏ ghim tin nhắn.', e);
                     }
                   },
                 ),
@@ -1763,11 +1976,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ref.invalidate(
                         pinnedMessagesProvider(widget.conversationId));
                   } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Ghim thất bại: $e')),
-                      );
-                    }
+                    _showChatError('Không thể ghim tin nhắn.', e);
                   }
                 },
           onUnpin: !canManagePins
@@ -1780,11 +1989,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ref.invalidate(
                         pinnedMessagesProvider(widget.conversationId));
                   } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Bỏ ghim thất bại: $e')),
-                      );
-                    }
+                    _showChatError('Không thể bỏ ghim tin nhắn.', e);
                   }
                 },
           onSwipeToReply: () {
@@ -1805,12 +2010,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
             if (replyMsg == null || replyMsg.id.isEmpty) {
               // Không có thông tin → không làm gì
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Không thể tìm thấy tin nhắn gốc'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
+              ToastService.showWarning(context, 'Không tìm thấy tin nhắn gốc.');
               return;
             }
 
@@ -1950,9 +2150,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             otherUserName);
     final replyContent = msg.isText
         ? msg.content
-        : (msg.isVoice
-            ? 'Tin nhắn thoại'
-            : (msg.isImage ? 'Hình ảnh' : 'Cuộc gọi'));
+        : (msg.isFile
+            ? 'Tệp: ${msg.content ?? 'Tệp đính kèm'}'
+            : (msg.isVoice
+                ? 'Tin nhắn thoại'
+                : (msg.isVideo ? 'Video' : (msg.isImage ? 'Hình ảnh' : 'Cuộc gọi'))));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2243,17 +2445,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ref.invalidate(conversationsProvider);
             }
           } catch (e) {
-            debugPrint('Error sending voice message: $e');
+            _showChatError('Không thể gửi tin nhắn thoại. Vui lòng thử lại.', e);
           }
         },
       );
     }
+
+    final hasPendingFile = _pendingFile != null;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (_replyingToMessage != null) _buildReplyPreview(theme, hasWallpaper),
         if (hasPendingImage) _buildImagePreview(theme, hasWallpaper),
+        if (hasPendingFile) _buildFilePreview(theme, hasWallpaper),
         if (_activeMention != null &&
             isGroup &&
             (permissions?.canMentionAll ?? false))
@@ -2283,6 +2488,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // ── Left icons: collapsed (>) or expanded (+, gallery, mic)
               AnimatedSize(
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeInOut,
@@ -2296,74 +2502,90 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       child: child,
                     ),
                   ),
-                  child: (!_focusNode.hasFocus &&
-                          _messageController.text.isEmpty &&
-                          !hasPendingImage)
-                      ? Row(
-                          key: const ValueKey('icons'),
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              onPressed: _sending ? null : _pickImage,
-                              icon: Icon(
-                                CupertinoIcons.photo,
-                                color: hasPendingImage
-                                    ? chatThemeColor
-                                    : (isDark
-                                        ? Colors.white60
-                                        : Colors.black45),
-                                size: 22,
-                              ),
-                              padding: const EdgeInsets.all(6),
-                              constraints: const BoxConstraints(),
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              onPressed: _sending
-                                  ? null
-                                  : () =>
-                                      setState(() => _isRecordingVoice = true),
-                              icon: Icon(
-                                CupertinoIcons.mic_fill,
-                                color: isDark ? Colors.white60 : Colors.black45,
-                                size: 22,
-                              ),
-                              padding: const EdgeInsets.all(6),
-                              constraints: const BoxConstraints(),
-                            ),
-                            const SizedBox(width: 4),
-                          ],
-                        )
-                      : (_focusNode.hasFocus &&
-                              _messageController.text.isEmpty &&
-                              !hasPendingImage)
+                  // Text uses the full row until the user expands actions with >.
+                  child: _messageController.text.trim().isNotEmpty &&
+                          !_areQuickActionsExpanded
+                          // Text present and shortcuts collapsed → show >
                           ? Row(
                               key: const ValueKey('chevron'),
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 GestureDetector(
-                                  onTapDown: (_) {
-                                    Future.microtask(() {
-                                      FocusScope.of(context).unfocus();
-                                    });
-                                  },
+                                  onTap: () => setState(() =>
+                                      _areQuickActionsExpanded = true),
                                   child: Padding(
-                                    padding: const EdgeInsets.all(6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4, vertical: 6),
                                     child: Icon(
                                       CupertinoIcons.chevron_right,
-                                      color: isDark
-                                          ? Colors.white60
-                                          : Colors.black45,
-                                      size: 20,
+                                      color: chatThemeColor,
+                                      size: 22,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: 2),
                               ],
                             )
-                          : const SizedBox.shrink(key: ValueKey('empty')),
+                          // Show [+] [gallery] [mic] when actions are expanded.
+                          : Row(
+                              key: const ValueKey('icons'),
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // + button
+                                GestureDetector(
+                                  onTap: _sending
+                                      ? null
+                                      : () {
+                                          if (_focusNode.hasFocus) {
+                                            FocusScope.of(context).unfocus();
+                                          }
+                                          setState(() =>
+                                              _areQuickActionsExpanded = true);
+                                          _openPlusMenu(
+                                            theme,
+                                            hasWallpaper,
+                                            chatThemeColor,
+                                            isDark,
+                                          );
+                                        },
+                                  child: Icon(
+                                    _isPlusMenuOpen
+                                        ? CupertinoIcons.xmark
+                                        : CupertinoIcons.add,
+                                    color: chatThemeColor,
+                                    size: 27,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                // Gallery
+                                _buildMediaIcon(
+                                  icon: CupertinoIcons.photo_fill,
+                                  color: _isPlusMenuOpen
+                                      ? theme.disabledColor
+                                      : chatThemeColor,
+                                  onTap: _sending || _isPlusMenuOpen
+                                      ? null
+                                      : _pickImageFromGallery,
+                                ),
+                                const SizedBox(width: 14),
+                                // Mic
+                                _buildMediaIcon(
+                                  icon: CupertinoIcons.mic_fill,
+                                  color: _isPlusMenuOpen
+                                      ? theme.disabledColor
+                                      : chatThemeColor,
+                                  onTap: _sending || _isPlusMenuOpen
+                                      ? null
+                                      : () => setState(
+                                          () => _isRecordingVoice = true),
+                                ),
+                                const SizedBox(width: 10),
+                              ],
+                            ),
                 ),
               ),
+
+              // ── TextField ─────────────────────────────────────────────
               Expanded(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 120),
@@ -2373,8 +2595,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     cursorColor:
                         isVanishMode ? Colors.purpleAccent : chatThemeColor,
                     decoration: InputDecoration(
-                      hintText:
-                          hasPendingImage ? 'Thêm chú thích...' : 'Nhắn tin...',
+                      hintText: hasPendingImage
+                          ? 'Thêm chú thích...'
+                          : hasPendingFile
+                              ? 'Thêm chú thích file...'
+                              : 'Nhắn tin...',
                       hintStyle:
                           TextStyle(color: theme.hintColor, fontSize: 15),
                       border: OutlineInputBorder(
@@ -2405,39 +2630,54 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       isDense: true,
+                      suffixIcon: IconButton(
+                        tooltip: 'Emoji',
+                        onPressed:
+                            _isPlusMenuOpen ? null : _showEmojiPicker,
+                        icon: Icon(CupertinoIcons.smiley_fill,
+                            color: _isPlusMenuOpen
+                                ? theme.disabledColor
+                                : chatThemeColor,
+                            size: 22),
+                      ),
                     ),
                     maxLines: null,
                     textInputAction: TextInputAction.newline,
                     textCapitalization: TextCapitalization.sentences,
-                    onChanged: (_) => _updateActiveMention(
-                      _messageController.value,
-                    ),
+                    onChanged: (_) {
+                      _updateActiveMention(_messageController.value);
+                      setState(() {
+                        _areQuickActionsExpanded =
+                            _messageController.text.trim().isEmpty;
+                      });
+                    },
                     onSubmitted: (_) => _send(),
                   ),
                 ),
               ),
               const SizedBox(width: 6),
+
+              // ── Send button ────────────────────────────────────────────
               ValueListenableBuilder<TextEditingValue>(
                 valueListenable: _messageController,
                 builder: (context, value, _) {
-                  final hasContent =
-                      value.text.trim().isNotEmpty || hasPendingImage;
-                  final bgColor = hasContent
-                      ? (isVanishMode ? Colors.purpleAccent : chatThemeColor)
-                      : (isDark
-                          ? AppColors.darkChatInputSendDisabled
-                          : AppColors.chatInputSendDisabled);
-                  final iconColor = hasContent
-                      ? AppColors.chatInputSendIconEnabled
-                      : AppColors.chatInputSendIconDisabled;
-
+                  final hasContent = value.text.trim().isNotEmpty ||
+                      hasPendingImage ||
+                      hasPendingFile;
+                  final bgColor = !hasContent || _isPlusMenuOpen
+                      ? theme.disabledColor.withValues(alpha: 0.35)
+                      : (isVanishMode ? Colors.purpleAccent : chatThemeColor);
                   return GestureDetector(
-                    onTap: (hasContent && !_sending) ? _send : null,
+                    onTap: _sending || !hasContent || _isPlusMenuOpen
+                        ? null
+                        : (hasPendingFile && !hasPendingImage
+                            ? _sendFile
+                            : _send),
                     child: Container(
                       width: 40,
                       height: 40,
-                      decoration:
-                          BoxDecoration(color: bgColor, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                          color: bgColor, shape: BoxShape.circle),
                       child: _sending
                           ? const Center(
                               child: SizedBox(
@@ -2448,7 +2688,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               ),
                             )
                           : Icon(CupertinoIcons.paperplane_fill,
-                              color: iconColor, size: 18),
+                              color: hasContent && !_isPlusMenuOpen
+                                  ? Colors.white
+                                  : theme.hintColor,
+                              size: 18),
                     ),
                   );
                 },
@@ -2458,6 +2701,290 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _showEmojiPicker() async {
+    const emojis = [
+      '😀', '😃', '😄', '😁', '😆', '😊', '🙂', '😉', '😍', '🥰',
+      '😘', '😎', '🤔', '😢', '😭', '😡', '👍', '👎', '❤️', '🎉',
+      '🔥', '🙏', '👏', '💯', '😂', '🤣', '🥳', '😴', '🤗', '✨',
+    ];
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: emojis.map((emoji) => InkWell(
+              onTap: () {
+                final value = _messageController.value;
+                final selection = value.selection;
+                final start = selection.isValid ? selection.start : value.text.length;
+                final end = selection.isValid ? selection.end : value.text.length;
+                final text = value.text.replaceRange(start, end, emoji);
+                _messageController.value = TextEditingValue(
+                  text: text,
+                  selection: TextSelection.collapsed(offset: start + emoji.length),
+                );
+                Navigator.of(sheetContext).pop();
+                _focusNode.requestFocus();
+              },
+              child: Text(emoji, style: const TextStyle(fontSize: 28)),
+            )).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMediaIcon({
+    required IconData icon,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon, color: color, size: 25),
+      ),
+    );
+  }
+
+  Widget _buildPlusMenu(
+    ThemeData theme,
+    bool hasWallpaper,
+    Color chatThemeColor,
+    bool isDark,
+  ) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+      width: 264,
+      margin: const EdgeInsets.fromLTRB(8, 2, 8, 8),
+      decoration: BoxDecoration(
+        color: hasWallpaper
+            ? theme.scaffoldBackgroundColor.withValues(alpha: 0.95)
+            : (isDark ? const Color(0xFF1C1C1E) : Colors.white),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildPlusMenuItem(
+            icon: CupertinoIcons.doc_fill,
+            label: 'File',
+            iconBgColor: chatThemeColor,
+            isDark: isDark,
+            onTap: () => _pickFileWithExtensions(_documentExtensions),
+          ),
+          _buildPlusMenuItem(
+            icon: CupertinoIcons.location_fill,
+            label: 'Vị trí',
+            iconBgColor: chatThemeColor,
+            isDark: isDark,
+            onTap: _shareCurrentLocation,
+          ),
+          _buildPlusMenuItem(
+            icon: CupertinoIcons.play_rectangle_fill,
+            label: 'Video',
+            iconBgColor: chatThemeColor,
+            isDark: isDark,
+            onTap: () => _pickFileWithExtensions(_videoExtensions),
+          ),
+          _buildPlusMenuItem(
+            icon: CupertinoIcons.music_note,
+            label: 'Âm thanh',
+            iconBgColor: chatThemeColor,
+            isDark: isDark,
+            onTap: () => _pickFileWithExtensions(_audioExtensions),
+          ),
+          _buildPlusMenuItem(
+            icon: CupertinoIcons.folder_fill,
+            label: 'Chọn file',
+            iconBgColor: chatThemeColor,
+            isDark: isDark,
+            onTap: _pickFile,
+          ),
+        ],
+      ),
+      ),
+    );
+  }
+
+  Widget _buildPlusMenuItem({
+    required IconData icon,
+    required String label,
+    required Color iconBgColor,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, color: iconBgColor, size: 20),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 12,
+              color: isDark ? Colors.white30 : Colors.black26,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilePreview(ThemeData theme, bool hasWallpaper) {
+    final isDark = theme.brightness == Brightness.dark;
+    final file = _pendingFile!;
+    final ext = (file.extension ?? '').toLowerCase();
+    final icon = _fileIcon(ext);
+    final color = _fileColor(ext);
+    final sizeStr = _formatFileSize(file.size);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+      decoration: BoxDecoration(
+        color: hasWallpaper
+            ? theme.scaffoldBackgroundColor.withValues(alpha: 0.7)
+            : theme.scaffoldBackgroundColor,
+        border: Border(
+          top: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.2),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  file.name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$sizeStr · ${ext.toUpperCase()}',
+                  style: TextStyle(fontSize: 11, color: theme.hintColor),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => setState(() => _pendingFile = null),
+            icon: Icon(CupertinoIcons.xmark,
+                size: 16,
+                color: isDark ? Colors.white54 : Colors.black38),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _fileIcon(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return CupertinoIcons.doc_text_fill;
+      case 'doc':
+      case 'docx':
+        return CupertinoIcons.doc_fill;
+      case 'xls':
+      case 'xlsx':
+      case 'csv':
+        return CupertinoIcons.doc_chart_fill;
+      case 'ppt':
+      case 'pptx':
+        return CupertinoIcons.doc_on_doc_fill;
+      case 'mp3':
+      case 'm4a':
+      case 'aac':
+      case 'ogg':
+      case 'wav':
+        return CupertinoIcons.music_note;
+      case 'mp4':
+      case 'mov':
+        return CupertinoIcons.play_circle_fill;
+      default:
+        return CupertinoIcons.doc_fill;
+    }
+  }
+
+  Color _fileColor(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return const Color(0xFFE53935);
+      case 'doc':
+      case 'docx':
+        return const Color(0xFF1565C0);
+      case 'xls':
+      case 'xlsx':
+      case 'csv':
+        return const Color(0xFF2E7D32);
+      case 'ppt':
+      case 'pptx':
+        return const Color(0xFFE65100);
+      case 'mp3':
+      case 'm4a':
+      case 'aac':
+        return const Color(0xFF6A1B9A);
+      case 'mp4':
+      case 'mov':
+        return const Color(0xFF00838F);
+      default:
+        return const Color(0xFF546E7A);
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 }
 
@@ -2692,6 +3219,100 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
   bool _isTranslating = false;
   bool _showTranslation = false;
 
+  Future<void> _saveFileMessage(MessageModel message) async {
+    final url = message.firstMediaUrl;
+    if (url == null || url.isEmpty) return;
+    try {
+      await MediaSaveService.saveUrls(
+        [url],
+        fallbackBaseName: 'viora_file',
+        preferredFileNames: [message.content?.trim().isNotEmpty == true
+            ? message.content!.trim()
+            : 'tep_dinh_kem'],
+      );
+      if (mounted) ToastService.showSuccess(context, 'Đã mở tùy chọn lưu file');
+    } catch (error) {
+      debugPrint('[ChatMessage] Save file failed: $error');
+      if (mounted) {
+        ToastService.showError(context, 'Không thể lưu file. Vui lòng thử lại.');
+      }
+    }
+  }
+
+  Widget _fileMessageCard(MessageModel message, bool isMine, bool isDark,
+      Color textColor, String themeName) {
+    final fileName = message.content?.trim().isNotEmpty == true
+        ? message.content!.trim()
+        : 'Tệp đính kèm';
+    final extension = fileName.contains('.')
+        ? fileName.split('.').last.toLowerCase()
+        : '';
+    final icon = switch (extension) {
+      'pdf' => Icons.picture_as_pdf_rounded,
+      'doc' || 'docx' => Icons.description_rounded,
+      'xls' || 'xlsx' || 'csv' => Icons.table_chart_rounded,
+      'ppt' || 'pptx' => Icons.slideshow_rounded,
+      'mp4' || 'mov' => Icons.video_file_rounded,
+      'mp3' || 'm4a' || 'wav' || 'aac' || 'ogg' || 'flac' => Icons.audio_file_rounded,
+      'jpg' || 'jpeg' || 'png' || 'webp' || 'gif' => Icons.image_rounded,
+      'txt' => Icons.article_rounded,
+      _ => Icons.insert_drive_file_rounded,
+    };
+    final accent = getChatThemePrimaryColor(themeName);
+
+    return InkWell(
+      onTap: () => _saveFileMessage(message),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isMine
+              ? Colors.white.withValues(alpha: 0.12)
+              : (isDark ? Colors.white.withValues(alpha: 0.07) : Colors.black.withValues(alpha: 0.045)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: textColor.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: accent, size: 24),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(fileName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: textColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 3),
+                  Text(extension.isEmpty ? 'Tệp đính kèm' : extension.toUpperCase(),
+                      style: TextStyle(
+                          color: textColor.withValues(alpha: 0.65), fontSize: 11)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.download_rounded,
+                color: textColor.withValues(alpha: 0.8), size: 21),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _translateMessage() async {
     final content = widget.message.content?.trim();
 
@@ -2732,12 +3353,8 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
     } catch (error) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Không thể dịch tin nhắn này'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      debugPrint('[ChatMessage] Translate failed: $error');
+      ToastService.showError(context, 'Không thể dịch tin nhắn này.');
     } finally {
       if (mounted) {
         setState(() {
@@ -2880,9 +3497,15 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                             Text(
                               message.replyToMessage!.isText
                                   ? (message.replyToMessage!.content ?? '')
-                                  : (message.replyToMessage!.isImage
-                                      ? 'Hình ảnh'
-                                      : 'Cuộc gọi'),
+                                  : (message.replyToMessage!.isFile
+                                      ? 'Tệp: ${message.replyToMessage!.content ?? 'Tệp đính kèm'}'
+                                      : (message.replyToMessage!.isVoice
+                                          ? 'Tin nhắn thoại'
+                                          : (message.replyToMessage!.isVideo
+                                              ? 'Video'
+                                              : (message.replyToMessage!.isImage
+                                                  ? 'Hình ảnh'
+                                                  : 'Cuộc gọi')))),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: isMine
@@ -2929,6 +3552,12 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                 hasCaption: hasCaption,
                 caption: hasCaption ? message.content : null,
                 captionColor: isMine ? myTextColor : theirTextColor,
+              )
+            else if (message.isFile && message.firstMediaUrl != null)
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: _fileMessageCard(
+                    message, isMine, isDark, isMine ? myTextColor : theirTextColor, themeName),
               )
             else if (message.isCall)
               _CallLogBubble(message: message, isMine: isMine)
@@ -3074,18 +3703,14 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
           onCopy: () {
             Navigator.pop(context);
             Clipboard.setData(ClipboardData(text: message.content ?? ''));
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Đã sao chép tin nhắn vào bộ nhớ tạm'),
-              duration: Duration(seconds: 1),
-            ));
+            ToastService.showSuccess(context, 'Đã sao chép tin nhắn vào bộ nhớ tạm',
+                duration: const Duration(seconds: 1));
           },
           onForward: () {
             Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content:
-                  Text('Chức năng chuyển tiếp tin nhắn đang được phát triển'),
-              duration: Duration(seconds: 1),
-            ));
+            ToastService.showInfo(context,
+                'Chức năng chuyển tiếp tin nhắn đang được phát triển',
+                duration: const Duration(seconds: 1));
           },
           onSaveMedia: (message.isImage || message.isVideo || message.isFile) &&
                   message.mediaUrls.isNotEmpty
@@ -3095,11 +3720,16 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                     await MediaSaveService.saveUrls(
                       message.mediaUrls,
                       fallbackBaseName: 'viora_${message.messageType}',
+                      preferredFileNames: message.isFile &&
+                              message.content?.trim().isNotEmpty == true
+                          ? [message.content!.trim()]
+                          : null,
                     );
                   } catch (e) {
                     if (context.mounted) {
+                      debugPrint('[ChatMessage] Save media failed: $e');
                       ToastService.showError(
-                          context, 'Không thể lưu nội dung: $e');
+                          context, 'Không thể lưu nội dung này. Vui lòng thử lại.');
                     }
                   }
                 }
@@ -3137,16 +3767,15 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                                       .notifier)
                                   .recallMessage(message.id);
                               if (context.mounted) {
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(const SnackBar(
-                                  content: Text('Đã thu hồi tin nhắn'),
-                                  duration: Duration(seconds: 1),
-                                ));
+                                ToastService.showSuccess(context, 'Đã thu hồi tin nhắn',
+                                    duration: const Duration(seconds: 1));
                               }
                             } catch (e) {
                               if (context.mounted) {
+                                debugPrint(
+                                    '[ChatMessage] Recall failed: $e');
                                 ToastService.showError(
-                                    context, 'Không thể thu hồi tin nhắn: $e');
+                                    context, 'Không thể thu hồi tin nhắn.');
                               }
                             }
                           },
@@ -3201,17 +3830,19 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                           await notifier.deleteMessageLocally(message.id);
                         }
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(deletePermanently
+                          ToastService.showSuccess(
+                            context,
+                            deletePermanently
                                 ? 'Đã xóa tin nhắn vĩnh viễn'
-                                : 'Đã xóa tin nhắn phía bạn'),
+                                : 'Đã xóa tin nhắn phía bạn',
                             duration: const Duration(seconds: 1),
-                          ));
+                          );
                         }
                       } catch (e) {
                         if (context.mounted) {
+                          debugPrint('[ChatMessage] Delete failed: $e');
                           ToastService.showError(
-                              context, 'Không thể xóa tin nhắn: $e');
+                              context, 'Không thể xóa tin nhắn.');
                         }
                       }
                     },
@@ -3222,11 +3853,11 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
           },
           onInfo: () {
             Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content:
-                  Text('Gửi lúc: ${message.createdAt.toLocal().toString()}'),
+            ToastService.showInfo(
+              context,
+              'Gửi lúc: ${message.createdAt.toLocal()}',
               duration: const Duration(seconds: 2),
-            ));
+            );
           },
           onReact: (emoji) {
             Navigator.pop(context);
@@ -3299,10 +3930,8 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
               onPressed: () {
                 Navigator.pop(ctx);
                 Clipboard.setData(ClipboardData(text: widget.message.content!));
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Đã sao chép tin nhắn vào bộ nhớ tạm'),
-                  duration: Duration(seconds: 1),
-                ));
+                ToastService.showSuccess(context, 'Đã sao chép tin nhắn vào bộ nhớ tạm',
+                    duration: const Duration(seconds: 1));
               },
               child: const Text('Sao chép'),
             ),
@@ -3523,9 +4152,15 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                                 Text(
                                   message.replyToMessage!.isText
                                       ? (message.replyToMessage!.content ?? '')
-                                      : (message.replyToMessage!.isImage
-                                          ? 'Hình ảnh'
-                                          : 'Cuộc gọi'),
+                                      : (message.replyToMessage!.isFile
+                                          ? 'Tệp: ${message.replyToMessage!.content ?? 'Tệp đính kèm'}'
+                                          : (message.replyToMessage!.isVoice
+                                              ? 'Tin nhắn thoại'
+                                              : (message.replyToMessage!.isVideo
+                                                  ? 'Video'
+                                                  : (message.replyToMessage!.isImage
+                                                      ? 'Hình ảnh'
+                                                      : 'Cuộc gọi')))),
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: isMine
@@ -3590,6 +4225,12 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                   hasCaption: hasCaption,
                   caption: hasCaption ? message.content : null,
                   captionColor: isMine ? myTextColor : theirTextColor,
+                )
+              else if (message.isFile && message.firstMediaUrl != null)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: _fileMessageCard(
+                      message, isMine, isDark, isMine ? myTextColor : theirTextColor, themeName),
                 )
               else if (message.isCall)
                 _CallLogBubble(message: message, isMine: isMine)

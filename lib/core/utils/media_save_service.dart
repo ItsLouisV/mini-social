@@ -12,6 +12,7 @@ class MediaSaveService {
   static Future<void> saveUrls(
     List<String> urls, {
     required String fallbackBaseName,
+    List<String>? preferredFileNames,
   }) async {
     if (urls.isEmpty) throw StateError('Không có nội dung để lưu');
 
@@ -26,9 +27,15 @@ class MediaSaveService {
       final contentType = response.headers['content-type']?.split(';').first;
       final sourceName =
           uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-      final fileName = sourceName.contains('.')
-          ? sourceName
-          : '${fallbackBaseName}_${index + 1}.${_extensionFor(contentType)}';
+      final preferredName = preferredFileNames != null &&
+              index < preferredFileNames.length &&
+              preferredFileNames[index].trim().isNotEmpty
+          ? preferredFileNames[index].trim()
+          : null;
+      final fileName = preferredName ??
+          (sourceName.contains('.')
+              ? sourceName
+              : '${fallbackBaseName}_${index + 1}.${_extensionFor(contentType)}');
       files.add(XFile.fromData(
         Uint8List.fromList(response.bodyBytes),
         name: fileName,
