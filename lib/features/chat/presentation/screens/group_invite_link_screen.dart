@@ -24,7 +24,10 @@ class GroupInviteLinkScreen extends ConsumerStatefulWidget {
 class _GroupInviteLinkScreenState extends ConsumerState<GroupInviteLinkScreen> {
   late Future<Map<String, dynamic>> _linkFuture;
   final _rulesController = TextEditingController();
-  final _questionController = TextEditingController();
+  // Tối đa 3 câu hỏi, mỗi câu hỏi là một controller riêng
+  final List<TextEditingController> _questionControllers = [
+    TextEditingController(),
+  ];
   bool _isUpdating = false;
   bool _isSavingRequirements = false;
   bool _approvalRequired = false;
@@ -37,7 +40,19 @@ class _GroupInviteLinkScreenState extends ConsumerState<GroupInviteLinkScreen> {
             .getGroupInviteLink(widget.conversationId))
         .then((data) {
       _rulesController.text = data['join_rules'] as String? ?? '';
-      _questionController.text = data['join_question'] as String? ?? '';
+      // join_question được lưu là chuỗi, mỗi câu hỏi cách nhau bằng '\n---\n'
+      final raw = data['join_question'] as String? ?? '';
+      final questions = raw.isEmpty
+          ? <String>[]
+          : raw.split('\n---\n').map((q) => q.trim()).where((q) => q.isNotEmpty).toList();
+      // Đặt tối đa 3 câu hỏi vào controllers
+      for (var i = 0; i < _questionControllers.length; i++) {
+        _questionControllers[i].text = i < questions.length ? questions[i] : '';
+      }
+      // Thêm controllers còn thiếu nếu dữ liệu có nhiều hơn 1 câu hỏi
+      for (var i = _questionControllers.length; i < questions.length && i < 3; i++) {
+        _questionControllers.add(TextEditingController(text: questions[i]));
+      }
       _approvalRequired = data['approval_required'] as bool? ?? false;
       return data;
     });
@@ -46,7 +61,9 @@ class _GroupInviteLinkScreenState extends ConsumerState<GroupInviteLinkScreen> {
   @override
   void dispose() {
     _rulesController.dispose();
-    _questionController.dispose();
+    for (final c in _questionControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -59,7 +76,11 @@ class _GroupInviteLinkScreenState extends ConsumerState<GroupInviteLinkScreen> {
         widget.conversationId,
         approvalRequired: _approvalRequired,
         joinRules: _rulesController.text.trim(),
-        joinQuestion: _questionController.text.trim(),
+        // Ghép các câu hỏi thành chuỗi phân cách bằng '\n---\n'
+        joinQuestion: _questionControllers
+            .map((c) => c.text.trim())
+            .where((q) => q.isNotEmpty)
+            .join('\n---\n'),
       );
       if (!mounted) return;
       setState(() {
@@ -404,14 +425,85 @@ class _GroupInviteLinkScreenState extends ConsumerState<GroupInviteLinkScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      TextField(
-                        controller: _questionController,
-                        maxLength: 500,
-                        decoration: const InputDecoration(
-                          labelText: 'Câu hỏi khi xin vào (không bắt buộc)',
-                          hintText: 'Ví dụ: Bạn biết nhóm từ đâu?',
-                          border: OutlineInputBorder(),
-                        ),
+                      // ── Câu hỏi khi xin vào (tối đa 3 câu hỏi) ──────
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Câu hỏi khi xin vào (tối đa 3)',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (_questionControllers.length < 3)
+                                TextButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _questionControllers.add(
+                                        TextEditingController(),
+                                      );
+                                    });
+                                  },
+                                  icon: const Icon(
+                                    CupertinoIcons.plus_circle_fill,
+                                    size: 16,
+                                  ),
+                                  label: const Text('Thêm câu hỏi'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ...List.generate(_questionControllers.length, (i) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: TextField(
+                                controller: _questionControllers[i],
+                                // Multi-line: Enter xuống dòng, không giới hạn dòng
+                                minLines: 2,
+                                maxLines: null,
+                                maxLength: 500,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
+                                decoration: InputDecoration(
+                                  labelText: 'Câu hỏi ${i + 1}',
+                                  hintText: i == 0
+                                      ? 'Ví dụ: Bạn biết nhóm từ đâu?'
+                                      : i == 1
+                                          ? 'Ví dụ: Bạn đồng ý với nội quy nhóm?'
+                                          : 'Ví dụ: Giới thiệu bản thân ngắn gọn...',
+                                  border: const OutlineInputBorder(),
+                                  suffixIcon: _questionControllers.length > 1
+                                      ? IconButton(
+                                          tooltip: 'Xóa câu hỏi này',
+                                          icon: const Icon(
+                                            CupertinoIcons.minus_circle_fill,
+                                            color: Colors.redAccent,
+                                            size: 20,
+                                          ),
+                                          onPressed: () {
+                                            setState(() {
+                                              _questionControllers[i]
+                                                  .dispose();
+                                              _questionControllers.removeAt(i);
+                                            });
+                                          },
+                                        )
+                                      : null,
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       SizedBox(

@@ -743,6 +743,14 @@ class ChatRepository {
     return Map<String, dynamic>.from(response as Map);
   }
 
+  Future<Map<String, dynamic>> getGroupInvitePreview(String inviteCode) async {
+    final response = await _client.rpc(
+      'get_group_invite_preview',
+      params: {'p_invite_code': inviteCode},
+    );
+    return Map<String, dynamic>.from(response as Map);
+  }
+
   /// Rời khỏi nhóm
   Future<void> leaveGroup(String conversationId) async {
     final userId = currentUserId!;

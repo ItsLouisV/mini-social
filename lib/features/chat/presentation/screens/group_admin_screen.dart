@@ -435,7 +435,18 @@ class _PendingGroupJoinRequestsState
                     ]),
                     if (answer.isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      Text('Trả lời: $answer'),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          answer,
+                          style: const TextStyle(fontSize: 13, height: 1.4),
+                        ),
+                      ),
                     ],
                     if (request['accepted_rules'] == true) ...[
                       const SizedBox(height: 6),
