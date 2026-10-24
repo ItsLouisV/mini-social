@@ -105,76 +105,6 @@ class _FeelingActivityTile extends StatelessWidget {
   }
 }
 
-class _FeelingActivityTab extends StatelessWidget {
-  final String emoji;
-  final String label;
-  final bool selected;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _FeelingActivityTab({
-    required this.emoji,
-    required this.label,
-    required this.selected,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: selected
-              ? (isDark ? const Color(0xFF34363A) : Colors.white)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : const [],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 11),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(emoji, style: const TextStyle(fontSize: 16)),
-                  const SizedBox(width: 7),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected
-                          ? Theme.of(context).colorScheme.onSurface
-                          : Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.65),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   late final TextEditingController _captionController;
   List<PostMedia> _existingMedia = [];
@@ -616,37 +546,70 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF0F172A)
-                      : const Color(0xFFF1F3F5),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    _FeelingActivityTab(
-                      emoji: '😊',
-                      label: 'Cảm xúc',
-                      selected: activeTab == 0,
-                      isDark: isDark,
-                      onTap: () => setModalState(() {
-                        activeTab = 0;
-                        searchQuery = '';
-                      }),
+              child: SizedBox(
+                width: double.infinity,
+                child: CupertinoSlidingSegmentedControl<int>(
+                  groupValue: activeTab,
+                  backgroundColor: isDark
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFFE2E8F0),
+                  thumbColor: isDark
+                      ? const Color(0xFF334155)
+                      : Colors.white,
+                  children: {
+                    0: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('😊', style: TextStyle(fontSize: 16)),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Cảm xúc',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: activeTab == 0
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: activeTab == 0
+                                  ? (isDark ? Colors.white : Colors.black87)
+                                  : (isDark ? Colors.white70 : Colors.black54),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    _FeelingActivityTab(
-                      emoji: '✨',
-                      label: 'Hoạt động',
-                      selected: activeTab == 1,
-                      isDark: isDark,
-                      onTap: () => setModalState(() {
-                        activeTab = 1;
-                        searchQuery = '';
-                      }),
+                    1: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('✨', style: TextStyle(fontSize: 16)),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Hoạt động',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: activeTab == 1
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: activeTab == 1
+                                  ? (isDark ? Colors.white : Colors.black87)
+                                  : (isDark ? Colors.white70 : Colors.black54),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
+                  },
+                  onValueChanged: (val) {
+                    if (val != null && val != activeTab) {
+                      setModalState(() {
+                        activeTab = val;
+                        searchQuery = '';
+                      });
+                    }
+                  },
                 ),
               ),
             ),

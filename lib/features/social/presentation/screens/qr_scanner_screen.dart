@@ -74,44 +74,18 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
 
     final inviteCode = _extractGroupInviteCode(qrData);
     if (inviteCode != null) {
-      if (mounted) setState(() => _isDetected = true);
-      try {
-        final result = await GroupInvitePreviewSheet.show(context, inviteCode);
-        if (!mounted) return;
-        if (result == null) {
-          setState(() {
-            _isProcessing = false;
-            _isDetected = false;
-          });
-          return;
-        }
-        if (result['status'] == 'pending') {
-          ToastService.showSuccess(
-              context, 'Đã gửi yêu cầu. Hãy chờ trưởng nhóm hoặc phó nhóm duyệt.');
-          context.pop();
-          return;
-        }
-        final conversationId = result['conversation_id'] as String?;
-        if (conversationId == null || conversationId.isEmpty) {
-          throw StateError('Không tìm thấy nhóm từ link này.');
-        }
-        final alreadyMember = result['already_member'] as bool? ?? false;
-        ToastService.showSuccess(
-          context,
-          alreadyMember
-              ? 'Bạn đã ở trong nhóm này'
-              : 'Đã tham gia ${result['group_name'] ?? 'nhóm'}',
-        );
-        context.pushReplacement('/chat/$conversationId');
-      } catch (error) {
-        _showToast('Không thể tham gia nhóm: $error');
-        await Future.delayed(const Duration(seconds: 2));
-        if (mounted) {
-          setState(() {
-            _isProcessing = false;
-            _isDetected = false;
-          });
-        }
+      // Trigger visual snap-lock & checkmark verification animation
+      if (mounted) {
+        setState(() => _isDetected = true);
+      }
+
+      await Future.delayed(const Duration(milliseconds: 450));
+
+      // Đóng màn hình quét và hiển thị preview sheet trên màn hình trước đó
+      if (mounted) {
+        final targetInviteCode = inviteCode;
+        context.pop(); // Đóng màn hình quét
+        GroupInvitePreviewSheet.show(context, targetInviteCode);
       }
       return;
     }

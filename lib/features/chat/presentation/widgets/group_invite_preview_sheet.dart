@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/toast_service.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../providers/chat_provider.dart';
 
@@ -108,15 +110,17 @@ class _GroupInvitePreviewSheetState
     if (conversationId == null) return;
 
     if (data['already_member'] == true) {
-      Navigator.of(context).pop({
-        'status': 'joined',
-        'conversation_id': conversationId,
-        'already_member': true,
-      });
+      context.pop();
+      ToastService.showSuccess(context, 'Bạn đã ở trong nhóm này');
+      context.push('/chat/$conversationId');
       return;
     }
     if (data['request_pending'] == true) {
-      Navigator.of(context).pop({'status': 'pending'});
+      context.pop();
+      ToastService.showInfo(
+        context,
+        'Yêu cầu tham gia của bạn đang chờ duyệt.',
+      );
       return;
     }
     if (_page == 0 && _needsRequest(data)) {
@@ -156,11 +160,21 @@ class _GroupInvitePreviewSheetState
             );
         if (!mounted) return;
         final status = result['status'] as String?;
-        Navigator.of(context).pop({
-          'status': status == 'pending' ? 'pending' : 'joined',
-          'conversation_id': result['conversation_id'] as String?,
-          'already_member': false,
-        });
+        final targetConvId =
+            (result['conversation_id'] as String?) ?? conversationId;
+        context.pop();
+        if (status == 'pending') {
+          ToastService.showSuccess(
+            context,
+            'Đã gửi yêu cầu. Hãy chờ trưởng nhóm hoặc phó nhóm duyệt.',
+          );
+        } else {
+          ToastService.showSuccess(
+            context,
+            'Đã tham gia ${data['group_name'] ?? 'nhóm'}',
+          );
+          context.push('/chat/$targetConvId');
+        }
       } else {
         final result = await ref
             .read(chatRepositoryProvider)
@@ -180,17 +194,21 @@ class _GroupInvitePreviewSheetState
           });
           return;
         }
-        Navigator.of(context).pop({
-          'status': 'joined',
-          'conversation_id': result['conversation_id'] as String?,
-          'already_member': result['already_member'] as bool? ?? false,
-        });
+        final targetConvId =
+            (result['conversation_id'] as String?) ?? conversationId;
+        final alreadyMember = result['already_member'] as bool? ?? false;
+        context.pop();
+        ToastService.showSuccess(
+          context,
+          alreadyMember
+              ? 'Bạn đã ở trong nhóm này'
+              : 'Đã tham gia ${data['group_name'] ?? 'nhóm'}',
+        );
+        context.push('/chat/$targetConvId');
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể tham gia nhóm: $error')),
-        );
+        ToastService.showError(context, 'Không thể tham gia nhóm: $error');
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -216,8 +234,8 @@ class _GroupInvitePreviewSheetState
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return DraggableScrollableSheet(
-      initialChildSize: 0.58,
-      minChildSize: 0.55,
+      initialChildSize: 0.65,
+      minChildSize: 0.60,
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) => Container(
@@ -385,78 +403,207 @@ class _GroupInvitePreviewSheetState
     Map<String, dynamic> data,
   ) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final rules = data['join_rules'] as String? ?? '';
     final rawQuestion = data['join_question'] as String? ?? '';
     final questions = _parseQuestions(rawQuestion);
     _syncAnswerControllers(questions);
 
+    final answeredCount = _answerControllers
+        .where((c) => c.text.trim().isNotEmpty)
+        .length;
+
     return ListView(
       controller: controller,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       children: [
-        Row(children: [
-          IconButton(
-            onPressed: () => setState(() => _page = 0),
-            icon: const Icon(CupertinoIcons.chevron_back),
-          ),
-          Expanded(
-            child: Text(
-              'Điều kiện tham gia',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800),
+        Row(
+          children: [
+            IconButton(
+              onPressed: () => setState(() => _page = 0),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              icon: Icon(
+                CupertinoIcons.chevron_back,
+                size: 24,
+                color: isDark ? Colors.white : AppColors.primary,
+              ),
             ),
-          ),
-          const SizedBox(width: 48),
-        ]),
+            Expanded(
+              child: Text(
+                'Điều kiện tham gia',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+            const SizedBox(width: 40),
+          ],
+        ),
         const SizedBox(height: 16),
         if (rules.trim().isNotEmpty) ...[
-          Text(
-            'Quy định nhóm',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
           Container(
+            margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
+              color: isDark
+                  ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.35)
+                  : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark
+                    ? colorScheme.outlineVariant.withValues(alpha: 0.3)
+                    : const Color(0xFFE2E8F0),
+              ),
             ),
-            child: Text(rules, style: const TextStyle(height: 1.45)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.shield_lefthalf_fill,
+                      size: 18,
+                      color: isDark
+                          ? const Color(0xFF60A5FA)
+                          : AppColors.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Quy định nhóm',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? colorScheme.surface.withValues(alpha: 0.7)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant
+                          .withValues(alpha: isDark ? 0.3 : 0.4),
+                    ),
+                  ),
+                  child: Text(
+                    rules,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.5,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.9)
+                          : const Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => setState(() => _acceptedRules = !_acceptedRules),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 4, horizontal: 2),
+                      child: Row(
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: _acceptedRules
+                                  ? AppColors.primary
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: _acceptedRules
+                                  ? null
+                                  : Border.all(
+                                      color: colorScheme.outlineVariant
+                                          .withValues(alpha: 0.8),
+                                      width: 1.6,
+                                    ),
+                            ),
+                            child: _acceptedRules
+                                ? const Icon(CupertinoIcons.checkmark,
+                                    size: 14, color: Colors.white)
+                                : null,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Tôi đã đọc và đồng ý với quy định nhóm',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: _acceptedRules
+                                    ? (isDark
+                                        ? Colors.white
+                                        : AppColors.primary)
+                                    : colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _acceptedRules,
-            controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (value) =>
-                setState(() => _acceptedRules = value ?? false),
-            title: const Text('Tôi đã đọc và đồng ý với quy định'),
-          ),
-          const SizedBox(height: 12),
         ],
         if (questions.isNotEmpty) ...[
           Row(
             children: [
-              Text(
-                'Câu hỏi tham gia',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
+              Icon(
+                CupertinoIcons.question_circle_fill,
+                size: 18,
+                color: isDark ? const Color(0xFF60A5FA) : AppColors.primary,
               ),
               const SizedBox(width: 8),
+              Text(
+                questions.length > 1
+                    ? 'Câu hỏi tham gia (${questions.length} câu)'
+                    : 'Câu hỏi tham gia',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+              const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
+                  color: (answeredCount == questions.length
+                          ? Colors.green
+                          : AppColors.primary)
+                      .withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '${questions.length} câu',
-                  style: const TextStyle(
-                    color: AppColors.primary,
+                  '$answeredCount/${questions.length} đã trả lời',
+                  style: TextStyle(
+                    color: answeredCount == questions.length
+                        ? (isDark
+                            ? const Color(0xFF4ADE80)
+                            : Colors.green.shade700)
+                        : (isDark
+                            ? const Color(0xFF60A5FA)
+                            : AppColors.primary),
                     fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                    fontSize: 11.5,
                   ),
                 ),
               ),
@@ -464,22 +611,34 @@ class _GroupInvitePreviewSheetState
           ),
           const SizedBox(height: 4),
           Text(
-            'Vui lòng trả lời các câu hỏi để quản trị viên duyệt yêu cầu của bạn.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            'Vui lòng trả lời câu hỏi để quản trị viên duyệt yêu cầu của bạn.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 12.5,
+            ),
           ),
           const SizedBox(height: 12),
           ...List.generate(questions.length, (i) {
+            final isAnswered = i < _answerControllers.length &&
+                _answerControllers[i].text.trim().isNotEmpty;
             return Container(
               margin: const EdgeInsets.only(bottom: 14),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.4),
+                color: isDark
+                    ? colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.35)
+                    : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color:
-                      theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+                  color: isAnswered
+                      ? (isDark
+                          ? const Color(0xFF60A5FA).withValues(alpha: 0.5)
+                          : AppColors.primary.withValues(alpha: 0.5))
+                      : (isDark
+                          ? colorScheme.outlineVariant.withValues(alpha: 0.3)
+                          : const Color(0xFFE2E8F0)),
+                  width: isAnswered ? 1.3 : 1.0,
                 ),
               ),
               child: Column(
@@ -491,26 +650,66 @@ class _GroupInvitePreviewSheetState
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.12),
+                          color: AppColors.primary
+                              .withValues(alpha: isDark ? 0.22 : 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           'Câu hỏi ${i + 1}',
-                          style: const TextStyle(
-                            color: AppColors.primary,
+                          style: TextStyle(
+                            color: isDark
+                                ? const Color(0xFF60A5FA)
+                                : AppColors.primary,
                             fontWeight: FontWeight.w700,
                             fontSize: 12,
                           ),
                         ),
                       ),
+                      const Spacer(),
+                      if (isAnswered)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              CupertinoIcons.checkmark_alt_circle_fill,
+                              size: 15,
+                              color: isDark
+                                  ? const Color(0xFF4ADE80)
+                                  : Colors.green.shade600,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Đã trả lời',
+                              style: TextStyle(
+                                color: isDark
+                                    ? const Color(0xFF4ADE80)
+                                    : Colors.green.shade600,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Text(
+                          '* Bắt buộc',
+                          style: TextStyle(
+                            color: isDark
+                                ? const Color(0xFFF87171)
+                                : Colors.red.shade600,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Text(
                     questions[i],
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      height: 1.4,
+                      fontSize: 14,
+                      height: 1.45,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -523,31 +722,41 @@ class _GroupInvitePreviewSheetState
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
                     textAlignVertical: TextAlignVertical.top,
+                    style: const TextStyle(fontSize: 13.5),
                     decoration: InputDecoration(
                       hintText: 'Nhập câu trả lời cho câu ${i + 1}...',
-                      alignLabelWithHint: true,
+                      hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: theme.colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.6),
+                      ),
                       filled: true,
-                      fillColor: theme.colorScheme.surface,
+                      fillColor: isDark
+                          ? colorScheme.surface.withValues(alpha: 0.8)
+                          : Colors.white,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(
-                          color: theme.colorScheme.outlineVariant,
+                          color: theme.colorScheme.outlineVariant
+                              .withValues(alpha: 0.5),
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(
-                          color: theme.colorScheme.outlineVariant
-                              .withValues(alpha: 0.6),
+                          color: isDark
+                              ? theme.colorScheme.outlineVariant
+                                  .withValues(alpha: 0.3)
+                              : const Color(0xFFE2E8F0),
                         ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(
                           color: AppColors.primary,
-                          width: 1.5,
+                          width: 1.6,
                         ),
                       ),
                     ),
@@ -557,11 +766,39 @@ class _GroupInvitePreviewSheetState
             );
           }),
         ],
-        const SizedBox(height: 8),
-        Text(
-          'Yêu cầu tham gia sẽ chờ trưởng nhóm hoặc phó nhóm duyệt.',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        Container(
+          margin: const EdgeInsets.only(top: 4, bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: isDark ? 0.15 : 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: isDark ? 0.25 : 0.18),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.info_circle_fill,
+                size: 16,
+                color: isDark ? const Color(0xFF60A5FA) : AppColors.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Yêu cầu tham gia sẽ được trưởng nhóm hoặc phó nhóm xét duyệt.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.85)
+                        : const Color(0xFF334155),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
