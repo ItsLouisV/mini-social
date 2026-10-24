@@ -410,7 +410,29 @@ class _ConversationSettingsScreenState
                 const SizedBox(height: 24),
                 _buildGroupMembersSection(context, ref, conv, currentUserId,
                     cardBgColor, dividerColor, isGroupAdmin, isOwner, perms),
+              ],
+              if (isGroup) ...[
                 const SizedBox(height: 24),
+                _buildSectionHeader('THAM GIA NHÓM'),
+                _buildCardContainer(
+                  cardBgColor,
+                  children: [
+                    _buildListTile(
+                      context: context,
+                      icon: CupertinoIcons.link,
+                      gradientColors: const [
+                        Color(0xFF38BDF8),
+                        Color(0xFF6366F1),
+                      ],
+                      title: 'Link nhóm',
+                      subtitle: 'Bật, tắt và chia sẻ mã QR mời vào nhóm',
+                      trailing: const Icon(CupertinoIcons.right_chevron,
+                          size: 16, color: Colors.grey),
+                      onTap: () =>
+                          context.push('/chat/${widget.conversationId}/group-link'),
+                    ),
+                  ],
+                ),
               ],
               const SizedBox(height: 24),
 

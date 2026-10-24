@@ -180,6 +180,12 @@ class GroupAdminScreen extends ConsumerWidget {
               cardBgColor: cardBgColor,
               dividerColor: dividerColor,
             ),
+            const SizedBox(height: 24),
+            _buildSectionHeader('YÊU CẦU THAM GIA'),
+            _PendingGroupJoinRequests(
+              conversationId: conversationId,
+              cardBgColor: cardBgColor,
+            ),
           ],
         ],
       ),
@@ -310,6 +316,168 @@ class GroupAdminScreen extends ConsumerWidget {
 }
 
 // ── Muted members widget ────────────────────────────────────────────────────
+
+class _PendingGroupJoinRequests extends ConsumerStatefulWidget {
+  final String conversationId;
+  final Color cardBgColor;
+
+  const _PendingGroupJoinRequests({
+    required this.conversationId,
+    required this.cardBgColor,
+  });
+
+  @override
+  ConsumerState<_PendingGroupJoinRequests> createState() =>
+      _PendingGroupJoinRequestsState();
+}
+
+class _PendingGroupJoinRequestsState
+    extends ConsumerState<_PendingGroupJoinRequests> {
+  late Future<List<Map<String, dynamic>>> _requests;
+  final Set<String> _busyIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  void _reload() {
+    _requests = ref
+        .read(chatRepositoryProvider)
+        .getPendingGroupJoinRequests(widget.conversationId);
+  }
+
+  Future<void> _review(String requestId, bool approve) async {
+    setState(() => _busyIds.add(requestId));
+    try {
+      await ref.read(chatRepositoryProvider).reviewGroupJoinRequest(
+            requestId,
+            approve: approve,
+          );
+      if (!mounted) return;
+      setState(_reload);
+      ToastService.showSuccess(
+          context, approve ? 'Đã duyệt thành viên' : 'Đã từ chối yêu cầu');
+    } catch (error) {
+      if (mounted) {
+        ToastService.showError(context, 'Không thể xử lý yêu cầu: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _busyIds.remove(requestId));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _requests,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(child: CupertinoActivityIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return ListTile(
+            tileColor: widget.cardBgColor,
+            title: const Text('Không tải được yêu cầu tham gia'),
+            subtitle: Text('${snapshot.error}'),
+            trailing: IconButton(
+              icon: const Icon(CupertinoIcons.refresh),
+              onPressed: () => setState(_reload),
+            ),
+          );
+        }
+        final requests = snapshot.data ?? const [];
+        if (requests.isEmpty) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: widget.cardBgColor,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Text('Chưa có yêu cầu tham gia đang chờ duyệt.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey)),
+          );
+        }
+        return Container(
+          decoration: BoxDecoration(
+            color: widget.cardBgColor,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            children: requests.map((request) {
+              final requestId = request['id'] as String;
+              final avatar = request['avatar_url'] as String?;
+              final name = request['display_name'] as String? ?? 'Người dùng';
+              final answer = (request['answer'] as String? ?? '').trim();
+              final waiting = _busyIds.contains(requestId);
+              return Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      CircleAvatar(
+                        backgroundImage:
+                            avatar == null ? null : NetworkImage(avatar),
+                        child: avatar == null ? const Icon(Icons.person) : null,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(name,
+                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ]),
+                    if (answer.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text('Trả lời: $answer'),
+                    ],
+                    if (request['accepted_rules'] == true) ...[
+                      const SizedBox(height: 6),
+                      const Text('Đã đồng ý với quy định nhóm',
+                          style: TextStyle(color: Colors.green, fontSize: 12)),
+                    ],
+                    const SizedBox(height: 10),
+                    Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      TextButton(
+                        onPressed: waiting
+                            ? null
+                            : () => _review(requestId, false),
+                        child: const Text('Từ chối'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: waiting
+                            ? null
+                            : () => _review(requestId, true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor:
+                              AppColors.primary.withValues(alpha: 0.45),
+                          disabledForegroundColor:
+                              Colors.white.withValues(alpha: 0.8),
+                        ),
+                        child: waiting
+                            ? const CupertinoActivityIndicator()
+                            : const Text('Duyệt'),
+                      ),
+                    ]),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _MutedMembersList extends ConsumerWidget {
   final String conversationId;

@@ -1516,7 +1516,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: IconButton(
                 icon: Icon(
                   CupertinoIcons.chevron_back,
-                  color: theme.colorScheme.primary,
+                  color: Colors.white,
                   size: 24,
                 ),
                 onPressed: () => context.pop(),
@@ -1590,7 +1590,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           buildHeaderButton(
             icon:
-                const Icon(CupertinoIcons.phone, color: Colors.white, size: 18),
+                const Icon(CupertinoIcons.phone_fill,
+                    color: Colors.white, size: 18),
             onPressed: () {
               if (otherUser?.id == null) return;
               context.push('/call/outgoing', extra: {
@@ -1788,7 +1789,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ],
                   ),
                 ),
-                _buildInput(theme, hasWallpaper, isBlocked, isBlockedBy),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => ClipRect(
+                    child: SizeTransition(
+                      axis: Axis.vertical,
+                      axisAlignment: 1,
+                      sizeFactor: animation,
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.06),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                    ),
+                  ),
+                  child: KeyedSubtree(
+                    key: ValueKey(_isRecordingVoice),
+                    child:
+                        _buildInput(theme, hasWallpaper, isBlocked, isBlockedBy),
+                  ),
+                ),
               ],
             ),
             if (_isPinnedBannerExpanded && pinnedMessages.length > 1)
@@ -2482,12 +2509,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           decoration: BoxDecoration(
             color: Colors.transparent,
-            border: Border(
-              top: BorderSide(
-                color: theme.dividerColor.withValues(alpha: 0.3),
-                width: 0.5,
-              ),
-            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,

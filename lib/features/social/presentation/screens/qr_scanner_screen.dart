@@ -10,6 +10,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../chat/providers/chat_provider.dart';
 import '../../utils/qr_image_decoder.dart';
 import '../widgets/qr_profile_bottom_sheet.dart';
 
@@ -71,6 +72,64 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
   void _processQrCode(String qrData) async {
     setState(() => _isProcessing = true);
 
+    final inviteCode = _extractGroupInviteCode(qrData);
+    if (inviteCode != null) {
+      if (mounted) setState(() => _isDetected = true);
+      try {
+        final result = await ref
+            .read(chatRepositoryProvider)
+            .joinGroupByInvite(inviteCode);
+        final conversationId = result['conversation_id'] as String?;
+        if (conversationId == null || conversationId.isEmpty) {
+          throw StateError('Không tìm thấy nhóm từ link này.');
+        }
+        if (!mounted) return;
+        final alreadyMember = result['already_member'] as bool? ?? false;
+        if (!alreadyMember && result['requires_request'] == true) {
+          final response = await _collectGroupJoinRequest(result);
+          if (!mounted) return;
+          if (response == null) {
+            setState(() {
+              _isProcessing = false;
+              _isDetected = false;
+            });
+            return;
+          }
+          final requestResult = await ref
+              .read(chatRepositoryProvider)
+              .submitGroupJoinRequest(
+                inviteCode: inviteCode,
+                answer: response.answer,
+                acceptedRules: response.acceptedRules,
+              );
+          if (!mounted) return;
+          if (requestResult['status'] == 'pending') {
+            ToastService.showSuccess(
+                context, 'Đã gửi yêu cầu. Hãy chờ trưởng nhóm hoặc phó nhóm duyệt.');
+            context.pop();
+            return;
+          }
+        }
+        ToastService.showSuccess(
+          context,
+          alreadyMember
+              ? 'Bạn đã ở trong nhóm này'
+              : 'Đã tham gia ${result['group_name'] ?? 'nhóm'}',
+        );
+        context.pushReplacement('/chat/$conversationId');
+      } catch (error) {
+        _showToast('Không thể tham gia nhóm: $error');
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) {
+          setState(() {
+            _isProcessing = false;
+            _isDetected = false;
+          });
+        }
+      }
+      return;
+    }
+
     String? extractedUserId;
 
     // Parse payload: viora://profile/<userId> or https://viora.app/profile/<userId> or raw UUID
@@ -115,6 +174,119 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
       context.pop(); // Đóng màn hình quét
       QrProfileBottomSheet.show(context, targetId);
     }
+  }
+
+  Future<_GroupJoinResponse?> _collectGroupJoinRequest(
+      Map<String, dynamic> groupInfo) async {
+    final rules = groupInfo['join_rules'] as String? ?? '';
+    final question = groupInfo['join_question'] as String? ?? '';
+    final answerController = TextEditingController();
+    var acceptedRules = rules.trim().isEmpty;
+    final result = await showDialog<_GroupJoinResponse>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Tham gia ${groupInfo['group_name'] ?? 'nhóm'}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (rules.trim().isNotEmpty) ...[
+                  const Text('Quy định nhóm',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SingleChildScrollView(child: Text(rules)),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: acceptedRules,
+                    onChanged: (value) => setDialogState(
+                        () => acceptedRules = value ?? false),
+                    title: const Text('Tôi đã đọc và đồng ý với quy định'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                ],
+                if (question.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(question,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: answerController,
+                    onChanged: (_) => setDialogState(() {}),
+                    maxLines: 3,
+                    maxLength: 2000,
+                    decoration: const InputDecoration(
+                      hintText: 'Câu trả lời của bạn',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                const Text(
+                    'Yêu cầu tham gia sẽ được gửi đến trưởng nhóm và phó nhóm để duyệt.'),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Để sau'),
+            ),
+            FilledButton(
+              onPressed: (rules.trim().isNotEmpty && !acceptedRules) ||
+                      (question.trim().isNotEmpty &&
+                          answerController.text.trim().isEmpty)
+                  ? null
+                  : () => Navigator.pop(
+                        dialogContext,
+                        _GroupJoinResponse(
+                          answer: answerController.text.trim(),
+                          acceptedRules: acceptedRules,
+                        ),
+                      ),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                disabledBackgroundColor:
+                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.45),
+                disabledForegroundColor:
+                    Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8),
+              ),
+              child: const Text('Gửi yêu cầu'),
+            ),
+          ],
+        ),
+      ),
+    );
+    answerController.dispose();
+    return result;
+  }
+
+  String? _extractGroupInviteCode(String rawValue) {
+    final uri = Uri.tryParse(rawValue.trim());
+    if (uri == null) return null;
+
+    if (uri.scheme == 'viora' && uri.host == 'group') {
+      return uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
+    }
+
+    final segments = uri.pathSegments;
+    if ((uri.scheme == 'https' || uri.scheme == 'http') &&
+        segments.length >= 2 &&
+        segments[segments.length - 2] == 'group') {
+      return segments.last;
+    }
+    return null;
   }
 
   void _showToast(String message) {
@@ -483,6 +655,16 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen>
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Painter for Futuristic Neon L-shaped Corner Brackets
 // ─────────────────────────────────────────────────────────────────────────────
+class _GroupJoinResponse {
+  final String answer;
+  final bool acceptedRules;
+
+  const _GroupJoinResponse({
+    required this.answer,
+    required this.acceptedRules,
+  });
+}
+
 class _ScannerCornerPainter extends CustomPainter {
   final Color color;
   final double cornerLength;

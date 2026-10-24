@@ -125,7 +125,7 @@ class _MediaEditModalState extends State<MediaEditModal> {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF18191A) : Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(

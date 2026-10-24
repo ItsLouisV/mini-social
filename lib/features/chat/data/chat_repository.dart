@@ -657,6 +657,92 @@ class ChatRepository {
     }
   }
 
+  Future<Map<String, dynamic>> getGroupInviteLink(
+      String conversationId) async {
+    final response = await _client.rpc(
+      'get_group_invite_link',
+      params: {'p_conversation_id': conversationId},
+    );
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  Future<Map<String, dynamic>> setGroupInviteLinkEnabled(
+    String conversationId, {
+    required bool enabled,
+  }) async {
+    final response = await _client.rpc(
+      'set_group_invite_link_enabled',
+      params: {
+        'p_conversation_id': conversationId,
+        'p_enabled': enabled,
+      },
+    );
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  Future<Map<String, dynamic>> configureGroupInviteRequirements(
+    String conversationId, {
+    required bool approvalRequired,
+    required String joinRules,
+    required String joinQuestion,
+  }) async {
+    final response = await _client.rpc(
+      'configure_group_invite_requirements',
+      params: {
+        'p_conversation_id': conversationId,
+        'p_approval_required': approvalRequired,
+        'p_join_rules': joinRules,
+        'p_join_question': joinQuestion,
+      },
+    );
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  Future<Map<String, dynamic>> submitGroupJoinRequest({
+    required String inviteCode,
+    required String answer,
+    required bool acceptedRules,
+  }) async {
+    final response = await _client.rpc(
+      'submit_group_join_request',
+      params: {
+        'p_invite_code': inviteCode,
+        'p_answer': answer,
+        'p_accepted_rules': acceptedRules,
+      },
+    );
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingGroupJoinRequests(
+      String conversationId) async {
+    final response = await _client.rpc(
+      'list_group_join_requests',
+      params: {'p_conversation_id': conversationId},
+    );
+    return (response as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<void> reviewGroupJoinRequest(
+    String requestId, {
+    required bool approve,
+  }) async {
+    await _client.rpc(
+      'review_group_join_request',
+      params: {'p_request_id': requestId, 'p_approve': approve},
+    );
+  }
+
+  Future<Map<String, dynamic>> joinGroupByInvite(String inviteCode) async {
+    final response = await _client.rpc(
+      'join_group_by_invite',
+      params: {'p_invite_code': inviteCode},
+    );
+    return Map<String, dynamic>.from(response as Map);
+  }
+
   /// Rời khỏi nhóm
   Future<void> leaveGroup(String conversationId) async {
     final userId = currentUserId!;

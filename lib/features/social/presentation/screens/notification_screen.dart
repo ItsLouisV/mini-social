@@ -8,6 +8,7 @@ import '../../../../core/localization/app_translations.dart';
 import '../../../../core/extensions/date_extension.dart';
 import '../../../../shared/widgets/app_avatar.dart';
 import '../../../../shared/widgets/error_widget.dart';
+import '../../../../shared/widgets/notification_peek_popup.dart';
 import '../../../social/providers/follow_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../shared/widgets/skeletons/tile_skeleton_loading.dart';
@@ -120,7 +121,23 @@ class NotificationScreen extends ConsumerWidget {
                             _deleteNotificationOptimistically(ref, id);
                           }
                         },
-                        child: _NotificationTile(notification: n),
+                        child: NotificationPeekWrapper(
+                          peekCard: _NotificationPeekCard(notification: n),
+                          actions: [
+                            NotificationPeekAction(
+                              icon: CupertinoIcons.trash,
+                              label: 'Xóa thông báo',
+                              isDestructive: true,
+                              onTap: () {
+                                final id = n['id'] as String?;
+                                if (id != null) {
+                                  _deleteNotificationOptimistically(ref, id);
+                                }
+                              },
+                            ),
+                          ],
+                          child: _NotificationTile(notification: n),
+                        ),
                       );
                     },
                     childCount: visibleNotifications.length,
@@ -440,6 +457,200 @@ class _NotificationTile extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Card hiển thị đầy đủ thông báo trong peek popup (không giới hạn chữ)
+// ---------------------------------------------------------------------------
+class _NotificationPeekCard extends StatelessWidget {
+  final Map<String, dynamic> notification;
+
+  const _NotificationPeekCard({required this.notification});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final type = notification['type'] as String?;
+    final isRead = notification['is_read'] as bool? ?? true;
+    final createdAt = notification['created_at'] != null
+        ? DateTime.parse(notification['created_at'] as String)
+        : DateTime.now();
+
+    final sender = notification['profiles'] as Map<String, dynamic>?;
+    final senderName = sender?['full_name'] as String? ??
+        sender?['username'] as String? ??
+        notification['sender_name'] as String? ??
+        (type == 'moderation' ? 'Hệ thống' : 'Người dùng');
+    final senderAvatar = sender?['avatar_url'] as String?;
+
+    String actionText = '';
+    IconData icon = CupertinoIcons.bell_fill;
+    Color iconColor = theme.colorScheme.primary;
+
+    switch (type) {
+      case 'like':
+        actionText = ' đã thích bài viết của bạn';
+        icon = CupertinoIcons.heart_fill;
+        iconColor = const Color(0xFFFC2A35);
+        break;
+      case 'comment':
+        actionText = ' đã bình luận về bài viết của bạn';
+        icon = CupertinoIcons.chat_bubble_fill;
+        iconColor = const Color(0xFF007AFF);
+        break;
+      case 'reply':
+        actionText = ' đã trả lời bình luận của bạn';
+        icon = CupertinoIcons.chat_bubble_2_fill;
+        iconColor = const Color(0xFF007AFF);
+        break;
+      case 'follow':
+        actionText = ' đã bắt đầu theo dõi bạn';
+        icon = CupertinoIcons.person_add_solid;
+        iconColor = const Color(0xFF34C759);
+        break;
+      case 'friend_request':
+        actionText = ' đã gửi lời mời kết bạn cho bạn';
+        icon = CupertinoIcons.person_add_solid;
+        iconColor = const Color(0xFF007AFF);
+        break;
+      case 'friend_accept':
+        actionText = ' đã chấp nhận lời mời kết bạn của bạn';
+        icon = CupertinoIcons.person_2_fill;
+        iconColor = const Color(0xFF34C759);
+        break;
+      case 'moderation':
+        actionText = ' đã gửi quyết định kiểm duyệt';
+        icon = CupertinoIcons.exclamationmark_triangle_fill;
+        iconColor = const Color(0xFFFF9500);
+        break;
+      case 'group_dissolved':
+        actionText = ' đã giải tán nhóm';
+        icon = CupertinoIcons.person_3_fill;
+        iconColor = const Color(0xFFFF3B30);
+        break;
+      case 'group_added':
+        actionText = ' đã thêm bạn vào nhóm';
+        icon = CupertinoIcons.person_3_fill;
+        iconColor = const Color(0xFF5856D6);
+        break;
+      default:
+        actionText = ' có một thông báo mới';
+    }
+
+    final content = notification['content']?.toString() ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: avatar + tên + thời gian
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AppAvatar(imageUrl: senderAvatar, name: senderName, radius: 26),
+                  Positioned(
+                    right: -4,
+                    bottom: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: iconColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark
+                              ? const Color(0xFF1E1E2F)
+                              : Colors.white,
+                          width: 2,
+                        ),
+                      ),
+                      child: Icon(icon, size: 12, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 15,
+                          height: 1.4,
+                          color: isRead
+                              ? theme.textTheme.bodyMedium?.color
+                              : theme.textTheme.titleLarge?.color,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: senderName,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          TextSpan(text: actionText),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      createdAt.timeAgo,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
+                        color: isRead
+                            ? theme.hintColor
+                            : theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Nội dung đầy đủ (không giới hạn dòng)
+          if (content.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.black.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                '"$content"',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
+                  height: 1.5,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.85)
+                      : Colors.black87,
+                ),
+                // Không giới hạn dòng - hiển thị toàn bộ
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

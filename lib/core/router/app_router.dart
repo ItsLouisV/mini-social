@@ -22,6 +22,7 @@ import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversations_screen.dart';
 import '../../features/chat/presentation/screens/hidden_conversations_screen.dart';
 import '../../features/chat/presentation/screens/conversation_settings_screen.dart';
+import '../../features/chat/presentation/screens/group_invite_link_screen.dart';
 import '../../features/chat/presentation/screens/shared_media_screen.dart';
 import '../../features/chat/presentation/screens/wallpaper_history_screen.dart';
 import '../../features/feed/domain/post_model.dart';
@@ -282,6 +283,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         pageBuilder: (_, state) => CupertinoPage(
           child: ConversationSettingsScreen(
+            conversationId: state.pathParameters['conversationId']!,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/chat/:conversationId/group-link',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (_, state) => CupertinoPage(
+          child: GroupInviteLinkScreen(
             conversationId: state.pathParameters['conversationId']!,
           ),
         ),
@@ -600,6 +610,9 @@ class _MainShellState extends ConsumerState<MainShell> {
         onNotification: _onScrollNotification,
         child: Scaffold(
           key: _scaffoldKey,
+          // Keep the floating tab bar anchored to the screen when a search
+          // field opens the keyboard in one of the tabs.
+          resizeToAvoidBottomInset: false,
           drawer: const FeedDrawer(),
           extendBody: true,
           body: Stack(

@@ -68,6 +68,11 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Quét mã QR',
+            onPressed: () => context.push('/qr-scan'),
+            icon: const Icon(CupertinoIcons.qrcode_viewfinder, size: 23),
+          ),
           PopupMenuButton<String>(
             icon: Stack(
               clipBehavior: Clip.none,

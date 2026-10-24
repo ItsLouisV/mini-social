@@ -43,7 +43,24 @@ class _VoiceRecorderBarState extends State<VoiceRecorderBar>
   StreamSubscription? _previewStateSub;
 
   static const List<double> _liveWaveBase = [
-    0.4, 0.7, 0.2, 0.9, 1.2, 1.0, 0.5, 0.8, 0.3, 1.2, 0.9, 0.4, 0.7, 0.3, 0.1, 0.9, 0.6, 0.5
+    0.4,
+    0.7,
+    0.2,
+    0.9,
+    1.2,
+    1.0,
+    0.5,
+    0.8,
+    0.3,
+    1.2,
+    0.9,
+    0.4,
+    0.7,
+    0.3,
+    0.1,
+    0.9,
+    0.6,
+    0.5
   ];
 
   @override
@@ -81,7 +98,8 @@ class _VoiceRecorderBarState extends State<VoiceRecorderBar>
         String? path;
         if (!kIsWeb) {
           final tempDir = await getTemporaryDirectory();
-          path = '${tempDir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          path =
+              '${tempDir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
         }
 
         await _audioRecorder.start(config, path: path ?? '');
@@ -158,7 +176,8 @@ class _VoiceRecorderBarState extends State<VoiceRecorderBar>
       if (_recordedPath != null) {
         await _previewPlayer!.play(UrlSource(_recordedPath!));
       } else {
-        await _previewPlayer!.play(BytesSource(Uint8List.fromList(_recordedBytes)));
+        await _previewPlayer!
+            .play(BytesSource(Uint8List.fromList(_recordedBytes)));
       }
     }
   }
@@ -213,160 +232,166 @@ class _VoiceRecorderBarState extends State<VoiceRecorderBar>
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Theme.of(context).scaffoldBackgroundColor,
+      color: Colors.transparent,
       child: SafeArea(
         top: false,
-        child: Row(
-          children: [
-            // 1. Nút Hủy (Trash)
-            GestureDetector(
-              onTap: _cancelRecording,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  CupertinoIcons.trash,
-                  color: Colors.red,
-                  size: 20,
+        child: SizedBox(
+          height: 40,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 1. Nút Hủy (Trash)
+              GestureDetector(
+                onTap: _cancelRecording,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.trash,
+                    color: Colors.red,
+                    size: 20,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
+              const SizedBox(width: 10),
 
-            // 2. Khung sóng âm & Bộ đếm thời gian
-            Expanded(
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: bgContainerColor,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Row(
-                  children: [
-                    if (!isPreview) ...[
-                      // Nút Tạm Dừng Ghi Âm để Nghe Thử
-                      GestureDetector(
-                        onTap: _stopAndPreview,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            CupertinoIcons.pause_fill,
-                            color: Colors.orange,
-                            size: 16,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _formatSeconds(_secondsRecorded),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                      const Spacer(),
-                      // Dải sóng equalizer động khi đang ghi âm
-                      AnimatedBuilder(
-                        animation: _animController,
-                        builder: (context, child) {
-                          return SizedBox(
-                            height: 18,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: List.generate(_liveWaveBase.length, (index) {
-                                final factor = (index % 2 == 0)
-                                    ? _animController.value
-                                    : (1.0 - _animController.value);
-                                final height =
-                                    4.0 + (_liveWaveBase[index] * 12.0 * factor);
-
-                                return Container(
-                                  width: 2.0,
-                                  height: height,
-                                  margin: const EdgeInsets.symmetric(horizontal: 0.8),
-                                  decoration: BoxDecoration(
-                                    color: widget.themeColor,
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                );
-                              }),
+              // 2. Khung sóng âm & Bộ đếm thời gian
+              Expanded(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: bgContainerColor,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Row(
+                    children: [
+                      if (!isPreview) ...[
+                        // Nút Tạm Dừng Ghi Âm để Nghe Thử
+                        GestureDetector(
+                          onTap: _stopAndPreview,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
                             ),
-                          );
-                        },
-                      ),
-                    ] else ...[
-                      // Chế độ Nghe Thử (Preview Mode)
-                      GestureDetector(
-                        onTap: _togglePreviewPlay,
-                        child: Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: widget.themeColor.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            isPlaying
-                                ? CupertinoIcons.pause_fill
-                                : CupertinoIcons.play_fill,
-                            color: widget.themeColor,
-                            size: 16,
+                            child: const Icon(
+                              CupertinoIcons.pause_fill,
+                              color: Colors.orange,
+                              size: 16,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        isPlaying
-                            ? _formatSeconds(_previewPosition.inSeconds)
-                            : _formatSeconds(_secondsRecorded),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: widget.themeColor,
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatSeconds(_secondsRecorded),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
                         ),
-                      ),
-                      const Spacer(),
-                      const Text(
-                        'Nghe lại',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
+                        const Spacer(),
+                        // Dải sóng equalizer động khi đang ghi âm
+                        AnimatedBuilder(
+                          animation: _animController,
+                          builder: (context, child) {
+                            return SizedBox(
+                              height: 18,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: List.generate(_liveWaveBase.length,
+                                    (index) {
+                                  final factor = (index % 2 == 0)
+                                      ? _animController.value
+                                      : (1.0 - _animController.value);
+                                  final height = 4.0 +
+                                      (_liveWaveBase[index] * 12.0 * factor);
 
-            // 3. Nút Gửi (Paperplane)
-            GestureDetector(
-              onTap: _confirmSend,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: widget.themeColor,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  CupertinoIcons.arrow_up,
-                  color: Colors.white,
-                  size: 20,
+                                  return Container(
+                                    width: 2.0,
+                                    height: height,
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 0.8),
+                                    decoration: BoxDecoration(
+                                      color: widget.themeColor,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            );
+                          },
+                        ),
+                      ] else ...[
+                        // Chế độ Nghe Thử (Preview Mode)
+                        GestureDetector(
+                          onTap: _togglePreviewPlay,
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: widget.themeColor.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isPlaying
+                                  ? CupertinoIcons.pause_fill
+                                  : CupertinoIcons.play_fill,
+                              color: widget.themeColor,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          isPlaying
+                              ? _formatSeconds(_previewPosition.inSeconds)
+                              : _formatSeconds(_secondsRecorded),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: widget.themeColor,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        const Spacer(),
+                        const Text(
+                          'Nghe lại',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 10),
+
+              // 3. Nút Gửi (Paperplane)
+              GestureDetector(
+                onTap: _confirmSend,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: widget.themeColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.arrow_up,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

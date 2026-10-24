@@ -89,7 +89,8 @@ class SocialRepository {
     try {
       final data = await _client
           .from(SupabaseConstants.notificationsTable)
-          .select('*, profiles!notifications_sender_id_fkey(id, full_name, username, avatar_url)')
+          .select(
+              '*, profiles!notifications_sender_id_fkey(id, full_name, username, avatar_url)')
           .eq('receiver_id', currentUserId!)
           .order('created_at', ascending: false)
           .limit(50);
@@ -102,7 +103,8 @@ class SocialRepository {
 
       return list;
     } catch (e) {
-      debugPrint('⚠️ [SocialRepository] Offline fallback for notifications: loading from local DB: $e');
+      debugPrint(
+          '⚠️ [SocialRepository] Offline fallback for notifications: loading from local DB: $e');
       if (_isarService != null) {
         return _isarService.getNotifications(limit: 50);
       }
@@ -177,11 +179,11 @@ class SocialRepository {
           .select('sender_id, receiver_id, status')
           .or('and(sender_id.eq.$myId,receiver_id.eq.$targetUserId),and(sender_id.eq.$targetUserId,receiver_id.eq.$myId)')
           .maybeSingle();
-      
+
       if (data == null) return null;
       final status = data['status'] as String;
       final senderId = data['sender_id'] as String;
-      
+
       if (status == 'accepted') {
         return 'accepted';
       } else if (status == 'pending') {
@@ -215,22 +217,19 @@ class SocialRepository {
   }
 
   Future<void> cancelFriendRequest(String targetUserId) async {
-    await _client
-        .from('friend_requests')
-        .delete()
-        .or('and(sender_id.eq.$currentUserId,receiver_id.eq.$targetUserId),and(sender_id.eq.$targetUserId,receiver_id.eq.$currentUserId)');
+    await _client.from('friend_requests').delete().or(
+        'and(sender_id.eq.$currentUserId,receiver_id.eq.$targetUserId),and(sender_id.eq.$targetUserId,receiver_id.eq.$currentUserId)');
   }
 
-  Future<List<Map<String, dynamic>>> getFriends() async {
-    final userId = currentUserId;
-    if (userId == null) return [];
-    
+  Future<List<Map<String, dynamic>>> getFriends(String userId) async {
+    if (userId.trim().isEmpty) return [];
+
     final data = await _client
         .from('friend_requests')
         .select('sender_id, receiver_id')
         .eq('status', 'accepted')
         .or('sender_id.eq.$userId,receiver_id.eq.$userId');
-        
+
     final friendIds = (data as List).map((x) {
       if (x['sender_id'] == userId) {
         return x['receiver_id'] as String;
@@ -238,56 +237,58 @@ class SocialRepository {
         return x['sender_id'] as String;
       }
     }).toList();
-    
+
     if (friendIds.isEmpty) return [];
-    
+
     final profilesData = await _client
         .from(SupabaseConstants.profilesTable)
         .select('*')
         .inFilter('id', friendIds);
-        
+
     return List<Map<String, dynamic>>.from(profilesData);
   }
 
   Future<List<Map<String, dynamic>>> getPendingReceived() async {
     final userId = currentUserId;
     if (userId == null) return [];
-    
+
     final data = await _client
         .from('friend_requests')
         .select('sender_id')
         .eq('receiver_id', userId)
         .eq('status', 'pending');
-        
-    final senderIds = (data as List).map((x) => x['sender_id'] as String).toList();
+
+    final senderIds =
+        (data as List).map((x) => x['sender_id'] as String).toList();
     if (senderIds.isEmpty) return [];
-    
+
     final profilesData = await _client
         .from(SupabaseConstants.profilesTable)
         .select('*')
         .inFilter('id', senderIds);
-        
+
     return List<Map<String, dynamic>>.from(profilesData);
   }
 
   Future<List<Map<String, dynamic>>> getPendingSent() async {
     final userId = currentUserId;
     if (userId == null) return [];
-    
+
     final data = await _client
         .from('friend_requests')
         .select('receiver_id')
         .eq('sender_id', userId)
         .eq('status', 'pending');
-        
-    final receiverIds = (data as List).map((x) => x['receiver_id'] as String).toList();
+
+    final receiverIds =
+        (data as List).map((x) => x['receiver_id'] as String).toList();
     if (receiverIds.isEmpty) return [];
-    
+
     final profilesData = await _client
         .from(SupabaseConstants.profilesTable)
         .select('*')
         .inFilter('id', receiverIds);
-        
+
     return List<Map<String, dynamic>>.from(profilesData);
   }
 }

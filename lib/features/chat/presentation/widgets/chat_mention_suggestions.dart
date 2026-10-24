@@ -20,7 +20,10 @@ class ChatMentionMatch {
     if (caret < 0 || caret > value.text.length) return null;
 
     final beforeCaret = value.text.substring(0, caret);
-    final match = RegExp(r'(?:^|\s)@([^\s@]*)$').firstMatch(beforeCaret);
+
+    // Tìm vị trí @ cuối cùng mà trước nó là đầu dòng hoặc khoảng trắng
+    // Regex cho phép khoảng cách trong query để hỗ trợ tên có dấu cách
+    final match = RegExp(r'(?:^|\s)@(.*)$').firstMatch(beforeCaret);
     if (match == null) return null;
 
     final atIndex = beforeCaret.lastIndexOf('@');
@@ -33,7 +36,9 @@ class ChatMentionMatch {
 }
 
 class ChatMentionOption {
+  /// Token được insert vào text khi chọn (không có khoảng cách nếu dùng username).
   final String token;
+  /// Tên hiển thị trong danh sách gợi ý.
   final String title;
   final String subtitle;
   final String? avatarUrl;
@@ -72,13 +77,24 @@ class ChatMentionOption {
             : rawUsername;
         final hasFullName = fullName != null && fullName.isNotEmpty;
         final hasUsername = username.isNotEmpty;
-        // Insert the full name first. Username is the fallback when full name
-        // is absent or invalid; user id is only a final safety fallback.
-        final token = hasFullName
-            ? fullName
-            : hasUsername
-                ? username
-                : member.userId;
+
+        // Token ưu tiên: nếu fullName có khoảng cách → dùng username (không space)
+        // để tránh mention bị ngắt khi gõ. Nếu không có username → dùng fullName.
+        final String token;
+        if (hasFullName) {
+          // Nếu full name không có space → dùng trực tiếp
+          // Nếu có space → ưu tiên username (không space) để insert an toàn
+          final nameHasSpace = fullName.contains(' ');
+          if (nameHasSpace && hasUsername) {
+            token = username;
+          } else {
+            token = fullName;
+          }
+        } else if (hasUsername) {
+          token = username;
+        } else {
+          token = member.userId;
+        }
 
         return ChatMentionOption(
           token: token,
@@ -96,9 +112,10 @@ class ChatMentionOption {
     if (query.isEmpty) return options.take(8).toList();
     return options
         .where((option) {
-          return option.token.toLowerCase().contains(query) ||
-              option.title.toLowerCase().contains(query) ||
-              option.subtitle.toLowerCase().contains(query);
+          final q = query.toLowerCase();
+          return option.token.toLowerCase().contains(q) ||
+              option.title.toLowerCase().contains(q) ||
+              option.subtitle.toLowerCase().contains(q);
         })
         .take(8)
         .toList();

@@ -214,7 +214,11 @@ class ProfileRepository {
   }
 
   Future<String> uploadAvatar(String userId, XFile file) async {
-    final path = '$userId/avatar.jpg';
+    // Use an immutable object URL for each revision. Reusing avatar.jpg means
+    // browser/CDN and CachedNetworkImage caches can keep serving the old bytes
+    // for the full Storage cache-control lifetime after an avatar replacement.
+    final version = DateTime.now().microsecondsSinceEpoch;
+    final path = '$userId/avatar_$version.${_imageExtension(file)}';
     return _service.uploadFile(
       bucket: SupabaseConstants.avatarsBucket,
       path: path,
@@ -224,13 +228,21 @@ class ProfileRepository {
   }
 
   Future<String> uploadCover(String userId, XFile file) async {
-    final path = '$userId/cover.jpg';
+    final version = DateTime.now().microsecondsSinceEpoch;
+    final path = '$userId/cover_$version.${_imageExtension(file)}';
     return _service.uploadFile(
       bucket: SupabaseConstants.coversBucket,
       path: path,
       file: file,
       upsert: true,
     );
+  }
+
+  String _imageExtension(XFile file) {
+    final extension = file.name.split('.').last.toLowerCase();
+    return const {'jpg', 'jpeg', 'png', 'webp', 'heic'}.contains(extension)
+        ? extension
+        : 'jpg';
   }
 
   Future<UserPostsData> getUserPosts(String userId) async {

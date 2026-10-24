@@ -111,7 +111,7 @@ final friendsListProvider = FutureProvider.autoDispose
     } catch (_) {}
   });
 
-  final data = await repo.getFriends();
+  final data = await repo.getFriends(userId);
   return data.map((e) => ProfileModel.fromJson(e)).toList();
 });
 
