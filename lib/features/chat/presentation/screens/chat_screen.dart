@@ -635,8 +635,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     if (text.isEmpty) {
       try {
-        _typingChannel?.send(
-          type: RealtimeListenTypes.broadcast,
+        _typingChannel?.sendBroadcastMessage(
           event: 'typing',
           payload: {'userId': currentUserId, 'isTyping': false},
         );
@@ -670,8 +669,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
       // 2. Broadcast realtime event
       try {
-        _typingChannel?.send(
-          type: RealtimeListenTypes.broadcast,
+        _typingChannel?.sendBroadcastMessage(
           event: 'typing',
           payload: {
             'userId': currentUserId,
@@ -1447,6 +1445,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             0)
         : 0;
 
+    final pendingJoinRequestsCount =
+        (isGroup && (groupPermissions?.isAdmin ?? false))
+            ? (ref
+                    .watch(pendingGroupJoinRequestsProvider(
+                        widget.conversationId))
+                    .valueOrNull
+                    ?.length ??
+                0)
+            : 0;
+
     final titleName = isGroup
         ? (conversation?.name?.isNotEmpty == true
             ? conversation!.name!
@@ -1604,12 +1612,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             },
             tooltip: 'Gọi thoại',
           ),
-          buildHeaderButton(
-            icon: const Icon(CupertinoIcons.ellipsis,
-                color: Colors.white, size: 18),
-            onPressed: () =>
-                context.push('/chat/${widget.conversationId}/settings'),
-            tooltip: 'Thêm',
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              buildHeaderButton(
+                icon: const Icon(CupertinoIcons.ellipsis,
+                    color: Colors.white, size: 18),
+                onPressed: () =>
+                    context.push('/chat/${widget.conversationId}/settings'),
+                tooltip: 'Thêm',
+              ),
+              if (pendingJoinRequestsCount > 0)
+                Positioned(
+                  top: 5,
+                  right: 1,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      pendingJoinRequestsCount > 9
+                          ? '9+'
+                          : '$pendingJoinRequestsCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 8),
         ],
@@ -1629,6 +1672,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           children: [
             Column(
               children: [
+                if (pendingJoinRequestsCount > 0)
+                  _buildPendingJoinRequestsNotice(
+                      theme, pendingJoinRequestsCount),
                 Expanded(
                   child: Stack(
                     children: [
@@ -1885,6 +1931,83 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         }
       },
       child: scaffold,
+    );
+  }
+
+  Widget _buildPendingJoinRequestsNotice(ThemeData theme, int count) {
+    return Material(
+      color: Colors.amber.shade700.withValues(alpha: 0.12),
+      child: InkWell(
+        onTap: () => context.pushNamed('group-management', pathParameters: {
+          'conversationId': widget.conversationId,
+        }),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Colors.amber.shade700.withValues(alpha: 0.3),
+                width: 0.8,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade700,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.person_badge_plus_fill,
+                  size: 14,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Có $count yêu cầu tham gia nhóm đang chờ duyệt',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade700,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Duyệt ngay',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(width: 2),
+                    Icon(
+                      CupertinoIcons.chevron_right,
+                      size: 10,
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

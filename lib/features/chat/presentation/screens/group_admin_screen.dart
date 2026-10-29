@@ -48,16 +48,43 @@ class GroupAdminScreen extends ConsumerWidget {
       );
     }
 
+    final pendingRequestsAsync =
+        ref.watch(pendingGroupJoinRequestsProvider(conversationId));
+    final pendingCount = pendingRequestsAsync.valueOrNull?.length ?? 0;
+
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text(
-          'Quản lý nhóm',
-          style: TextStyle(
-              fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: -0.2),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Quản lý nhóm',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: -0.2),
+            ),
+            if (pendingCount > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$pendingCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         centerTitle: true,
         leading: IconButton(
@@ -70,6 +97,16 @@ class GroupAdminScreen extends ConsumerWidget {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
+          // ── Pending join requests (prioritized at top when pendingCount > 0) ──
+          if (perms.isAdmin && pendingCount > 0) ...[
+            _buildSectionHeader('YÊU CẦU THAM GIA ĐANG CHỜ ($pendingCount)',
+                color: Colors.orange.shade800),
+            _PendingGroupJoinRequests(
+              conversationId: conversationId,
+              cardBgColor: cardBgColor,
+            ),
+            const SizedBox(height: 24),
+          ],
           // ── Owner-only section ─────────────────────────────────────────────
           if (perms.isOwner) ...[
             _buildSectionHeader('CHẾ ĐỘ NHÓM'),
@@ -180,27 +217,29 @@ class GroupAdminScreen extends ConsumerWidget {
               cardBgColor: cardBgColor,
               dividerColor: dividerColor,
             ),
-            const SizedBox(height: 24),
-            _buildSectionHeader('YÊU CẦU THAM GIA'),
-            _PendingGroupJoinRequests(
-              conversationId: conversationId,
-              cardBgColor: cardBgColor,
-            ),
+            if (pendingCount == 0) ...[
+              const SizedBox(height: 24),
+              _buildSectionHeader('YÊU CẦU THAM GIA'),
+              _PendingGroupJoinRequests(
+                conversationId: conversationId,
+                cardBgColor: cardBgColor,
+              ),
+            ],
           ],
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, {Color? color}) {
     return Padding(
       padding: const EdgeInsets.only(left: 8, bottom: 8),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.bold,
-          color: Colors.grey,
+          color: color ?? Colors.grey,
           letterSpacing: 0.8,
         ),
       ),
@@ -333,20 +372,7 @@ class _PendingGroupJoinRequests extends ConsumerStatefulWidget {
 
 class _PendingGroupJoinRequestsState
     extends ConsumerState<_PendingGroupJoinRequests> {
-  late Future<List<Map<String, dynamic>>> _requests;
   final Set<String> _busyIds = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _reload();
-  }
-
-  void _reload() {
-    _requests = ref
-        .read(chatRepositoryProvider)
-        .getPendingGroupJoinRequests(widget.conversationId);
-  }
 
   Future<void> _review(String requestId, bool approve) async {
     setState(() => _busyIds.add(requestId));
@@ -355,8 +381,11 @@ class _PendingGroupJoinRequestsState
             requestId,
             approve: approve,
           );
+      ref.invalidate(pendingGroupJoinRequestsProvider(widget.conversationId));
+      ref.invalidate(conversationMembersProvider(widget.conversationId));
+      ref.invalidate(groupMembersProvider(widget.conversationId));
+      ref.invalidate(conversationsProvider);
       if (!mounted) return;
-      setState(_reload);
       ToastService.showSuccess(
           context, approve ? 'Đã duyệt thành viên' : 'Đã từ chối yêu cầu');
     } catch (error) {
@@ -370,27 +399,25 @@ class _PendingGroupJoinRequestsState
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _requests,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Padding(
-            padding: EdgeInsets.all(20),
-            child: Center(child: CupertinoActivityIndicator()),
-          );
-        }
-        if (snapshot.hasError) {
-          return ListTile(
-            tileColor: widget.cardBgColor,
-            title: const Text('Không tải được yêu cầu tham gia'),
-            subtitle: Text('${snapshot.error}'),
-            trailing: IconButton(
-              icon: const Icon(CupertinoIcons.refresh),
-              onPressed: () => setState(_reload),
-            ),
-          );
-        }
-        final requests = snapshot.data ?? const [];
+    final requestsAsync =
+        ref.watch(pendingGroupJoinRequestsProvider(widget.conversationId));
+
+    return requestsAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(20),
+        child: Center(child: CupertinoActivityIndicator()),
+      ),
+      error: (error, _) => ListTile(
+        tileColor: widget.cardBgColor,
+        title: const Text('Không tải được yêu cầu tham gia'),
+        subtitle: Text('$error'),
+        trailing: IconButton(
+          icon: const Icon(CupertinoIcons.refresh),
+          onPressed: () => ref.invalidate(
+              pendingGroupJoinRequestsProvider(widget.conversationId)),
+        ),
+      ),
+      data: (requests) {
         if (requests.isEmpty) {
           return Container(
             width: double.infinity,
@@ -408,84 +435,109 @@ class _PendingGroupJoinRequestsState
           decoration: BoxDecoration(
             color: widget.cardBgColor,
             borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: Colors.orange.withValues(alpha: 0.35),
+              width: 1,
+            ),
           ),
           child: Column(
-            children: requests.map((request) {
-              final requestId = request['id'] as String;
-              final avatar = request['avatar_url'] as String?;
-              final name = request['display_name'] as String? ?? 'Người dùng';
-              final answer = (request['answer'] as String? ?? '').trim();
-              final waiting = _busyIds.contains(requestId);
-              return Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      CircleAvatar(
-                        backgroundImage:
-                            avatar == null ? null : NetworkImage(avatar),
-                        child: avatar == null ? const Icon(Icons.person) : null,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(name,
-                            style: const TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ]),
-                    if (answer.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          answer,
-                          style: const TextStyle(fontSize: 13, height: 1.4),
-                        ),
-                      ),
-                    ],
-                    if (request['accepted_rules'] == true) ...[
-                      const SizedBox(height: 6),
-                      const Text('Đã đồng ý với quy định nhóm',
-                          style: TextStyle(color: Colors.green, fontSize: 12)),
-                    ],
-                    const SizedBox(height: 10),
-                    Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                      TextButton(
-                        onPressed: waiting
-                            ? null
-                            : () => _review(requestId, false),
-                        child: const Text('Từ chối'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: waiting
-                            ? null
-                            : () => _review(requestId, true),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor:
-                              AppColors.primary.withValues(alpha: 0.45),
-                          disabledForegroundColor:
-                              Colors.white.withValues(alpha: 0.8),
-                        ),
-                        child: waiting
-                            ? const CupertinoActivityIndicator()
-                            : const Text('Duyệt'),
-                      ),
-                    ]),
-                  ],
-                ),
-              );
-            }).toList(),
+            children: [
+              for (int i = 0; i < requests.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    thickness: 0.5,
+                    color: Colors.black.withValues(alpha: 0.05),
+                    indent: 16,
+                    endIndent: 16,
+                  ),
+                _buildRequestItem(requests[i]),
+              ],
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildRequestItem(Map<String, dynamic> request) {
+    final requestId = request['id'] as String;
+    final avatar = request['avatar_url'] as String?;
+    final name = request['display_name'] as String? ?? 'Người dùng';
+    final answer = (request['answer'] as String? ?? '').trim();
+    final waiting = _busyIds.contains(requestId);
+
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AppAvatar(
+                imageUrl: avatar,
+                name: name,
+                radius: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          if (answer.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                answer,
+                style: const TextStyle(fontSize: 13, height: 1.4),
+              ),
+            ),
+          ],
+          if (request['accepted_rules'] == true) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Đã đồng ý với quy định nhóm',
+              style: TextStyle(color: Colors.green, fontSize: 12),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: waiting ? null : () => _review(requestId, false),
+                child: const Text('Từ chối',
+                    style: TextStyle(color: Colors.redAccent)),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: waiting ? null : () => _review(requestId, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor:
+                      AppColors.primary.withValues(alpha: 0.45),
+                  disabledForegroundColor:
+                      Colors.white.withValues(alpha: 0.8),
+                ),
+                child: waiting
+                    ? const CupertinoActivityIndicator()
+                    : const Text('Duyệt'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

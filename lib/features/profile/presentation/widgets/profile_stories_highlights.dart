@@ -39,13 +39,15 @@ class ProfileStoriesHighlights extends ConsumerWidget {
           return const SizedBox.shrink();
         }
 
+        final displayStories = stories.take(5).toList();
+
         return Container(
           height: 104,
           padding: const EdgeInsets.only(top: 8, bottom: 4),
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             scrollDirection: Axis.horizontal,
-            itemCount: (isMine ? 1 : 0) + stories.length,
+            itemCount: (isMine ? 1 : 0) + displayStories.length,
             separatorBuilder: (_, __) => const SizedBox(width: 14),
             itemBuilder: (context, idx) {
               if (isMine && idx == 0) {
@@ -53,7 +55,7 @@ class ProfileStoriesHighlights extends ConsumerWidget {
               }
 
               final storyIdx = isMine ? idx - 1 : idx;
-              final story = stories[storyIdx];
+              final story = displayStories[storyIdx];
               return _buildStoryHighlightItem(
                   context, story, stories, storyIdx);
             },

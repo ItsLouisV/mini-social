@@ -18,12 +18,27 @@ class CreateStoryModal extends ConsumerStatefulWidget {
   const CreateStoryModal({super.key});
 
   static Future<bool?> show(BuildContext context) {
-    return showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const CreateStoryModal(),
+    return Navigator.of(context, rootNavigator: true).push<bool>(
+      PageRouteBuilder<bool>(
+        fullscreenDialog: true,
+        opaque: true,
+        barrierColor: Colors.black,
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const CreateStoryModal(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(0.0, 1.0);
+          const end = Offset.zero;
+          final curve = Curves.easeOutCubic;
+          final tween =
+              Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 350),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
+      ),
     );
   }
 
@@ -326,11 +341,10 @@ class _CreateStoryModalState extends ConsumerState<CreateStoryModal> {
     // Default text position center
     final textPos = _textOffset ?? Offset(16, screenHeight * 0.35);
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: Container(
-        height: screenHeight * 0.98,
-        color: bgColor,
+    return Scaffold(
+      backgroundColor: bgColor,
+      resizeToAvoidBottomInset: false,
+      body: SizedBox.expand(
         child: Stack(
           children: [
             // 1. FULLSCREEN CANVAS BACKGROUND
@@ -741,7 +755,7 @@ class _CreateStoryModalState extends ConsumerState<CreateStoryModal> {
                 left: 0,
                 right: 0,
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Colors.transparent, Colors.black87],
@@ -749,46 +763,49 @@ class _CreateStoryModalState extends ConsumerState<CreateStoryModal> {
                       end: Alignment.bottomCenter,
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          setState(() => _isEditingText = true);
-                          _captionFocusNode.requestFocus();
-                        },
-                        icon: const Icon(CupertinoIcons.textformat, color: Colors.white, size: 18),
-                        label: const Text('Viết chữ', style: TextStyle(color: Colors.white)),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.white30),
-                          backgroundColor: Colors.black45,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: SafeArea(
+                    top: false,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() => _isEditingText = true);
+                            _captionFocusNode.requestFocus();
+                          },
+                          icon: const Icon(CupertinoIcons.textformat, color: Colors.white, size: 18),
+                          label: const Text('Viết chữ', style: TextStyle(color: Colors.white)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.white30),
+                            backgroundColor: Colors.black45,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
                         ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _pickImage,
-                        icon: const Icon(CupertinoIcons.photo, color: Colors.white, size: 18),
-                        label: Text(_selectedImage != null ? 'Đổi ảnh' : 'Hình ảnh', style: const TextStyle(color: Colors.white)),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.white30),
-                          backgroundColor: Colors.black45,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        OutlinedButton.icon(
+                          onPressed: _pickImage,
+                          icon: const Icon(CupertinoIcons.photo, color: Colors.white, size: 18),
+                          label: Text(_selectedImage != null ? 'Đổi ảnh' : 'Hình ảnh', style: const TextStyle(color: Colors.white)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.white30),
+                            backgroundColor: Colors.black45,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
                         ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _pickMusic,
-                        icon: const Icon(CupertinoIcons.music_note_2, color: Color(0xFF38BDF8), size: 18),
-                        label: Text(
-                          _selectedMusicTrack != null ? 'Đổi nhạc' : 'Nhạc',
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                        OutlinedButton.icon(
+                          onPressed: _pickMusic,
+                          icon: const Icon(CupertinoIcons.music_note_2, color: Color(0xFF38BDF8), size: 18),
+                          label: Text(
+                            _selectedMusicTrack != null ? 'Đổi nhạc' : 'Nhạc',
+                            style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF38BDF8)),
+                            backgroundColor: Colors.black45,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
                         ),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF38BDF8)),
-                          backgroundColor: Colors.black45,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -799,30 +816,33 @@ class _CreateStoryModalState extends ConsumerState<CreateStoryModal> {
                 bottom: 36,
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: EdgeInsets.all(_isOverTrash ? 18 : 14),
-                    decoration: BoxDecoration(
-                      color: _isOverTrash ? Colors.red.withValues(alpha: 0.95) : Colors.black87,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _isOverTrash ? Colors.white : Colors.white38,
-                        width: 2,
+                child: SafeArea(
+                  top: false,
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: EdgeInsets.all(_isOverTrash ? 18 : 14),
+                      decoration: BoxDecoration(
+                        color: _isOverTrash ? Colors.red.withValues(alpha: 0.95) : Colors.black87,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _isOverTrash ? Colors.white : Colors.white38,
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          if (_isOverTrash)
+                            BoxShadow(
+                              color: Colors.red.withValues(alpha: 0.6),
+                              blurRadius: 24,
+                              spreadRadius: 6,
+                            ),
+                        ],
                       ),
-                      boxShadow: [
-                        if (_isOverTrash)
-                          BoxShadow(
-                            color: Colors.red.withValues(alpha: 0.6),
-                            blurRadius: 24,
-                            spreadRadius: 6,
-                          ),
-                      ],
-                    ),
-                    child: Icon(
-                      CupertinoIcons.trash,
-                      color: Colors.white,
-                      size: _isOverTrash ? 30 : 24,
+                      child: Icon(
+                        CupertinoIcons.trash,
+                        color: Colors.white,
+                        size: _isOverTrash ? 30 : 24,
+                      ),
                     ),
                   ),
                 ),

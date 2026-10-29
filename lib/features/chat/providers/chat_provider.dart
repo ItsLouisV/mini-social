@@ -959,6 +959,14 @@ final groupBansProvider = FutureProvider.autoDispose
   return repo.getGroupBans(conversationId);
 });
 
+// ── Pending Group Join Requests Provider ───────────────────────────────────────
+
+final pendingGroupJoinRequestsProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, conversationId) async {
+  final repo = ref.watch(chatRepositoryProvider);
+  return repo.getPendingGroupJoinRequests(conversationId);
+});
+
 // ── Chat Wallpaper Notifier & Provider ────────────────────────────────────────
 //
 // Primary storage: Supabase `conversation_settings` table (bền vững qua refresh).

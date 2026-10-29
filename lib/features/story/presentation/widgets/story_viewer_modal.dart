@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -62,9 +63,15 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
   int _currentTick = 0;
   static const int _totalTicks = 250; // 25 seconds total (250 * 100ms)
   bool _isHolding = false;
+  bool _isSwiping = false;
+  bool _isSheetOpen = false;
+  bool _isMuted = false;
+  int? _pendingUserIndex;
   late final AppAudioPlayer _audioPlayer;
   final GlobalKey<StoryReactionBurstOverlayState> _reactionOverlayKey =
       GlobalKey<StoryReactionBurstOverlayState>();
+
+  bool get _isPlaybackPaused => _isHolding || _isSwiping || _isSheetOpen;
 
   @override
   void initState() {
@@ -94,6 +101,8 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
   Future<void> _playCurrentMusic() async {
     try {
       await _audioPlayer.stop();
+      if (_isPlaybackPaused) return;
+      if (_isMuted) return;
       final track = _currentStory.musicTrack;
       if (track != null && track.previewUrl.isNotEmpty) {
         await _audioPlayer.play(track.previewUrl, loop: true);
@@ -112,34 +121,92 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
     }
   }
 
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+    if (_isMuted) {
+      _audioPlayer.pause();
+    } else {
+      if (!_isPlaybackPaused) {
+        final track = _currentStory.musicTrack;
+        if (track != null && track.previewUrl.isNotEmpty) {
+          _audioPlayer.play(track.previewUrl, loop: true);
+        }
+      }
+    }
+  }
+
+  void _pausePlayback() {
+    _timer?.cancel();
+    _audioPlayer.pause();
+  }
+
+  void _resumePlayback() {
+    if (_isPlaybackPaused) return;
+    if (!_isMuted) {
+      _audioPlayer.resume();
+    }
+    _runTimer();
+  }
+
+  void _onLongPressStart() {
+    setState(() {
+      _isHolding = true;
+    });
+    _pausePlayback();
+  }
+
+  void _onLongPressEnd() {
+    setState(() {
+      _isHolding = false;
+    });
+    _resumePlayback();
+  }
+
+  void _onScrollStart(ScrollStartNotification notification) {
+    if (notification.metrics.axis == Axis.horizontal && !_isSwiping) {
+      _isSwiping = true;
+      _pausePlayback();
+    }
+  }
+
+  void _handleScrollSettled() {
+    if (!mounted) return;
+    _isSwiping = false;
+
+    final double? page =
+        _pageController.hasClients && _pageController.page != null
+            ? _pageController.page
+            : null;
+    final int targetIndex = (page != null
+            ? page.round()
+            : (_pendingUserIndex ?? _userIndex))
+        .clamp(0, widget.allGroups.length - 1);
+    _pendingUserIndex = null;
+
+    if (targetIndex != _userIndex) {
+      setState(() {
+        _userIndex = targetIndex;
+        _storyIndex = 0;
+      });
+      _playCurrentMusic();
+      _startTimer();
+    } else {
+      _resumePlayback();
+    }
+  }
+
   void _startTimer() {
     _timer?.cancel();
     _currentTick = 0;
     _progress = 0.0;
-    _isHolding = false;
-    _runTimer();
-  }
-
-  void _pauseTimer() {
-    if (_isHolding) return;
-    _timer?.cancel();
-    _audioPlayer.pause();
-    setState(() {
-      _isHolding = true;
-    });
-  }
-
-  void _resumeTimer() {
-    if (!_isHolding) return;
-    setState(() {
-      _isHolding = false;
-    });
-    _audioPlayer.resume();
     _runTimer();
   }
 
   void _runTimer() {
     _timer?.cancel();
+    if (_isPlaybackPaused) return;
     const interval = Duration(milliseconds: 100);
     _timer = Timer.periodic(interval, (timer) {
       if (!mounted) return;
@@ -164,17 +231,19 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
       _startTimer();
     } else if (_userIndex < widget.allGroups.length - 1) {
       final nextUser = _userIndex + 1;
-      setState(() {
-        _userIndex = nextUser;
-        _storyIndex = 0;
-      });
-      _playCurrentMusic();
-      _startTimer();
-      _pageController.animateToPage(
+      _isSwiping = true;
+      _pausePlayback();
+      _pageController
+          .animateToPage(
         nextUser,
         duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
-      );
+        curve: Curves.easeInOutCubic,
+      )
+          .then((_) {
+        if (mounted && _isSwiping) {
+          _handleScrollSettled();
+        }
+      });
     } else {
       _closeViewer();
     }
@@ -190,17 +259,19 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
       _startTimer();
     } else if (_userIndex > 0) {
       final prevUser = _userIndex - 1;
-      setState(() {
-        _userIndex = prevUser;
-        _storyIndex = 0;
-      });
-      _playCurrentMusic();
-      _startTimer();
-      _pageController.animateToPage(
+      _isSwiping = true;
+      _pausePlayback();
+      _pageController
+          .animateToPage(
         prevUser,
         duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
-      );
+        curve: Curves.easeInOutCubic,
+      )
+          .then((_) {
+        if (mounted && _isSwiping) {
+          _handleScrollSettled();
+        }
+      });
     } else {
       _closeViewer();
     }
@@ -208,14 +279,7 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
 
   void _onPageChanged(int newIndex) {
     _reactionOverlayKey.currentState?.clear();
-    if (newIndex != _userIndex) {
-      setState(() {
-        _userIndex = newIndex;
-        _storyIndex = 0;
-      });
-      _playCurrentMusic();
-      _startTimer();
-    }
+    _pendingUserIndex = newIndex;
   }
 
   Color _hexToColor(String hex) {
@@ -314,7 +378,8 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
 
   void _showAllEmojisSheet(
       BuildContext context, StoryModel story, Offset? triggerOrigin) {
-    _pauseTimer();
+    _isSheetOpen = true;
+    _pausePlayback();
     const allEmojis = [
       '❤️', '🔥', '😂', '😮', '😢', '👏',
       '🎉', '😍', '🙌', '✨', '🥳',
@@ -385,12 +450,14 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
         );
       },
     ).whenComplete(() {
-      _resumeTimer();
+      _isSheetOpen = false;
+      _resumePlayback();
     });
   }
 
   void _showOwnerViewsSheet(BuildContext context, StoryModel story) {
-    _pauseTimer();
+    _isSheetOpen = true;
+    _pausePlayback();
 
     showModalBottomSheet(
       context: context,
@@ -514,7 +581,8 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
         );
       },
     ).whenComplete(() {
-      _resumeTimer();
+      _isSheetOpen = false;
+      _resumePlayback();
     });
   }
 
@@ -599,11 +667,11 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
           _closeViewer();
         }
       },
-      onLongPressStart: (_) => _pauseTimer(),
-      onLongPressEnd: (_) => _resumeTimer(),
-      onLongPressCancel: () => _resumeTimer(),
+      onLongPressStart: (_) => _onLongPressStart(),
+      onLongPressEnd: (_) => _onLongPressEnd(),
+      onLongPressCancel: () => _onLongPressEnd(),
       onTapUp: (details) {
-        if (_isHolding) return;
+        if (_isHolding || _isSwiping) return;
         final width = MediaQuery.of(context).size.width;
         if (details.globalPosition.dx < width / 3) {
           _previousStory();
@@ -710,11 +778,58 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
 
                       // User Info & Music Header Row
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          AppAvatar(
-                            imageUrl: story.author?.avatarUrl,
-                            name: story.author?.displayName ?? 'User',
-                            radius: 18,
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AppAvatar(
+                                imageUrl: story.author?.avatarUrl,
+                                name: story.author?.displayName ?? 'User',
+                                radius: 18,
+                              ),
+                              if (story.musicTrack != null) ...[
+                                const SizedBox(height: 6),
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _toggleMute,
+                                  child: Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.55),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: _isMuted
+                                            ? Colors.white24
+                                            : const Color(0xFF38BDF8)
+                                                .withValues(alpha: 0.7),
+                                        width: 1,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black
+                                              .withValues(alpha: 0.35),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Icon(
+                                      _isMuted
+                                          ? CupertinoIcons.speaker_slash_fill
+                                          : CupertinoIcons.speaker_2_fill,
+                                      color: _isMuted
+                                          ? Colors.white60
+                                          : const Color(0xFF38BDF8),
+                                      size: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -747,7 +862,7 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
                                   ],
                                 ),
                                 if (story.musicTrack != null) ...[
-                                  const SizedBox(height: 2),
+                                  const SizedBox(height: 3),
                                   Row(
                                     children: [
                                       const Icon(
@@ -757,8 +872,10 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
                                       ),
                                       const SizedBox(width: 4),
                                       Expanded(
-                                        child: Text(
-                                          '${story.musicTrack!.title} • ${story.musicTrack!.artist}',
+                                        child: StoryMarqueeText(
+                                          text:
+                                              '${story.musicTrack!.title} • ${story.musicTrack!.artist}',
+                                          isPaused: _isPlaybackPaused,
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 12,
@@ -769,8 +886,6 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
                                                   color: Colors.black54),
                                             ],
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
@@ -784,7 +899,8 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
                               icon: const Icon(CupertinoIcons.trash,
                                   color: Colors.white70, size: 20),
                               onPressed: () async {
-                                _pauseTimer();
+                                _isSheetOpen = true;
+                                _pausePlayback();
                                 final confirm = await showCupertinoDialog<bool>(
                                   context: context,
                                   builder: (ctx) => CupertinoAlertDialog(
@@ -805,8 +921,9 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
                                   ),
                                 );
 
+                                _isSheetOpen = false;
                                 if (confirm != true) {
-                                  _resumeTimer();
+                                  _resumePlayback();
                                   return;
                                 }
 
@@ -875,67 +992,265 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
       backgroundColor: Colors.black,
       body: StoryReactionBurstOverlay(
         key: _reactionOverlayKey,
-        child: PageView.builder(
-          controller: _pageController,
-          physics: const BouncingScrollPhysics(),
-          onPageChanged: _onPageChanged,
-          itemCount: widget.allGroups.length,
-          itemBuilder: (context, userIdx) {
-            return AnimatedBuilder(
-              animation: _pageController,
-              child: _buildStoryPageContent(context, userIdx, currentUserId),
-              builder: (context, child) {
-                double page = _userIndex.toDouble();
-                if (_pageController.hasClients &&
-                    _pageController.position.haveDimensions &&
-                    _pageController.page != null) {
-                  page = _pageController.page!;
-                }
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (ScrollNotification notification) {
+            if (notification.depth != 0) return false;
 
-                final double delta = userIdx - page;
-
-                // If page is completely offscreen (> 1.0 or < -1.0), don't render
-                if (delta.abs() > 1.0) {
-                  return const SizedBox.shrink();
-                }
-
-                // iOS Card Slide & Interactive Scale Transition:
-                final double progress = delta.abs().clamp(0.0, 1.0);
-                const double minScale = 0.85;
-                final double scale = 1.0 - ((1.0 - minScale) * progress);
-                final double opacity = (1.0 - (0.25 * progress)).clamp(0.0, 1.0);
-                final double radius = 24.0 * progress;
-
-                return Transform.scale(
-                  scale: scale,
-                  alignment: Alignment.center,
-                  child: Opacity(
-                    opacity: opacity,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(radius),
-                        boxShadow: progress > 0.02
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.5 * progress),
-                                  blurRadius: 20,
-                                  spreadRadius: 2,
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(radius),
-                        child: child,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            );
+            if (notification is ScrollStartNotification) {
+              _onScrollStart(notification);
+            } else if (notification is ScrollEndNotification) {
+              _handleScrollSettled();
+            }
+            return false;
           },
+          child: PageView.builder(
+            controller: _pageController,
+            clipBehavior: Clip.none,
+            physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
+            onPageChanged: _onPageChanged,
+            itemCount: widget.allGroups.length,
+            itemBuilder: (context, userIdx) {
+              return AnimatedBuilder(
+                animation: _pageController,
+                child: _buildStoryPageContent(context, userIdx, currentUserId),
+                builder: (context, child) {
+                  double page = _userIndex.toDouble();
+                  if (_pageController.hasClients &&
+                      _pageController.position.haveDimensions &&
+                      _pageController.page != null) {
+                    page = _pageController.page!;
+                  }
+
+                  final double maxPage =
+                      (widget.allGroups.length - 1).toDouble();
+                  final double clampedPage = page.clamp(0.0, maxPage);
+                  final double delta = userIdx - clampedPage;
+
+                  // If page is completely offscreen (>= 1.0 or <= -1.0), don't render
+                  if (delta.abs() >= 1.0) {
+                    return const SizedBox.shrink();
+                  }
+
+                  // 3D Cube flip rotation (Instagram-style)
+                  // Angle ranges from -pi/2 (-90°) to +pi/2 (+90°)
+                  final double angle =
+                      (delta * (math.pi / 2)).clamp(-math.pi / 2, math.pi / 2);
+
+                  // Pivot point:
+                  // delta < 0: page is to the left, pivoting around its right edge (seam)
+                  // delta > 0: page is to the right, pivoting around its left edge (seam)
+                  // delta == 0: centered page
+                  final Alignment alignment = delta < 0
+                      ? Alignment.centerRight
+                      : (delta > 0 ? Alignment.centerLeft : Alignment.center);
+
+                  // Perspective transformation matrix
+                  final Matrix4 transform = Matrix4.identity()
+                    ..setEntry(3, 2, 0.0012)
+                    ..rotateY(angle);
+
+                  // 3D depth shadow overlay as the cube face turns away from camera
+                  final double shadowOpacity =
+                      (delta.abs() * 0.55).clamp(0.0, 0.7);
+
+                  return Transform(
+                    transform: transform,
+                    alignment: alignment,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        child!,
+                        if (shadowOpacity > 0.01)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: delta < 0
+                                        ? Alignment.centerLeft
+                                        : Alignment.centerRight,
+                                    end: delta < 0
+                                        ? Alignment.centerRight
+                                        : Alignment.centerLeft,
+                                    colors: [
+                                      Colors.black.withValues(
+                                          alpha: shadowOpacity),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// Marquee text widget for song title / artist
+/// If text fits within bounds, renders static text.
+/// If text overflows, smoothly scrolls with a pause at the start and seamless loop.
+class StoryMarqueeText extends StatefulWidget {
+  final String text;
+  final TextStyle? style;
+  final bool isPaused;
+  final double velocity;
+
+  const StoryMarqueeText({
+    super.key,
+    required this.text,
+    this.style,
+    this.isPaused = false,
+    this.velocity = 32.0,
+  });
+
+  @override
+  State<StoryMarqueeText> createState() => _StoryMarqueeTextState();
+}
+
+class _StoryMarqueeTextState extends State<StoryMarqueeText>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  double _textWidth = 0.0;
+  double _containerWidth = 0.0;
+  static const double _gap = 36.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(StoryMarqueeText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _containerWidth = 0.0;
+      _textWidth = 0.0;
+      _controller.reset();
+    } else if (oldWidget.isPaused != widget.isPaused) {
+      if (widget.isPaused) {
+        _controller.stop();
+      } else {
+        if (_controller.duration != null &&
+            _controller.duration! > Duration.zero &&
+            !_controller.isAnimating) {
+          _controller.repeat();
+        }
+      }
+    }
+  }
+
+  void _measureAndSetup(double maxWidth) {
+    if ((_containerWidth - maxWidth).abs() < 1.0 && _textWidth > 0) return;
+    _containerWidth = maxWidth;
+
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    _textWidth = textPainter.width;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_textWidth > _containerWidth && _containerWidth > 0) {
+        final totalDistance = _textWidth + _gap;
+        const pauseMs = 1500;
+        final scrollMs = (totalDistance / widget.velocity * 1000).round();
+        final totalMs = pauseMs + scrollMs;
+
+        _controller.duration = Duration(milliseconds: totalMs);
+        if (!widget.isPaused && !_controller.isAnimating) {
+          _controller.repeat();
+        }
+      } else {
+        _controller.stop();
+        _controller.reset();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _measureAndSetup(constraints.maxWidth);
+
+        if (_textWidth <= constraints.maxWidth || constraints.maxWidth <= 0) {
+          return Text(
+            widget.text,
+            style: widget.style,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
+        }
+
+        final totalDistance = _textWidth + _gap;
+        const pauseMs = 1500;
+        final scrollMs = (totalDistance / widget.velocity * 1000).round();
+        final totalMs = pauseMs + scrollMs;
+        final pauseFraction =
+            totalMs > 0 ? (pauseMs / totalMs).clamp(0.0, 0.8) : 0.0;
+
+        return ShaderMask(
+          shaderCallback: (rect) {
+            return const LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.transparent,
+                Colors.black,
+                Colors.black,
+                Colors.transparent,
+              ],
+              stops: [0.0, 0.04, 0.94, 1.0],
+            ).createShader(rect);
+          },
+          blendMode: BlendMode.dstIn,
+          child: ClipRect(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                final t = _controller.value;
+                double curveProgress = 0.0;
+                if (t > pauseFraction) {
+                  curveProgress = (t - pauseFraction) / (1.0 - pauseFraction);
+                }
+                final double offset = curveProgress * totalDistance;
+
+                return Transform.translate(
+                  offset: Offset(-offset, 0),
+                  child: child,
+                );
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(widget.text, style: widget.style),
+                  const SizedBox(width: _gap),
+                  Text(widget.text, style: widget.style),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

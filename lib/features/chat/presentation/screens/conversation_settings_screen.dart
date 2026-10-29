@@ -131,10 +131,16 @@ class _ConversationSettingsScreenState
                     Stack(
                       children: [
                         GestureDetector(
-                          onTap: isGroup && (perms?.canEditGroupInfo ?? false)
-                              ? () =>
-                                  _pickAndChangeGroupAvatar(context, ref, conv)
-                              : null,
+                          onTap: () {
+                            if (avatarUrl != null && avatarUrl.isNotEmpty) {
+                              FullScreenImageViewer.open(
+                                context,
+                                avatarUrl,
+                                heroTag:
+                                    'conversation_avatar_${widget.conversationId}',
+                              );
+                            }
+                          },
                           child: Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
@@ -144,10 +150,14 @@ class _ConversationSettingsScreenState
                                 width: 3,
                               ),
                             ),
-                            child: AppAvatar(
-                              imageUrl: avatarUrl,
-                              name: chatTitle,
-                              radius: 48,
+                            child: Hero(
+                              tag:
+                                  'conversation_avatar_${widget.conversationId}',
+                              child: AppAvatar(
+                                imageUrl: avatarUrl,
+                                name: chatTitle,
+                                radius: 48,
+                              ),
                             ),
                           ),
                         ),
@@ -173,20 +183,6 @@ class _ConversationSettingsScreenState
                                 ),
                                 child: const Icon(CupertinoIcons.camera_fill,
                                     color: Colors.white, size: 14),
-                              ),
-                            ),
-                          )
-                        else if (!isGroup)
-                          Positioned(
-                            bottom: 4,
-                            right: 4,
-                            child: Container(
-                              width: 14,
-                              height: 14,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF34C759),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: bgColor, width: 2),
                               ),
                             ),
                           ),
@@ -621,6 +617,15 @@ class _ConversationSettingsScreenState
               _buildSectionHeader('HÀNH ĐỘNG'),
               Builder(builder: (context) {
                 if (isGroup) {
+                  final pendingCount = isGroupAdmin
+                      ? (ref
+                              .watch(pendingGroupJoinRequestsProvider(
+                                  widget.conversationId))
+                              .valueOrNull
+                              ?.length ??
+                          0)
+                      : 0;
+
                   return _buildCardContainer(
                     cardBgColor,
                     children: [
@@ -630,9 +635,35 @@ class _ConversationSettingsScreenState
                           icon: CupertinoIcons.settings_solid,
                           gradientColors: [Colors.indigo, Colors.purple],
                           title: 'Quản lý nhóm',
-                          subtitle: 'Quyền, mute, cấm thành viên...',
-                          trailing: const Icon(CupertinoIcons.right_chevron,
-                              size: 16, color: Colors.grey),
+                          subtitle: pendingCount > 0
+                              ? '$pendingCount yêu cầu tham gia chờ duyệt'
+                              : 'Quyền, mute, cấm thành viên...',
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (pendingCount > 0) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '$pendingCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              const Icon(CupertinoIcons.right_chevron,
+                                  size: 16, color: Colors.grey),
+                            ],
+                          ),
                           onTap: () => context.pushNamed('group-management',
                               pathParameters: {
                                 'conversationId': widget.conversationId

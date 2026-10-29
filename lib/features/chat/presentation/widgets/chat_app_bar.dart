@@ -47,6 +47,16 @@ class ChatAppBar extends ConsumerWidget implements PreferredSizeWidget {
     final themeName = themeState[conversationId] ?? 'blue';
     final chatThemeColor = getChatThemePrimaryColor(themeName);
 
+    final groupPerms =
+        isGroup ? ref.watch(groupPermissionsProvider(conversationId)) : null;
+    final pendingCount = (isGroup && (groupPerms?.isAdmin ?? false))
+        ? (ref
+                .watch(pendingGroupJoinRequestsProvider(conversationId))
+                .valueOrNull
+                ?.length ??
+            0)
+        : 0;
+
     Widget buildHeaderButton({
       required Widget icon,
       required VoidCallback onPressed,
@@ -210,12 +220,45 @@ class ChatAppBar extends ConsumerWidget implements PreferredSizeWidget {
               },
           tooltip: 'Gọi thoại',
         ),
-        buildHeaderButton(
-          icon: const Icon(CupertinoIcons.ellipsis,
-              color: Colors.white, size: 18),
-          onPressed: onSettingsTap ??
-              () => context.push('/chat/$conversationId/settings'),
-          tooltip: 'Thiết lập',
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            buildHeaderButton(
+              icon: const Icon(CupertinoIcons.ellipsis,
+                  color: Colors.white, size: 18),
+              onPressed: onSettingsTap ??
+                  () => context.push('/chat/$conversationId/settings'),
+              tooltip: 'Thiết lập',
+            ),
+            if (pendingCount > 0)
+              Positioned(
+                top: 2,
+                right: 4,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    pendingCount > 9 ? '9+' : '$pendingCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
         const SizedBox(width: 8),
       ],
