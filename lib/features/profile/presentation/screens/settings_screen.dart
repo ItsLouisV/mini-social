@@ -123,15 +123,24 @@ class SettingsScreen extends ConsumerWidget {
                       _IosRow(
                         iconBg: Colors.indigo,
                         icon: CupertinoIcons.moon_fill,
-                        title: AppTranslations.tr(ref, 'dark_mode'),
-                        showChevron: false,
-                        trailing: CupertinoSwitch(
-                          value: themeMode == ThemeMode.dark,
-                          onChanged: (val) {
-                            ref.read(themeModeProvider.notifier).setTheme(
-                                val ? ThemeMode.dark : ThemeMode.light);
-                          },
+                        title: 'Giao diện',
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              themeMode == ThemeMode.dark
+                                  ? 'Tối'
+                                  : themeMode == ThemeMode.light
+                                      ? 'Sáng'
+                                      : 'Hệ thống',
+                              style: TextStyle(color: labelColor, fontSize: 14),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(CupertinoIcons.chevron_forward,
+                                size: 16, color: labelColor),
+                          ],
                         ),
+                        onTap: () => context.push('/settings/appearance'),
                       ),
                       _Divider(color: theme.dividerColor),
                       _IosRow(

@@ -21,6 +21,48 @@ class DeviceManagementScreen extends ConsumerStatefulWidget {
 class _DeviceManagementScreenState extends ConsumerState<DeviceManagementScreen> {
   bool _revoking = false;
 
+  Future<void> _revokeAll() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Đăng xuất tất cả thiết bị?'),
+        content: const Text(
+          'Tất cả phiên đăng nhập, kể cả thiết bị này, sẽ bị đăng xuất ngay lập tức. Bạn sẽ cần đăng nhập lại.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Đăng xuất tất cả'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _revoking = true);
+    try {
+      // signOutAll dùng scope global → invalidate tất cả sessions trên server
+      // bao gồm cả phiên hiện tại, Supabase sẽ tự emit sự kiện signedOut
+      await ref.read(authRepositoryProvider).signOutAll();
+    } catch (e) {
+      CoreLogger.error('Lỗi khi đăng xuất tất cả: $e', tag: 'DeviceManagement');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không thể đăng xuất tất cả: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+        setState(() => _revoking = false);
+      }
+    }
+  }
+
   /// Giải mã JWT để lấy session ID của phiên hiện tại (sid claim)
   String? _getCurrentSessionId() {
     try {
@@ -152,11 +194,24 @@ class _DeviceManagementScreenState extends ConsumerState<DeviceManagementScreen>
         elevation: 0,
         backgroundColor: Colors.transparent,
         actions: [
-          IconButton(
-            icon: const Icon(CupertinoIcons.refresh),
-            tooltip: 'Tải lại',
-            onPressed: () => ref.invalidate(activeSessionsProvider),
-          ),
+          if (_revoking)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: CupertinoActivityIndicator(),
+            )
+          else ...
+            [
+              IconButton(
+                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                tooltip: 'Đăng xuất tất cả thiết bị',
+                onPressed: _revokeAll,
+              ),
+              IconButton(
+                icon: const Icon(CupertinoIcons.refresh),
+                tooltip: 'Tải lại',
+                onPressed: () => ref.invalidate(activeSessionsProvider),
+              ),
+            ],
         ],
       ),
       body: sessionsAsync.when(

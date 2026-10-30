@@ -57,6 +57,13 @@ class NativeAppAudioPlayer implements AppAudioPlayer {
   }
 
   @override
+  Future<void> setVolume(double volume) async {
+    try {
+      await _player.setVolume(volume.clamp(0.0, 1.0));
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
     _player.stop();
     _player.dispose();

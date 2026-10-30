@@ -83,6 +83,12 @@ class AuthRepository {
     await _client.auth.signOut();
   }
 
+  /// Đăng xuất toàn bộ thiết bị (bao gồm cả phiên hiện tại).
+  /// Supabase sẽ invalidate tất cả refresh token trên server.
+  Future<void> signOutAll() async {
+    await _client.auth.signOut(scope: SignOutScope.global);
+  }
+
   Future<void> resetPassword(String email) async {
     await _client.auth.resetPasswordForEmail(email);
   }

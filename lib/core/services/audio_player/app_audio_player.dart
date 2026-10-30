@@ -9,6 +9,7 @@ abstract class AppAudioPlayer {
   Future<void> stop();
   Future<void> pause();
   Future<void> resume();
+  Future<void> setVolume(double volume);
   void dispose();
 }
 

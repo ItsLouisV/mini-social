@@ -102,10 +102,11 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
     try {
       await _audioPlayer.stop();
       if (_isPlaybackPaused) return;
-      if (_isMuted) return;
       final track = _currentStory.musicTrack;
       if (track != null && track.previewUrl.isNotEmpty) {
         await _audioPlayer.play(track.previewUrl, loop: true);
+        // Áp dụng trạng thái mute: volume=0 nếu đang tắt tiếng
+        await _audioPlayer.setVolume(_isMuted ? 0.0 : 1.0);
       }
     } catch (e) {
       debugPrint('Error playing story music: $e');
@@ -125,16 +126,10 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
     setState(() {
       _isMuted = !_isMuted;
     });
-    if (_isMuted) {
-      _audioPlayer.pause();
-    } else {
-      if (!_isPlaybackPaused) {
-        final track = _currentStory.musicTrack;
-        if (track != null && track.previewUrl.isNotEmpty) {
-          _audioPlayer.play(track.previewUrl, loop: true);
-        }
-      }
-    }
+    // Không pause nhạc — chỉ thay đổi âm lượng để nhạc & tin luôn đồng bộ.
+    // Ví dụ: nhạc ABCDE, đang ở B thì tắt tiếng → nhạc vẫn chạy đến E (volume=0),
+    // khi bật lại thì nhạc tiếp tục đúng vị trí, khớp với tiến trình của tin.
+    _audioPlayer.setVolume(_isMuted ? 0.0 : 1.0);
   }
 
   void _pausePlayback() {

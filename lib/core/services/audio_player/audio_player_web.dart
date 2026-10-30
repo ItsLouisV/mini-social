@@ -73,6 +73,15 @@ class WebAppAudioPlayer implements AppAudioPlayer {
   }
 
   @override
+  Future<void> setVolume(double volume) async {
+    try {
+      if (_audioElement != null) {
+        _audioElement!.volume = volume.clamp(0.0, 1.0);
+      }
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
     stop();
     _audioElement?.remove();
